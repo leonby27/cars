@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { runGuaziRefresh } from './lib/guazi-refresh.mjs';
 import { createGuaziRefreshStore } from './lib/guazi-refresh-store.mjs';
 import { sendTelegram } from './lib/telegram.mjs';
+import { refreshAfterManualCatalog } from './lib/sitemap-refresh.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -19,7 +20,10 @@ const controller = new AbortController();
 process.on('SIGTERM', () => controller.abort());
 process.on('SIGINT', () => controller.abort());
 const store = createGuaziRefreshStore({ pool, withTransaction, upsertCar, databaseUrl: DATABASE_URL,
-  finalize: () => promisify(execFile)(process.execPath, ['scripts/deduplicate-cross-source.mjs', '--apply'], { cwd: root, timeout: 300000 }),
+  finalize: async () => {
+    await promisify(execFile)(process.execPath, ['scripts/deduplicate-cross-source.mjs', '--apply'], { cwd: root, timeout: 300000 });
+    await refreshAfterManualCatalog({ root });
+  },
 });
 try {
   await runGuaziRefresh({ root, newCircle: args.includes('--new-circle'), signal: controller.signal }, {

@@ -36,13 +36,17 @@ test('Encar failure distinguishes transport, malformed data, database errors and
   const text = circleFailure('encar', Error('incomplete'), { report: {
     readFailed: 12, parseFailed: 1, writeFailed: 45, unknown: 58, remainingListings: 60,
     responseStatuses: { 0: 10, 503: 2 }, checkpointPath: '/srv/abcars/runtime/encar-refresh-checkpoint.json', walk: {},
+    fatal: 'Encar: проверка остановлена после повторов и пауз',
+    errors: [{externalId: '123', stage: 'read', code: 'ETIMEDOUT', error: 'fetch failed'}],
   } });
   assert.match(text, /Ошибок чтения карточек: 12/);
   assert.match(text, /Ошибок разбора карточек: 1/);
   assert.match(text, /Ошибок записи в базу: 45/);
   assert.match(text, /сеть\/таймаут — 10/);
   assert.match(text, /HTTP 503 — 2/);
-  assert.match(text, /--resume/);
+  assert.match(text, /Следующий запуск продолжит/);
+  assert.match(text, /проверка остановлена/);
+  assert.match(text, /123: ETIMEDOUT · fetch failed/);
   assert.doesNotMatch(text, /Карточек без ответа: 58/);
 });
 
@@ -51,4 +55,18 @@ test('automatic omissions keep a green single result and reactivations and signi
   assert.match(text,/^✅/);assert.match(text,/Пропущено автоматически: 81/);
   assert.match(text,/Вернулось в продажу: 172/);assert.match(text,/Изменилось цен \(от \$100\): 7/);
   assert.doesNotMatch(text,/ручной|⚠️/);
+});
+
+test('Encar resume report shows current-attempt failures and cause instead of old queued network errors',()=>{
+  const text=circleFailure('encar',Error('scripts/refresh-encar.mjs: код 1'),{report:{
+    resumedAt:'2026-10-19T04:00:00Z',sold:3510,remainingListings:18516,readFailed:18516,
+    fatal:'Encar: HTTP 407; статус не подтверждён',responseStatuses:{0:18516},errors:[{externalId:'old',error:'old fetch failed'}],
+    attempt:{completed:505,readFailed:27,parseFailed:0,writeFailed:0,responseStatuses:{407:27},errors:[{externalId:'new',error:'HTTP 407'}]},
+  }});
+  assert.match(text,/Причина: Encar: HTTP 407/);
+  assert.match(text,/Осталось проверить объявлений: 18\D516/);
+  assert.match(text,/Завершено за этот запуск: 505/);
+  assert.match(text,/Ошибок чтения за этот запуск: 27/);
+  assert.match(text,/HTTP 407 — 27/);
+  assert.doesNotMatch(text,/old fetch failed|сеть\/таймаут|Ошибок чтения карточек: 18/);
 });

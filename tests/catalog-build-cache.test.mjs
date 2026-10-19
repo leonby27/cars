@@ -43,7 +43,7 @@ test('SEO rebuild uses compatible cached data with unavailable DB and new page a
  try {
   const output=join(dir,'build/client');mkdirSync(output,{recursive:true});
   writeFileSync(join(output,'index.html'),'<!doctype html><html><head><title>App</title><script type="module" src="/assets/new-ui.js"></script></head><body><div id="root"></div></body></html>');
-  const key=catalogBuildKey(resolve('.'),{siteUrl:'https://abcars.by',carsSitemap:false,fullSitemap:false,carsPerModelInSitemap:0,listPagesInSitemap:3,showcaseSize:20,blogCarsOnPage:BLOG_TOP_POOL,blogEnabled:BLOG_ENABLED,publishedPosts:blogPosts().map(p=>p.slug)});
+  const key=catalogBuildKey(resolve('.'),{siteUrl:'https://abcars.by',fullSitemap:false,listPagesInSitemap:3,showcaseSize:20,blogCarsOnPage:BLOG_TOP_POOL,blogEnabled:BLOG_ENABLED,publishedPosts:blogPosts().map(p=>p.slug)});
   const source=join(dir,'source.bin');writeCatalogBuildCache(source,{key,live:live(),marketPrices});
   const timingFile=join(dir,'catalog-timings.json'),decisionFile=join(dir,'catalog-decision.json');
   const out=execFileSync(process.execPath,['scripts/generate-seo-pages.mjs'],{encoding:'utf8',timeout:30000,env:{...process.env,SEO_OUTPUT_DIR:output,SEO_CATALOG:join(dir,'missing'),SEO_CARS_FROM_DB:'1',SEO_ALLOW_INDEXING:'0',SEO_CARS_SITEMAP:'0',SEO_SITEMAP_FULL:'0',SEO_VEHICLE_PAGES:'0',SITE_URL:'https://abcars.by',DATABASE_URL:'postgres://none:none@127.0.0.1:1/none',ABCARS_REUSE_CATALOG:'1',ABCARS_CATALOG_CACHE_FILE:source,ABCARS_CATALOG_TIMINGS:timingFile,ABCARS_CATALOG_DECISION:decisionFile}});

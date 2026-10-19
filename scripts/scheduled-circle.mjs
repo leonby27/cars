@@ -42,7 +42,7 @@ const diagnostics = async (source, startedAt) => {
     try {
       const value = await readState(name);
       // Old completed reports must not become progress of a failed new launch.
-      result[key] = key === 'cursor' || Date.parse(value?.updatedAt ?? value?.startedAt) >= startedAt ? value : null;
+      result[key] = key === 'cursor' || Date.parse(value?.updatedAt ?? value?.attempt?.startedAt ?? value?.resumedAt ?? value?.startedAt) >= startedAt ? value : null;
     } catch (error) { result.logTail = `${name}: ${error.message}\n`; }
   }
   if (currentStep) {
@@ -66,6 +66,8 @@ try {
       try { await run(step); }
       catch (error) { error.stage = step.args.find(arg => arg.endsWith('.mjs')); throw error; }
     }, diagnostics,
+    afterRefresh: () => run({ command: 'flock', args: ['-w', '600', process.env.ABCARS_DEPLOY_LOCK || '/run/lock/abcars-deploy.lock',
+      process.execPath, 'scripts/update-sitemaps.mjs'], log: 'runtime/sitemap-refresh.log' }),
     running: async source => sourceIsRunning(source, (await exec('ps', ['-eo', 'args='])).stdout),
     notify: text => sendTelegram(text, { root }).catch(error => console.error(`[telegram] ${error.message}`)),
   });

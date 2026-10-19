@@ -34,6 +34,7 @@ import { createEncarImportIdentity } from "./lib/encar-import-identity.mjs";
 import { safeDiagnostic } from "./lib/circle-report.mjs";
 import { MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { estimateLandedCost, sourceUsdRate } from "../src/pricing.js";
+import { refreshAfterManualCatalog } from "./lib/sitemap-refresh.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT_PATH = path.join(ROOT, "runtime", "encar-import-report.json");
@@ -232,8 +233,8 @@ async function worker() {
     try {
       const { status, car, detail, error } = await client.car(candidate.externalId, { usdPerKrw, history: withHistory });
       detailReads += 1;
-      if (status === 404) { reject("listing gone (404)", candidate.externalId); continue; }
-      if (status !== 200) { reject(`detail request failed (${status})${error ? `: ${safeDiagnostic(error.code || error.cause?.code || error.message).slice(0, 100)}` : ''}`, candidate.externalId); continue; }
+      if (status === 404 && !error) { reject("listing gone (404)", candidate.externalId); continue; }
+      if (status !== 200 || error) { reject(`detail request failed (${status})${error ? `: ${safeDiagnostic(error.code || error.cause?.code || error.message).slice(0, 100)}` : ''}`, candidate.externalId); continue; }
       if (!car) {
         const fuel = detail?.spec?.fuelName || "?";
         const ad = detail?.advertisement?.status || "?";
@@ -249,20 +250,23 @@ async function worker() {
       accepted.push(car);
       if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
     } catch (error) {
-      if (error instanceof EncarGeoBlockedError) throw error;
+      if (error instanceof EncarGeoBlockedError || error.code === 'ENCAR_UNAVAILABLE') throw error;
       reject(`detail error: ${String(error.message).slice(0, 80)}`, candidate.externalId);
     }
   }
 }
 
 try {
-  await Promise.all([
+  const results = await Promise.allSettled([
     discover().catch((error) => { discoveryFailure = safeDiagnostic(error.message); log(`[walk] обход оборван: ${discoveryFailure}`); }).finally(() => { discovering = false; }),
     ...Array.from({ length: concurrency }, worker),
   ]);
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed) throw failed.reason;
   await checkpoint(true);
   if (discoveryFailure || walkStats?.broken) throw new Error(discoveryFailure || `Encar: оборванных разделов выдачи ${walkStats.broken}`);
   if (!report().complete) throw new Error('Encar: пополнение прервано; повторный запуск пропустит уже сохранённые объявления');
+  if (writeDatabase) await refreshAfterManualCatalog({ root: ROOT });
   const final = report({ finishedAt: new Date().toISOString(), final: true, candidates: candidates.length });
   log(`[done] принято ${final.imported}, отклонено ${final.rejected}, запросов ${final.requests}`);
   console.log(JSON.stringify({ importedByBrand: final.importedByBrand, importedByType: final.importedByType, rejectedByReason: final.rejectedByReason }, null, 2));

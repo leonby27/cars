@@ -25,6 +25,9 @@ import {
 import { publishToTelegram, publishToThreads } from "../scripts/lib/social.mjs";
 import {
   SOCIAL_QUOTA_OVER,
+  catalogRetryDelayMs,
+  duelCandidate,
+  fetchCatalogResponse,
   isLiveAvailable,
   shapeSocialCar,
   socialLandedPrice,
@@ -147,6 +150,35 @@ test("проданная или недоступная машина не про�
   assert.equal(isLiveAvailable({ ...base, available:false }), false);
   assert.equal(isLiveAvailable({ ...base, status:"Продано", statusTone:"red" }), false);
   assert.equal(isLiveAvailable({ ...base, images:[] }), false);
+});
+
+test("каталог повторяет ограниченный запрос после указанной сервером паузы", async () => {
+  const waits = [];
+  const requests = [];
+  const responses = [
+    { ok:false, status:429, headers:new Headers({ "retry-after":"3", "set-cookie":"__Host-catalog_session=test-session; Path=/; Secure" }) },
+    { ok:true, status:200, headers:new Headers() },
+  ];
+  const response = await fetchCatalogResponse("https://example.com/api/cars", {
+    fetchImpl:async (url, options) => { requests.push({ url, options }); return responses.shift(); },
+    sleep:async (milliseconds) => waits.push(milliseconds),
+    pace:async () => {},
+    maxAttempts:3,
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(waits, [3000]);
+  assert.equal(requests[1].options.headers.cookie, "__Host-catalog_session=test-session");
+  assert.equal(catalogRetryDelayMs(null, 2), 8000);
+});
+
+test("сравнение не повторяет машину с другой обложки недели", () => {
+  const cars = [
+    { externalId:"used", year:2025, mileage:10_000 },
+    { externalId:"free", year:2024, mileage:20_000 },
+    { externalId:"older", year:2023, mileage:30_000 },
+  ];
+  assert.equal(duelCandidate(cars, ["used"]).externalId, "free");
+  assert.equal(duelCandidate(cars, cars.map((car) => car.externalId)), null);
 });
 
 test("у всех недельных постов разные машины на обложках", () => {

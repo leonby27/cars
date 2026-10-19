@@ -18,6 +18,9 @@ for (const failed of [false, true]) test(`actual scheduler runner sends one ${fa
 export const sendTelegram = async (text, {root}) => fs.appendFile(root + '/messages.jsonl', JSON.stringify(text) + '\\n');`);
   await fs.writeFile(path.join(root, 'bin/xvfb-run'), '#!/bin/sh\nshift\nexec "$@"\n', { mode: 0o755 });
   await fs.symlink(process.execPath, path.join(root, 'bin/node'));
+  await fs.writeFile(path.join(root, 'bin/flock'), '#!/bin/sh\nshift\nshift\nshift\nexec "$@"\n', { mode: 0o755 });
+  await fs.writeFile(path.join(root, 'scripts/update-sitemaps.mjs'), `import fs from 'node:fs/promises';
+await fs.writeFile('runtime/sitemap-updated', 'yes');`);
   await fs.writeFile(path.join(root, 'scripts/refresh-guazi.mjs'), `import fs from 'node:fs/promises';
 import {sendTelegram} from './lib/telegram.mjs';
 if (process.env.ABCARS_CIRCLE_REPORT_OWNER !== 'scheduler') {
@@ -34,6 +37,7 @@ ${failed ? "throw Object.assign(Error('access rejected on card fake-id'), {code:
   const options = { cwd: root, env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}` } };
   if (failed) await assert.rejects(exec(process.execPath, ['scripts/scheduled-circle.mjs', 'guazi'], options), { code: 1 });
   else await exec(process.execPath, ['scripts/scheduled-circle.mjs', 'guazi'], options);
+  assert.equal(await fs.access(path.join(root, 'runtime/sitemap-updated')).then(() => true, () => false), !failed);
   const messages = (await fs.readFile(path.join(root, 'messages.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   assert.equal(messages.length, 1);
   assert.match(messages[0], failed ? /не завершён/ : /Круг 2 · Guazi завершён/);

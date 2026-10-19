@@ -220,6 +220,108 @@ test('bad filters do not wait/retry; missing facets and short lists cannot look 
   assert.match(stats.errors[0].error, /Incomplete list/);
 });
 
+test('list walk retries an empty page and accepts a confirmed smaller current count', async () => {
+  for (const recoveredRows of [true, false]) {
+    const waits = [], offsets = [];
+    const client = new EncarClient({ pace: 0, wait: async ms => waits.push(ms), fetcher: async url => {
+      const params = new URL(url).searchParams;
+      let body;
+      if (params.has('inav')) body = { Count: 2, iNav: { Nodes: [{ DisplayName: '모델그룹', Facets: [{ Value: '그랜저', Count: 2 }] }] } };
+      else {
+        const offset = Number(params.get('sr').split('|')[2]);
+        offsets.push(offset);
+        const row = sample('grandeur').listItem;
+        body = offsets.length === 1 ? { Count: 2, SearchResults: [row] }
+          : offsets.length === 2 ? { Count: 2, SearchResults: [] }
+          : recoveredRows ? { Count: 2, SearchResults: [{ ...row, Id: 'second' }] }
+          : { Count: 1, SearchResults: [] };
+      }
+      return { status: 200, text: async () => JSON.stringify(body) };
+    } });
+    const seen = [];
+    const stats = await client.walk({ brands: ['Hyundai'], onItem: item => seen.push(item.externalId) });
+    assert.equal(stats.broken, undefined);
+    assert.deepEqual(offsets, [0, 1, 1]);
+    assert.deepEqual(waits, [5000]);
+    assert.equal(seen.length, recoveredRows ? 2 : 1);
+  }
+});
+
+test('a persistent list gap stays broken after two retries; a growing list is read through', async () => {
+  for (const growing of [true, false]) {
+    const waits = [];
+    let pages = 0;
+    const client = new EncarClient({ pace: 0, wait: async ms => waits.push(ms), fetcher: async url => {
+      const facets = new URL(url).searchParams.has('inav');
+      const row = sample('grandeur').listItem;
+      const body = facets ? { Count: 2, iNav: { Nodes: [{ DisplayName: '모델그룹', Facets: [{ Value: '그랜저', Count: 2 }] }] } }
+        : ++pages === 1 ? { Count: 2, SearchResults: [row] }
+        : growing ? { Count: 3, SearchResults: [{ ...row, Id: String(pages) }] }
+        : { Count: 2, SearchResults: [] };
+      return { status: 200, text: async () => JSON.stringify(body) };
+    } });
+    const stats = await client.walk({ brands: ['Hyundai'], onItem: () => {} });
+    assert.equal(stats.broken || 0, growing ? 0 : 1);
+    assert.equal(pages, growing ? 3 : 4);
+    assert.deepEqual(waits, growing ? [] : [5000, 10000]);
+  }
+});
+
+test('transport diagnostics retain nested AggregateError codes and timeout names', async () => {
+  for (const failure of [
+    new TypeError('fetch failed', { cause: new AggregateError([
+      Object.assign(Error('connect timeout'), { code: 'ETIMEDOUT' }),
+      Object.assign(Error('unreachable network'), { code: 'ENETUNREACH' }),
+    ]) }),
+    Object.assign(Error('request timed out'), { name: 'TimeoutError' }),
+  ]) {
+    const client = new EncarClient({ attempts: 1, pace: 0, fetcher: async () => { throw failure; } });
+    const result = await client.json('https://api.encar.com/test');
+    assert.equal(result.status, 0);
+    if (failure.name === 'TimeoutError') assert.equal(result.error.code, 'TimeoutError');
+    else {
+      assert.match(result.error.code, /ETIMEDOUT/);
+      assert.match(result.error.code, /ENETUNREACH/);
+      assert.match(result.error.message, /connect timeout/);
+    }
+  }
+});
+
+test('sustained network, 429 and 5xx failures share pauses and stop further requests', async () => {
+  for (const status of [0, 429, 503]) {
+    const waits = [];
+    let calls = 0;
+    const client = new EncarClient({ attempts: 1, pace: 0, wait: async ms => waits.push(ms), fetcher: async () => {
+      calls++;
+      if (!status) throw new TypeError('fetch failed', { cause: Object.assign(Error('connection reset'), { code: 'ECONNRESET' }) });
+      return { status, text: async () => '' };
+    } });
+    for (let index = 0; index < 14; index++) assert.equal((await client.json('test')).status, status);
+    await assert.rejects(client.json('test'), error => error.code === 'ENCAR_UNAVAILABLE');
+    await assert.rejects(client.json('test'), error => error.code === 'ENCAR_UNAVAILABLE');
+    assert.deepEqual(waits, [60000, 60000]);
+    assert.equal(calls, 15);
+  }
+});
+
+test('recovery resets consecutive failures; parallel requests observe the same pause', async () => {
+  let healthy = false, calls = 0, release;
+  const client = new EncarClient({ attempts: 1, pace: 0, wait: () => new Promise(resolve => { release = resolve; }), fetcher: async () => {
+    calls++;
+    if (!healthy) throw Error('offline');
+    return { status: 404, text: async () => '' };
+  } });
+  for (let index = 0; index < 5; index++) await client.json('test');
+  const workers = [client.json('first'), client.json('second')];
+  assert.equal(calls, 5);
+  healthy = true;
+  release();
+  assert.deepEqual((await Promise.all(workers)).map(result => result.status), [404, 404]);
+  assert.equal(client.failedRequests, 0);
+  assert.equal(client.unavailable, null);
+  assert.equal(calls, 7);
+});
+
 test('HTTP 200 with invalid or incomplete detail data stays an error, never a sold/policy omission', async () => {
   for (const body of ['<html>access denied</html>', '{}', 'null', '[]']) {
     const client = new EncarClient({ pace: 0, attempts: 2, wait: async () => {}, fetcher: async () => ({ status: 200, text: async () => body }) });
@@ -258,7 +360,7 @@ test("клиент: 404 на списке — закрытая сеть, 404 н�
     const next = responses.shift() || { status: 200, body: "{}" };
     return { status: next.status, text: async () => next.body };
   };
-  const client = new EncarClient({ fetcher, pace: 0 });
+  const client = new EncarClient({ fetcher, pace: 0, wait: async () => {} });
   responses.push({ status: 404, body: "<html>has_been_cr_blocked</html>" });
   await assert.rejects(client.list("(And.Hidden.N.)"), EncarGeoBlockedError);
   responses.push({ status: 404, body: "" });

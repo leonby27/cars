@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runEncarRefresh, readEncarCheckpoint } from '../scripts/lib/encar-refresh.mjs';
 import { encarImportPlan } from '../scripts/lib/scheduled-circle.mjs';
+import { EncarClient } from '../scripts/lib/encar-client.mjs';
 
 async function fixture(t, ids = ['same', 'changed', 'missing']) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'encar-refresh-'));
@@ -116,7 +117,7 @@ test('empty/malformed successful detail responses are not persisted as sold', as
 
 test('incomplete lists cannot be resumed as complete or authorize import', async t => {
   const { options, client } = await fixture(t, []);
-  client.walk = async () => ({ broken: 1, errors: [{ status: 400 }] });
+  client.walk = async () => ({ slices: 1, broken: 1, errors: [{ status: 400 }] });
   const report = await runEncarRefresh(options);
   assert.equal(report.complete, false);
   await assert.rejects(runEncarRefresh({ ...options, resume: true }), /списки|Списки/);
@@ -132,4 +133,133 @@ test('resume rejects incompatible settings and never treats a failure before que
   assert.equal(checkpoint.summary.complete, false);
   await assert.rejects(runEncarRefresh({ ...options, resume: true }), /списки|Списки/);
   await assert.rejects(runEncarRefresh({ ...options, resume: true, dryRun: true }), /совместимой/);
+});
+
+test('an extended outage stops both workers, saves untouched cards and resumes the unresolved queue', async t => {
+  const ids = Array.from({ length: 40 }, (_, index) => String(index));
+  const { options, client: fixtureClient, writes, queries } = await fixture(t, ids);
+  let calls = 0;
+  const client = new EncarClient({ attempts: 1, pace: 0, wait: async () => {}, fetcher: async () => {
+    calls++;
+    throw new TypeError('fetch failed', { cause: Object.assign(Error('connection reset'), { code: 'ECONNRESET' }) });
+  } });
+  client.walk = fixtureClient.walk;
+  await assert.rejects(runEncarRefresh({ ...options, client, concurrency: 2 }), error => error.code === 'ENCAR_UNAVAILABLE');
+  const saved = await readEncarCheckpoint(options.checkpointPath);
+  assert.equal(saved.summary.complete, false);
+  assert.equal(saved.phase, 'partial');
+  assert.deepEqual(saved.pending, ids);
+  assert.match(saved.summary.fatal, /15 запросов/);
+  assert.ok(calls <= 16, 'stop after the limit plus an already in-flight request');
+  assert.deepEqual(writes, []);
+  assert.equal(queries.filter(query => query.sql.includes("status='unavailable'")).length, 0);
+  fixtureClient.walk = () => assert.fail('completed list snapshot must be reused');
+  const resumed = await runEncarRefresh({ ...options, resume: true });
+  assert.equal(resumed.complete, true);
+  assert.equal(resumed.remainingListings, 0);
+  assert.equal(resumed.readFailed, 0);
+  assert.equal(resumed.rewritten, ids.length);
+});
+
+test('resuming repairs only list evidence and outstanding cards, preserving completed work and discoveries',async t=>{
+  const {options,client,reads}=await fixture(t,['changed','missing']);
+  const initialWalk=client.walk;
+  client.walk=async args=>({...await initialWalk(args),broken:1,errors:[{label:'Kia',status:200,error:'Incomplete list'}]});
+  const initialCar=client.car;
+  client.car=async id=>id==='missing'?{status:503}:initialCar(id);
+  const first=await runEncarRefresh(options);
+  assert.equal(first.rewritten,1);
+  assert.equal(first.remainingListings,1);
+  reads.length=0;
+  client.car=initialCar;
+  client.walk=async({onItem})=>{onItem({externalId:'repaired-new',manufacturer:'기아'});return {broken:0,stopped:false};};
+  const resumed=await runEncarRefresh({...options,resume:true});
+  assert.deepEqual(reads,['missing']);
+  assert.equal(resumed.rewritten,2);
+  assert.equal(resumed.complete,true);
+  assert.equal(resumed.discoveries,3);
+  assert.equal(resumed.attempt.completed,1);
+  assert.equal(resumed.attempt.readFailed,0);
+  const discoveries=JSON.parse(await fs.readFile(options.discoveriesPath));
+  assert.deepEqual(discoveries.items.map(item=>item.externalId),['same','new','repaired-new']);
+  assert.ok(encarImportPlan(discoveries,resumed,Date.parse(resumed.resumedAt)));
+});
+
+test('a resume access-probe failure saves a current report without touching catalog records',async t=>{
+  const {options,client,reads,writes}=await fixture(t,['missing1','missing2']);
+  await runEncarRefresh({...options,detailLimit:1});
+  reads.length=0;writes.length=0;
+  client.verifyAccess=async()=>{throw Object.assign(Error('Encar access blocked'),{code:'ENCAR_GEO_BLOCKED'});};
+  await assert.rejects(runEncarRefresh({...options,resume:true}),/access blocked/);
+  assert.deepEqual(reads,[]);
+  assert.deepEqual(writes,[]);
+  const saved=await readEncarCheckpoint(options.checkpointPath);
+  assert.deepEqual(saved.pending,['missing2']);
+  assert.equal(saved.summary.attempt.completed,0);
+  assert.ok(saved.summary.attempt.startedAt);
+  assert.match(saved.summary.fatal,/access blocked/);
+});
+
+test('old unresolved failures are distinct from new-attempt errors and the actual HTTP status is retained',async t=>{
+  const {options,client}=await fixture(t,['one','two']);
+  client.car=async()=>({status:0,error:Error('old network error')});
+  await runEncarRefresh(options);
+  client.car=async()=>{throw Object.assign(Error('HTTP 407 without sold proof'),{code:'ENCAR_UNAVAILABLE',status:407});};
+  await assert.rejects(runEncarRefresh({...options,resume:true}),/407/);
+  const saved=await readEncarCheckpoint(options.checkpointPath);
+  assert.equal(saved.summary.readFailed,2);
+  assert.equal(saved.summary.attempt.readFailed,1);
+  assert.deepEqual(saved.summary.attempt.responseStatuses,{'407':1});
+  assert.match(saved.summary.errors[0].error,/407/);
+});
+
+test('a failed report save stops processing, retains the checkpoint and safely resumes without replaying saved successes',async t=>{
+  const {options,reads,writes}=await fixture(t,['missing1','missing2','missing3']);
+  let time=Date.now();
+  options.now=()=>time;
+  const backup=`${options.reportPath}.backup`;
+  options.upsert=async car=>{
+    writes.push(car.externalId);
+    time+=31000;
+    await fs.rename(options.reportPath,backup);
+    await fs.mkdir(options.reportPath);
+  };
+  await assert.rejects(runEncarRefresh(options));
+  assert.deepEqual(reads,['missing1']);
+  const saved=await readEncarCheckpoint(options.checkpointPath);
+  assert.deepEqual(saved.pending,['missing2','missing3']);
+  assert.equal(saved.summary.complete,false);
+  await fs.rm(options.reportPath,{recursive:true});
+  await fs.rename(backup,options.reportPath);
+  reads.length=0;
+  options.upsert=async car=>writes.push(car.externalId);
+  const resumed=await runEncarRefresh({...options,resume:true});
+  assert.deepEqual(reads,['missing2','missing3']);
+  assert.deepEqual(writes,['missing1','missing2','missing3']);
+  assert.equal(resumed.complete,true);
+});
+
+test('an unverified 404 never becomes a sale, and a catalog DB outage stops after the failed write',async t=>{
+  const {options,client,queries,reads}=await fixture(t,['missing1','missing2']);
+  client.car=async()=>({status:404,error:Object.assign(Error('API missing response not confirmed'),{code:'ENCAR_UNVERIFIED_STATUS'}),detail:null,car:null});
+  const partial=await runEncarRefresh(options);
+  assert.equal(partial.sold,0);
+  assert.equal(partial.readFailed,2);
+  assert.equal(queries.filter(x=>x.sql.includes("status='unavailable'")).length,0);
+  client.car=async id=>{reads.push(id);return {status:200,car:{externalId:id},detail:{advertisement:{status:'ADVERTISE'}}};};
+  options.upsert=async()=>{throw Object.assign(Error('database connection refused'),{code:'ECONNREFUSED'});};
+  await assert.rejects(runEncarRefresh({...options,resume:true}),/database connection refused/);
+  assert.deepEqual(reads,['missing1']);
+  const saved=await readEncarCheckpoint(options.checkpointPath);
+  assert.deepEqual(saved.pending,['missing1','missing2']);
+  assert.equal(saved.summary.attempt.writeFailed,1);
+  assert.equal(saved.summary.attempt.readFailed,0);
+});
+
+test('a completely failed list census cannot launch a mass missing-card pass',async t=>{
+  const {options,client,reads}=await fixture(t,['missing']);
+  client.walk=async()=>({slices:0,broken:1,errors:[{status:407}]});
+  await assert.rejects(runEncarRefresh(options),/ни одного списка/);
+  assert.deepEqual(reads,[]);
+  assert.equal((await readEncarCheckpoint(options.checkpointPath)).summary.complete,false);
 });

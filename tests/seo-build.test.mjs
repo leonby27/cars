@@ -67,11 +67,14 @@ const fixtureCars = [
   },
 ];
 
-async function build(env = {}, cars = fixtureCars) {
+async function build(env = {}, cars = fixtureCars, initialFiles = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "seo-build-"));
   const clientDir = path.join(dir, "client");
   await mkdir(clientDir, { recursive: true });
   await writeFile(path.join(clientDir, "index.html"), shell);
+  for (const [name, contents] of Object.entries(initialFiles)) {
+    await writeFile(path.join(clientDir, name), contents);
+  }
   const catalogPath = path.join(dir, "cars.json");
   await writeFile(catalogPath, JSON.stringify({ generatedAt: "2026-08-18T19:18:05.086Z", cars }));
   await run(process.execPath, [script], {
@@ -149,16 +152,15 @@ test("внутренняя CRM не содержит счётчиков и по�
   assert.doesNotMatch(partner, /analytics\.ahrefs\.com|window\.__ahrefs/, "в HTML кабинета партнёра остался код Ahrefs");
 });
 
-test("указатель карты сайта лежит и под открытым именем, и под зарегистрированным", async () => {
-  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
-  // До 25.09.2026 `/sitemap.xml` прятали от конкурентов, и по этому адресу отвечала
-  // страница приложения. Теперь тот же указатель лежит под обоими именами, а robots.txt
-  // ссылается на открытое; имя с токеном остаётся — оно зарегистрировано в кабинетах.
+test("robots ссылается на единственную карту с токеном, прежний sitemap.xml удаляется", async () => {
+  const oldFiles = ["sitemap.xml", "sitemap.xml.gz", "sitemap.xml.br"];
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" }, fixtureCars,
+    Object.fromEntries(oldFiles.map(name => [name, "stale sitemap"])));
+  for (const name of oldFiles) await missing(name);
   await missing("sitemap-pages.xml");
-  const [robots, sitemap, publicSitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex), read("sitemap.xml")]);
-  assert.match(robots, /^Sitemap: https:\/\/abcars\.by\/sitemap\.xml$/m);
+  const [robots, sitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex)]);
+  assert.deepEqual(robots.match(/^Sitemap: .*$/gm), ["Sitemap: https://abcars.by/sitemap-testtoken.xml"]);
   assert.match(sitemap, /<loc>https:\/\/abcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
-  assert.equal(publicSitemap, sitemap);
 });
 
 test("в закрытой сборке robots.txt на карту сайта не ссылается", async () => {
@@ -213,21 +215,34 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
   // Исходные китайские названия в разметку не попадают.
   assert.doesNotMatch(html, /比亚迪/);
   assert.match(robots, /^Allow: \/$/m);
-  assert.match(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
+  assert.doesNotMatch(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
 });
 
-test("в карте машин у каждой карточки есть дата изменения и первый снимок", async () => {
-  // 25.09.2026: карта снова перечисляет все машины, и роботу нужно, за чем возвращаться
-  // (lastmod) и что показывать в поиске по картинкам (image:loc с нашего адреса).
-  const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
-  const carsXml = await read(sitemapCars);
-  assert.match(carsXml, /xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1"/);
-  const entries = [...carsXml.matchAll(/<url>[\s\S]*?<\/url>/g)].map((match) => match[0]);
-  assert.equal(entries.length, fixtureCars.length);
-  for (const entry of entries) {
-    assert.match(entry, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/, entry);
-    assert.match(entry, /<image:image><image:loc>https:\/\/[^<]+<\/image:loc><\/image:image>/, entry);
+test("карты сайта содержат постоянные страницы и даты без карточек автомобилей и изображений", async () => {
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
+  const index = await read(sitemapIndex);
+  const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => new URL(match[1]).pathname.slice(1));
+  assert.deepEqual(files, [`sitemap-${sitemapToken}-pages.xml`]);
+  for (const xml of [index, ...await Promise.all(files.map(read))]) {
+    assert.doesNotMatch(xml, /xmlns:image|<image:|sitemap-image\/|\/photo\/|\/api\/image|example\.com|\/cars\//);
   }
+  await missing(sitemapCars);
+  const pages = await read(files[0]);
+  assert.match(pages, /<loc>https:\/\/abcars\.by\/catalog<\/loc>/);
+  assert.match(pages, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+});
+
+test("прежние флаги не возвращают карточки в sitemap, старые XML и сжатые части удаляются", async () => {
+  const stale = [sitemapCars, `${sitemapCars}.gz`, `${sitemapCars}.br`,
+    `sitemap-${sitemapToken}-cars-2.xml`, `sitemap-${sitemapToken}-cars-2.xml.gz`,
+    "sitemap-oldtoken-cars-3.xml.br", "sitemap-cars.xml", "sitemap-cars.xml.gz", "sitemap-cars.xml.br"];
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1", SEO_CARS_SITEMAP: "1", SEO_SITEMAP_FULL: "1", SEO_SITEMAP_CARS_PER_MODEL: "100" }, fixtureCars,
+    Object.fromEntries(stale.map(name => [name, "old sitemap"])));
+  for (const name of stale) await missing(name);
+  for (const name of [sitemapIndex, `sitemap-${sitemapToken}-pages.xml`]) assert.doesNotMatch(await read(name), /\/cars\/|sitemap-[^<]*-cars(?:-\d+)?\.xml/);
+  // Удаление из карты не закрывает саму карточку и не убирает внутренние ссылки.
+  assert.match(await read("cars/170268619192114/index.html"), /<meta name="robots" content="index, follow/);
+  assert.match(await read("index.html"), /href="\/cars\//);
 });
 
 test("static fallback ships a compact catalog and addressable full records", async () => {
@@ -444,9 +459,9 @@ test("адреса не оканчиваются косой чертой ни в
   // Пока черта оставалась, сайт указывал поисковику на адрес, которого нет: карта сайта
   // вела на перебросы, а внутренние ссылки добавляли лишний шаг на каждом переходе.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
-  const [home, car, pagesXml, carsXml] = await Promise.all([
+  const [home, car, pagesXml] = await Promise.all([
     read("index.html"), read("cars/170268619192114/index.html"),
-    read(`sitemap-${sitemapToken}-pages.xml`), read(sitemapCars),
+    read(`sitemap-${sitemapToken}-pages.xml`),
   ]);
   // Главная — единственный адрес, у которого черта на конце законна.
   for (const [name, html] of [["главная", home], ["машина", car]]) {
@@ -460,7 +475,7 @@ test("адреса не оканчиваются косой чертой ни в
     assert.doesNotMatch(html, /<a href="\/[^"]+\/"/, `${name}: внутренняя ссылка с чертой`);
   }
   assert.doesNotMatch(pagesXml, /<loc>https:\/\/abcars\.by\/(?:privacy|terms)<\/loc>/, "перенаправления на PDF не должны попадать в sitemap");
-  for (const [name, xml] of [["страницы", pagesXml], ["машины", carsXml]]) {
+  for (const [name, xml] of [["страницы", pagesXml]]) {
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
     assert.ok(locs.length, `карта «${name}» не должна быть пустой`);
     for (const loc of locs) {

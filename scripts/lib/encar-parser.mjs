@@ -20,6 +20,23 @@ export const ENCAR_PAGE_SIZE = 500;
 // Глубже этого смещения список отдаёт одну и ту же страницу — срез надо дробить.
 export const ENCAR_MAX_OFFSET = 10_000;
 
+// API 407 can hide both live and sold ads. Confirm the public SSR state, never the
+// status code or a generic error-page sentence alone. Do not execute page JS.
+export function encarPublicDetail(html, id) {
+  const match = String(html).match(/<script\b[^>]*>\s*(?:window\.)?__PRELOADED_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/);
+  try {
+    const cars = JSON.parse(match?.[1] || 'null')?.cars;
+    const base = cars?.base;
+    const requested = String(id);
+    if (!/^\d+$/.test(requested) || String(base?.queryCarId) !== requested
+      || ![base?.vehicleId, base?.manage?.dummyVehicleId].some(value => String(value) === requested)) return null;
+    const status = base?.advertisement?.status;
+    if (!((status === 'SOLD' && cars?.detailFlags?.adStatus === 'soldOut')
+      || (status === 'ADVERTISE' && cars?.detailFlags?.adStatus === 'advertise'))) return null;
+    return base;
+  } catch { return null; }
+}
+
 // Наши марки → как марка называется у площадки (значение фильтра Manufacturer).
 // Только марки из правил ввоза (config/import-policy.mjs) плюс Genesis и KGM для
 // Кореи. Chevrolet, Renault и прочие вычеркнутые не перечислены намеренно.

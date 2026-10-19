@@ -1,6 +1,6 @@
 // Encar refresh: list snapshot -> existing cards -> discoveries for import.
 // A missing list entry alone never marks a sale; the detail page decides.
-// --resume retries only the saved unresolved queue after a complete list walk.
+// --resume retains completed cards, repairing incomplete list evidence if needed.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EncarClient } from './lib/encar-client.mjs';
@@ -11,6 +11,7 @@ import { canonicalImportBrand, importPolicyViolation } from '../config/import-po
 import { sourceUsdRate } from '../src/pricing.js';
 import { pool, withTransaction } from '../server/db.mjs';
 import { upsertCar } from '../server/repository.mjs';
+import { refreshAfterManualCatalog } from './lib/sitemap-refresh.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Map(process.argv.slice(2).map(arg => {
@@ -56,6 +57,7 @@ try {
     reportPath: runtimeFile('encar-refresh-report'),
     discoveriesPath: runtimeFile('encar-discoveries'),
   });
+  if (!dryRun) await refreshAfterManualCatalog({ root: ROOT });
 } catch (error) {
   console.error(`[fail] ${error.message}`);
   process.exitCode = 1;

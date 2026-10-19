@@ -28,6 +28,69 @@ const number = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Numbe
 const CATALOG_ORIGIN = String(process.env.SOCIAL_CATALOG_ORIGIN || "https://abcars.by").replace(/\/$/, "");
 const PAGE_SIZE = 100;
 const liveModelCache = new Map();
+const CATALOG_WORKERS = Math.max(1, Math.min(2, Number(process.env.SOCIAL_CATALOG_WORKERS) || 2));
+// Публичный каталог допускает устойчиво шесть чтений в минуту. Короткий burst
+// существует для браузера, но недельная автоматика не должна зависеть от того,
+// сколько этого запаса уже потратил предыдущий запуск.
+const CATALOG_REQUEST_INTERVAL_MS = Math.max(0, Number(process.env.SOCIAL_CATALOG_REQUEST_INTERVAL_MS) || 10_500);
+const CATALOG_MAX_ATTEMPTS = Math.max(1, Number(process.env.SOCIAL_CATALOG_MAX_ATTEMPTS) || 5);
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+let catalogRequestGate = Promise.resolve();
+let nextCatalogRequestAt = 0;
+let catalogCooldownUntil = 0;
+let catalogSessionCookie = "";
+
+async function paceCatalogRequest() {
+  const previous = catalogRequestGate;
+  let release;
+  catalogRequestGate = new Promise((resolve) => { release = resolve; });
+  await previous;
+  try {
+    const delay = Math.max(0, nextCatalogRequestAt - Date.now(), catalogCooldownUntil - Date.now());
+    if (delay) await wait(delay);
+    nextCatalogRequestAt = Date.now() + CATALOG_REQUEST_INTERVAL_MS;
+  } finally {
+    release();
+  }
+}
+
+export function catalogRetryDelayMs(retryAfter, failedAttempt) {
+  const raw = String(retryAfter || "").trim();
+  const seconds = /^\d+$/.test(raw) ? Number(raw) * 1000 : NaN;
+  const date = raw && !Number.isFinite(seconds) ? Date.parse(raw) - Date.now() : NaN;
+  const advertised = Number.isFinite(seconds) ? seconds : date;
+  const fallback = 2000 * (2 ** Math.max(0, failedAttempt));
+  return Math.min(30_000, Math.max(1000, Number.isFinite(advertised) ? advertised : fallback));
+}
+
+export async function fetchCatalogResponse(url, {
+  fetchImpl = fetch,
+  sleep = wait,
+  pace = paceCatalogRequest,
+  maxAttempts = CATALOG_MAX_ATTEMPTS,
+} = {}) {
+  let response;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await pace();
+    response = await fetchImpl(url, {
+      signal:AbortSignal.timeout(30_000),
+      headers:{
+        "user-agent":"abcars-social-week/1.0",
+        ...(catalogSessionCookie ? { cookie:catalogSessionCookie } : {}),
+      },
+    });
+    const setCookie = response.headers.getSetCookie?.().find((value) => value.startsWith("__Host-catalog_session="))
+      || response.headers.get("set-cookie");
+    const session = String(setCookie || "").match(/(?:^|,\s*)(__Host-catalog_session=[^;,\s]+)/)?.[1];
+    if (session) catalogSessionCookie = session;
+    const retryable = response.status === 429 || response.status >= 500;
+    if (response.ok || !retryable || attempt === maxAttempts - 1) return response;
+    const delay = catalogRetryDelayMs(response.headers.get("retry-after"), attempt);
+    catalogCooldownUntil = Math.max(catalogCooldownUntil, Date.now() + delay);
+    await sleep(delay);
+  }
+  return response;
+}
 
 // Призыв, которым заканчивается каждая запись. В телеграме это личные сообщения,
 // в Instagram — Директ; слово выбирается по сети.
@@ -104,16 +167,15 @@ async function fetchLiveModel(brand, model) {
   const key = `${brand}\u0000${model}`;
   if (liveModelCache.has(key)) return liveModelCache.get(key);
   const request = (async () => {
-    const cars = [];
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const query = new URLSearchParams({ brand, model, sort:"price_asc", limit:String(PAGE_SIZE), offset:String(offset) });
-      const response = await fetch(`${CATALOG_ORIGIN}/api/cars?${query}`, { signal:AbortSignal.timeout(30_000) });
-      if (!response.ok) throw new Error(`Каталог ${brand} ${model}: HTTP ${response.status}`);
-      const page = await response.json();
-      if (!Array.isArray(page.items)) throw new Error(`Каталог ${brand} ${model}: неверный ответ API`);
-      cars.push(...page.items.filter(isLiveAvailable).map(normalizeLiveCar));
-      if (!page.hasMore || !page.items.length) break;
-    }
+    // Для пяти недельных публикаций нужен набор кандидатов, а не полная выгрузка
+    // каталога. Одна страница на модель даёт до 100 самых доступных живых машин и
+    // удерживает весь недельный запуск в пределах обычного публичного бюджета.
+    const query = new URLSearchParams({ brand, model, sort:"price_asc", limit:String(PAGE_SIZE), offset:"0" });
+    const response = await fetchCatalogResponse(`${CATALOG_ORIGIN}/api/cars?${query}`);
+    if (!response.ok) throw new Error(`Каталог ${brand} ${model}: HTTP ${response.status}`);
+    const page = await response.json();
+    if (!Array.isArray(page.items)) throw new Error(`Каталог ${brand} ${model}: неверный ответ API`);
+    const cars = page.items.filter(isLiveAvailable).map(normalizeLiveCar);
     return cars.map(priced).sort((left, right) =>
       left.totalUsd - right.totalUsd || String(left.externalId).localeCompare(String(right.externalId)));
   })();
@@ -131,7 +193,7 @@ async function listingsForModels(models) {
   // но недельный сборщик не должен создавать на нём всплеск нагрузки.
   const result = [];
   const queue = [...models];
-  const workers = Array.from({ length:Math.min(6, queue.length) }, async () => {
+  const workers = Array.from({ length:Math.min(CATALOG_WORKERS, queue.length) }, async () => {
     while (queue.length) {
       const item = queue.shift();
       result.push(...await fetchLiveModel(item.brand, item.model));
@@ -280,15 +342,21 @@ export async function budgetPick({ models, capUsd, network = "telegram", limit =
   };
 }
 
+export function duelCandidate(cars, excludedIds = []) {
+  const excluded = new Set(excludedIds.map(String));
+  const available = cars.filter((car) => !excluded.has(String(car.externalId)));
+  if (!available.length) return null;
+  const medianYear = median(available.map((car) => car.year));
+  const medianMileage = median(available.map((car) => car.mileage));
+  const good = available.filter((car) => car.year >= medianYear && car.mileage <= medianMileage);
+  return good[0] || available[0];
+}
+
 /** Блок 7. Сравнение двух моделей: берём у каждой оптимальную машину. */
-export async function modelDuel({ left, right, network = "telegram" }) {
+export async function modelDuel({ left, right, network = "telegram", excludedIds = [] }) {
   const pickBest = async ({ brand, model }) => {
     const cars = await modelListings(brand, model);
-    if (!cars.length) return null;
-    const medianYear = median(cars.map((car) => car.year));
-    const medianMileage = median(cars.map((car) => car.mileage));
-    const good = cars.filter((car) => car.year >= medianYear && car.mileage <= medianMileage);
-    return good[0] || cars[0];
+    return duelCandidate(cars, excludedIds);
   };
   const [one, two] = await Promise.all([pickBest(left), pickBest(right)]);
   if (!one || !two) return null;

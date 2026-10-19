@@ -95,6 +95,8 @@ test("кадры собираются без повторов, в JPEG и не �
     "https://erscglobal2.autoimg.cn/escimg/auto/g34/1080x0_b.jpg",
   ]);
   assert.equal(pickPhotos(car).length, 3, "чужой адрес и пустые значения отброшены");
+  const guazi = "https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg";
+  assert.deepEqual(pickPhotos({ images:[guazi] }), [guazi]);
 });
 
 test("номер машины берётся и из внешнего поля, и из нашего кода", () => {

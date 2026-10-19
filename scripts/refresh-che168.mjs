@@ -58,6 +58,7 @@ import { PENDING_CYCLE_SQL, resumeRefreshCycle, startNewRefreshCycle, readCheckL
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
+import { refreshAfterManualCatalog } from "./lib/sitemap-refresh.mjs";
 import { circleFailure } from "./lib/circle-report.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -1542,6 +1543,7 @@ try {
   console.log(JSON.stringify(report, null, 2));
   // Only one result: a successful summary or detailed incomplete/error report.
   if (circleClosed && !totals.addFailed) {
+    if (!dryRun) await refreshAfterManualCatalog({ root: ROOT });
     await reportCircleDone(cursor.round || 1, {
       brands: doneNow.size,
       checked: verifiedThisRun.size,

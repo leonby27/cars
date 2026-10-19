@@ -5,7 +5,7 @@ export const CIRCLE_SOURCES = Object.freeze({ '1': 'che', '2': 'guazi', '3': 'en
 export function circlePlan(source, state) {
   if (source === 'che') return [{ command: 'xvfb-run', args: ['-a', 'node', 'scripts/refresh-che168.mjs', '--new-per-brand=100', '--new-circle'], log: '/tmp/circle.log' }];
   if (source === 'guazi') return [{ command: 'xvfb-run', args: ['-a', 'node', 'scripts/refresh-guazi.mjs', '--run', ...(!state || state.status === 'complete' ? ['--new-circle'] : [])], log: 'runtime/guazi-refresh/worker.log' }];
-  if (source === 'encar') return [{ command: 'node', args: ['scripts/refresh-encar.mjs'], log: 'runtime/encar-circle.log' }];
+  if (source === 'encar') return [{ command: 'node', args: ['scripts/refresh-encar.mjs', ...(state?.phase && state.phase !== 'complete' && state.detailsReady ? ['--resume'] : [])], log: 'runtime/encar-circle.log' }];
   throw Error(`Unknown circle source: ${source}`);
 }
 
@@ -21,14 +21,16 @@ export function sourceIsRunning(source, processList) {
 }
 
 export function encarImportPlan(discoveries, report, startedAt) {
-  if (!report?.finishedAt || report.fatal || Date.parse(report.startedAt) < startedAt || !Number.isFinite(Date.parse(report.startedAt))) throw Error('Нет свежего завершённого отчёта Encar');
+  const snapshotStartedAt = Date.parse(report?.startedAt);
+  const refreshedAt = Math.max(snapshotStartedAt, Date.parse(report?.resumedAt) || 0);
+  if (report?.fatal || !Number.isFinite(snapshotStartedAt) || !Number.isFinite(Date.parse(report?.finishedAt)) || Date.parse(report.finishedAt) < startedAt || refreshedAt < startedAt) throw Error('Нет свежего завершённого отчёта Encar');
   if (report.complete === false || report.remainingListings || report.walk?.broken || report.walk?.stopped || report.unknown) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
-  if (!Array.isArray(discoveries?.items) || Date.parse(discoveries.generatedAt) < startedAt || !Number.isFinite(Date.parse(discoveries.generatedAt))) throw Error('Нет свежих находок Encar');
+  if (!Array.isArray(discoveries?.items) || Date.parse(discoveries.generatedAt) < snapshotStartedAt || Date.parse(discoveries.generatedAt) > Date.parse(report.finishedAt) || !Number.isFinite(Date.parse(discoveries.generatedAt))) throw Error('Нет свежих находок Encar');
   if (!discoveries.items.length) return null;
   return { command: 'node', args: ['scripts/import-encar.mjs', '--discoveries', `--limit=${discoveries.items.length}`], log: 'runtime/encar-circle.log' };
 }
 
-export async function runScheduledCircle(source, { readState, running, run, notify = async () => {}, diagnostics = async () => ({}), now = Date.now }) {
+export async function runScheduledCircle(source, { readState, running, run, afterRefresh = async () => {}, notify = async () => {}, diagnostics = async () => ({}), now = Date.now }) {
   const number = Object.keys(CIRCLE_SOURCES).find(key => CIRCLE_SOURCES[key] === source);
   if (!number) throw Error(`Unknown circle source: ${source}`);
   const label = `Круг ${number} · ${source === 'che' ? 'Che168' : source === 'guazi' ? 'Guazi' : 'Encar'}`;
@@ -39,7 +41,7 @@ export async function runScheduledCircle(source, { readState, running, run, noti
       await notify(`${label}: запуск по расписанию пропущен — источник уже работает.`);
       return 'busy';
     }
-    state = source === 'guazi' ? await readState('runtime/guazi-refresh/current.json') : null;
+    state = source === 'guazi' ? await readState('runtime/guazi-refresh/current.json') : source === 'encar' ? await readState('runtime/encar-refresh-checkpoint.json') : null;
     for (const step of circlePlan(source, state)) await run(step);
     if (source === 'encar') {
       report = await readState('runtime/encar-refresh-report.json');
@@ -64,6 +66,7 @@ export async function runScheduledCircle(source, { readState, running, run, noti
       state = await readState('runtime/guazi-refresh/current.json');
       if (state?.status !== 'complete') throw Error('Круг не завершён; прогресс сохранён. Продолжение: «Продолжить 2».');
     }
+    await afterRefresh();
     await notify(circleSummary(source, { report, state, importReport, elapsedMs: now() - startedAt }));
     return 'complete';
   } catch (error) {

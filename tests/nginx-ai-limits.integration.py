@@ -183,6 +183,11 @@ http {{
         sustained = [request(address='127.0.0.9',url='/api/cars/summary?offset='+str(n))[0] for n in range(90)]
         assert sum(code==200 for code in sustained) == 31, collections.Counter(sustained)
         assert all(code==429 for code in sustained[-20:])
+        # The relaxed visitor allowance recovers one request in five seconds,
+        # shared between domains; the old 6/minute policy would still refuse it.
+        time.sleep(5.15)
+        assert request(address='127.0.0.9', host='b.test', url='/api/cars/summary?offset=recovered')[0] == 200
+        assert request(address='127.0.0.9', host='a.test', url='/api/cars/summary?offset=still-bounded')[0] == 429
 
         # Genuine provider IP + matching UA bypass; forged name does not.
         search_agents = ['Googlebot/2.1','bingbot/2.0','YandexRenderResourcesBot/1.0','Applebot/0.1','DuckDuckBot/1.0','OAI-SearchBot/1.0','PerplexityBot/1.0','Claude-SearchBot/1.0']

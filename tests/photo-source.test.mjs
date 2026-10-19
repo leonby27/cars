@@ -61,6 +61,16 @@ test("для соцсетей адрес ведёт в хранилище ист
     assert.equal(socialPhotoHref(other), "");
 });
 
+test("для соцсетей Guazi остаётся JPEG на разрешённом хосте", () => {
+  const guazi = "https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg";
+  assert.equal(socialPhotoHref(guazi), guazi);
+  assert.equal(
+    socialPhotoHref(guazi, { origin:"https://abcars.by" }),
+    `https://abcars.by/api/image?src=${encodeURIComponent(guazi)}`,
+  );
+  assert.equal(socialPhotoHref(guazi.replace("a.jpg", "a.webp")), "");
+});
+
 const mockImage = (src, srcset) => {
   const attrs = { src, ...(srcset ? { srcset, sizes: "100vw" } : {}) };
   return {

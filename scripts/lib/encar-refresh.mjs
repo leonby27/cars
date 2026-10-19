@@ -29,7 +29,7 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
   if (resume && (!state || state.version !== 1 || JSON.stringify(state.options) !== JSON.stringify(options))) {
     throw new Error('Encar: нет совместимой сохранённой очереди; запустите новый полный проход');
   }
-  if (resume && (!state.detailsReady || !state.summary.walk || state.summary.walk.broken || state.summary.walk.stopped)) {
+  if (resume && (!state.detailsReady || !state.summary.walk)) {
     throw new Error('Encar: списки не завершены; нужен новый полный проход');
   }
   if (resume && state.phase === 'complete') throw new Error('Encar: сохранённый проход уже завершён');
@@ -45,6 +45,7 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
   delete summary.fatal;
   delete summary.finishedAt;
   if (resume) summary.resumedAt = iso();
+  const attempt = summary.attempt = { startedAt: iso(), checked: 0, completed: 0, readFailed: 0, parseFailed: 0, writeFailed: 0, responseStatuses: {}, errors: [] };
   let pending = new Set(state.pending);
   let workQueue = [...pending];
   let saveChain = Promise.resolve();
@@ -61,7 +62,10 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
       summary.responseStatuses[key] = (summary.responseStatuses[key] || 0) + 1;
     }
     // Keep examples of every kind even if thousands of network failures came first.
-    summary.errors = ['read', 'parse', 'write'].flatMap(stage => failures.filter(item => item.stage === stage).slice(0, 5));
+    summary.errors = ['read', 'parse', 'write'].flatMap(stage => [
+      ...attempt.errors.filter(item => item.stage === stage),
+      ...failures.filter(item => item.stage === stage && !attempt.errors.some(current => current.externalId === item.externalId)),
+    ].slice(0, 5));
     summary.remainingListings = pending.size;
     summary.requests = requestsBefore + client.requests;
     summary.checkpointPath = checkpointPath;
@@ -82,6 +86,9 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     const entry = { externalId, stage, status, code: error?.code || error?.cause?.code,
       error: safeDiagnostic(error?.message || error).slice(0, 240) };
     state.failures[externalId] = entry;
+    attempt[`${stage}Failed`] += 1;
+    if (stage === 'read') attempt.responseStatuses[String(status ?? 0)] = (attempt.responseStatuses[String(status ?? 0)] || 0) + 1;
+    attempt.errors = [entry, ...attempt.errors].slice(0, 15);
     log(`[${stage}] ${externalId}: ${status === undefined ? '' : `HTTP ${status} · `}${entry.code ? `${entry.code} · ` : ''}${entry.error}`);
   };
   try {
@@ -102,6 +109,7 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
         },
         onSlice: ({ label, total, items }) => log(`[list] ${label}: ${items} из ${total}`),
       });
+      if (summary.walk.broken && !summary.walk.slices) throw new Error('Encar: ни одного списка не удалось подтвердить; проверка карточек не запущена');
       state.discoveries = [...discoveries.values()];
       state.discoveriesGeneratedAt = iso();
       summary.discoveries = discoveries.size;
@@ -129,6 +137,26 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
       state.detailsReady = true;
       await save();
     } else {
+      state.phase = 'details';
+      await save();
+      if (summary.walk.broken || summary.walk.stopped) {
+        // Rebuild only the list evidence; keep the existing unresolved detail
+        // queue and all successful card writes/counters from the same round.
+        log('[resume] перепроверяю неполные списки; готовые карточки не повторяются');
+        const known = new Set((await db.query("SELECT external_id FROM listings WHERE source='Encar'")).rows.map(row => String(row.external_id)));
+        const discoveries = new Map(state.discoveries.map(item => [item.externalId, item]));
+        summary.walk = await client.walk({ brands, yearFrom, minYear: yearFrom, stop,
+          onItem: candidate => {
+            if (!known.has(candidate.externalId)) discoveries.set(candidate.externalId, { ...candidate, brand: canonicalBrand(candidate.manufacturer) });
+          },
+          onSlice: ({ label, total, items }) => log(`[list] ${label}: ${items} из ${total}`),
+        });
+        state.discoveries = [...discoveries.values()];
+        summary.discoveries = discoveries.size;
+        await writeEncarJson(discoveriesPath, { generatedAt: state.discoveriesGeneratedAt, source: 'Encar', yearFrom, items: state.discoveries });
+        await save();
+        if (summary.walk.broken || summary.walk.stopped) throw new Error('Encar: списки пока не завершены; очередь сохранена для продолжения');
+      } else await client.verifyAccess?.({ brands, yearFrom, sampleId: workQueue[0] || state.discoveries[0]?.externalId });
       if (detailLimit > 0) workQueue = workQueue.slice(0, detailLimit);
       log(`[resume] осталось проверить ${pending.size} карточек`);
     }
@@ -136,10 +164,11 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     const worker = async () => {
       while (cursor < workQueue.length && !stop() && !fatal) {
         const externalId = workQueue[cursor++];
+        attempt.checked += 1;
         let stage = 'read';
         try {
           const { status, car, detail, error } = await client.car(externalId, { usdPerKrw, history: true });
-          if (status !== 200 && status !== 404) {
+          if ((status !== 200 && status !== 404) || (status === 404 && error)) {
             fail(externalId, 'read', error || `Encar: detail request failed (${status})`, status);
           } else if (status === 200 && (!detail || error)) {
             fail(externalId, 'parse', error || 'Encar: empty detail response', status);
@@ -155,12 +184,19 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
               summary.stillAlive += 1;
             }
             pending.delete(externalId);
+            attempt.completed += 1;
             delete state.failures[externalId];
           }
         } catch (error) {
           if (error.code === 'ENCAR_GEO_BLOCKED') { fatal = error; break; }
+          if (error.code === 'ENCAR_UNAVAILABLE') {
+            fail(externalId, error.stage || 'read', error, error.status ?? 0);
+            fatal = error;
+            break;
+          }
           if (error.stage === 'parse') stage = 'parse';
-          fail(externalId, stage, error);
+          fail(externalId, stage, error, error.status);
+          if (stage === 'write' && /^(?:08|53|57P0|ECONN|ETIMEDOUT|EPIPE)/.test(error.code || '')) { fatal = error; break; }
         }
         processedSinceSave += 1;
         if (processedSinceSave >= 100 || now() - savedAt >= 30_000) {

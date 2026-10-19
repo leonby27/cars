@@ -90,6 +90,12 @@ export function socialPhotoHref(source, { origin = "", width = 1080 } = {}) {
       if (!/\.jpe?g$/i.test(encarUrl.pathname)) return "";
       return origin ? `${origin}${ENCAR_PHOTO_PREFIX}/w1200${encarUrl.pathname}` : `https://${encarUrl.hostname}${encarUrl.pathname}?${encarResizeQuery(width)}`;
     }
+    // Guazi уже отдаёт JPEG по адресу объявления. Для собственных публикаций
+    // используем этот же разрешённый хост напрямую либо наш проверяющий прокси.
+    if (guaziHosts.has(encarUrl.hostname)) {
+      if (!/\.jpe?g$/i.test(encarUrl.pathname)) return "";
+      return origin ? `${origin}/api/image?src=${encodeURIComponent(encarUrl.href)}` : encarUrl.href;
+    }
     const url = new URL(
       source.startsWith("/photo/") ? `${sourceOrigin}${source.slice("/photo".length)}`
         : source.startsWith("//") ? `https:${source}` : source,

@@ -41,7 +41,7 @@ test('Guazi schedule resumes its actual current.json and verifies completion', a
 test('Encar failure stops subsequent import and reports the error', async () => {
   let calls = 0;
   const messages = [];
-  await assert.rejects(runScheduledCircle('encar', { running: async () => false, readState: () => assert.fail(), run: async () => { calls++; throw Error('network failed'); }, notify: async text => messages.push(text) }), /network failed/);
+  await assert.rejects(runScheduledCircle('encar', { running: async () => false, readState: async name => { assert.equal(name,'runtime/encar-refresh-checkpoint.json'); return null; }, run: async () => { calls++; throw Error('network failed'); }, notify: async text => messages.push(text) }), /network failed/);
   assert.equal(calls, 1);
   assert.equal(messages.length, 1);
   assert.match(messages[0], /не завершён/);
@@ -53,6 +53,20 @@ test('Encar refresh and import run in order', async () => {
     run: async step => steps.push(step.args[0]),
   });
   assert.deepEqual(steps, ['scripts/refresh-encar.mjs', 'scripts/import-encar.mjs']);
+});
+test('sitemap refresh follows successful import and precedes completion, failures remain failures', async () => {
+  for (const fails of [false, true]) {
+    const events = [];
+    const options = { now: () => startedAt, running: async () => false,
+      readState: async name => name.includes('discoveries') ? { generatedAt: iso, items: [{}] } : name.includes('import-report') ? { ...report, final: true } : report,
+      run: async step => events.push(step.args[0]),
+      afterRefresh: async () => { events.push('sitemap'); if (fails) throw Error('sitemap unavailable'); },
+      notify: async text => events.push(text.includes('✅') ? 'success' : 'failure'),
+    };
+    if (fails) await assert.rejects(runScheduledCircle('encar', options), /sitemap unavailable/);
+    else await runScheduledCircle('encar', options);
+    assert.deepEqual(events, ['scripts/refresh-encar.mjs', 'scripts/import-encar.mjs', 'sitemap', fails ? 'failure' : 'success']);
+  }
 });
 test('Che168 emits a single numeric summary, and a single detailed failure for partial work', async () => {
   for (const partial of [false, true]) {
@@ -102,4 +116,27 @@ test('weekly timers encode Minsk time with no jitter or missed-run catchup', asy
     assert.ok(timer.includes('RandomizedDelaySec=0'));
     assert.ok(timer.includes('Persistent=false'));
   }
+});
+
+test('Encar resumes an unfinished queue and only starts fresh after a complete checkpoint',()=>{
+  assert.ok(circlePlan('encar',{phase:'partial',detailsReady:true}).at(0).args.includes('--resume'));
+  assert.ok(!circlePlan('encar',{phase:'complete',detailsReady:true}).at(0).args.includes('--resume'));
+  assert.ok(!circlePlan('encar',{phase:'partial',detailsReady:false}).at(0).args.includes('--resume'));
+});
+
+test('a fresh resumed report may import its original discoveries, but stale attempts and unrelated dates cannot',async()=>{
+  const old='2026-10-01T15:00:00Z';
+  const discoveries={generatedAt:'2026-10-01T15:05:00Z',items:[{}]};
+  const resumed={...report,startedAt:old,resumedAt:iso,complete:true,remainingListings:0};
+  assert.ok(encarImportPlan(discoveries,resumed,startedAt));
+  assert.throws(()=>encarImportPlan(discoveries,{...resumed,resumedAt:old},startedAt));
+  assert.throws(()=>encarImportPlan(discoveries,{...resumed,finishedAt:old},startedAt));
+  assert.throws(()=>encarImportPlan({...discoveries,generatedAt:'2026-09-01'},resumed,startedAt));
+  assert.throws(()=>encarImportPlan({...discoveries,generatedAt:'2026-10-06'},resumed,startedAt));
+  const steps=[];
+  await runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,run:async step=>steps.push(step.args),
+    readState:async name=>name.includes('checkpoint')?{phase:'partial',detailsReady:true}:name.includes('discoveries')?discoveries:name.includes('import-report')?{...report,final:true,complete:true}:resumed,
+  });
+  assert.ok(steps[0].includes('--resume'));
+  assert.equal(steps[1][0],'scripts/import-encar.mjs');
 });

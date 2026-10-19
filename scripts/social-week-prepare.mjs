@@ -128,7 +128,8 @@ if (weekSerial % 2 === 0) {
   middleContext = { count:middle?.cars?.length || 5, capUsd };
 } else {
   const [left, right] = duelPairs[Math.abs(weekSerial) % duelPairs.length];
-  middle = await allNetworks((network) => modelDuel({ left, right, network }));
+  const excludedIds = [core.block.cars[0]?.externalId, value.block.cars[0]?.externalId].filter(Boolean);
+  middle = await allNetworks((network) => modelDuel({ left, right, network, excludedIds }));
   middleContext = {
     left:carTitle(left.brand, left.model, null),
     right:carTitle(right.brand, right.model, null),
