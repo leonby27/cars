@@ -8,7 +8,7 @@ export function homeBootFromSnapshot(saved) {
   return {
     ...(popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : {}),
     ...(Number.isFinite(total) && total > 0 ? {
-      catalogFacts: { total, updatedAt: String(saved.catalogFacts.updatedAt || "") },
+      catalogFacts: { total, ...(Number(saved.catalogFacts.brandCount) > 0 ? { brandCount: Number(saved.catalogFacts.brandCount) } : {}), updatedAt: String(saved.catalogFacts.updatedAt || "") },
     } : {}),
   };
 }

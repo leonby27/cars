@@ -126,6 +126,7 @@ test("preview build ships public pages as noindex and no vehicle pages", async (
   const { read, missing } = await build();
   const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
   assert.match(home, /<h1>Авто из Китая и Кореи с доставкой в Беларусь<\/h1>/);
+  assert.match(home, /<meta name="description" content="Каталог авто из Китая и Кореи\. ⚡️ С доставкой в Беларусь под ключ\. ✓ С расчётом стоимости до Минска\."/);
   assert.match(home, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
   // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
@@ -206,6 +207,7 @@ test("на тестовой сборке заготовка машины зак�
 test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", async () => {
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
   const [home, html, robots, sitemap] = await Promise.all([read("index.html"), read("cars/170268619192114/index.html"), read("robots.txt"), read(sitemapIndex)]);
+  assert.match(home, /<meta name="description" content="Каталог из 3 авто из Китая и Кореи\. ⚡️ С доставкой в Беларусь под ключ/);
   // Адрес карточки — короткий номер объявления: приставка источника из ссылок убрана.
   assert.match(home, /<a href="\/cars\/170268619192114"/);
   assert.doesNotMatch(home, /<a href="\/cars\/guazi-/);

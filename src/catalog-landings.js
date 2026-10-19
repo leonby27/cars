@@ -1,3 +1,4 @@
+import { catalogDescription, homeDescription } from "./meta-descriptions.js";
 import { fuelType } from "./engine-spec.js";
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
@@ -1772,38 +1773,17 @@ export const landingSeoTitle = (landing, stats = null) => {
   return fitTitle(base, [" — цены и наличие", " — цены"], 70);
 };
 
-/**
- * Короткое описание сохраняет предмет раздела и страны даже с живыми цифрами.
- * Сначала убираем общий текст, затем годы и верхнюю цену, но не марку или бюджет.
- */
+/** Описание раздела с фактическими остатками и минимальной ценой до Минска. */
 export const landingSeoDescription = (landing, stats = null) => {
-  const base = landing.sourceSeoDescription || landing.seoDescription || "";
-  const total = Number(stats?.total) || 0;
-  if (!total) {
-    if (base.length <= 160) return base;
-    const from = landing.kind === "origin" ? fromPhrase(landing.origin) : siteFromPhrase();
-    return `${landingSubject(landing) || "Каталог авто"} с пробегом ${from}: характеристики и ориентировочная цена с доставкой до Минска.`;
-  }
-  const from = Number(stats?.priceFrom) || 0;
-  const to = Number(stats?.priceTo) || 0;
-  const prices = from && to && to > from ? `цены от ${formatCount(from)} до ${formatCount(to)} $ с доставкой до Минска` : from ? `цены от ${formatCount(from)} $ с доставкой до Минска` : "";
-  const yearMin = Number(stats?.yearMin) || 0;
-  const yearMax = Number(stats?.yearMax) || 0;
-  const years = yearMin && yearMax ? (yearMin === yearMax ? `${yearMin} года выпуска` : `${yearMin}–${yearMax} годов выпуска`) : "";
-  const origin = landing.kind === "origin" ? fromPhrase(landing.origin) : siteFromPhrase();
   let subject = (landingSubject(landing) || "Каталог авто").replace(ADJECTIVE_HEAD(), "");
   if (landing.brand && !subject.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU"))) subject = `${landing.brand} ${subject}`;
-  const heading = `${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${origin}`;
-  const count = `в наличии ${formatCount(total)} авто б/у`;
-  const describe = (parts) => `${heading}: ${parts.filter(Boolean).join(", ")}.`;
-  const shortest = describe([count, from ? `от ${formatCount(from)} $ с доставкой до Минска` : "доставка до Минска"]);
-  const variants = [
-    `${describe([count, prices || "доставка до Минска", years])} ${base}`.trim(),
-    describe([count, prices || "доставка до Минска", years]),
-    describe([count, prices || "доставка до Минска"]),
-    shortest,
-  ];
-  return variants.find((description) => description.length <= 160) || shortest;
+  return catalogDescription({
+    subject: landing.kind === "origin" ? "Каталог авто" : subject.charAt(0).toUpperCase() + subject.slice(1),
+    origin: landing.origin,
+    total: stats?.total,
+    priceFrom: stats?.priceFrom,
+    brand: landing.kind === "brand",
+  });
 };
 
 /** Заголовок страницы без «б/у» и «с пробегом»: они в подзаголовке и в тексте. */
@@ -1836,7 +1816,7 @@ export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSe
 export const HOME_SEO = Object.freeze({
   // До 80 знаков: «под заказ» из заголовка ушло в описание (с Кореей фраза длиннее).
   title: `Авто ${siteFromPhrase()} в Беларусь — ${siteAdjective()} автомобили${TITLE_TAIL}`,
-  description: `Б/у авто ${siteFromPhrase()} под заказ с проверкой и доставкой в Беларусь: ${siteAdjective()} автомобили с пробегом под ключ, цена продавца и расчёт стоимости до Минска.`,
+  description: homeDescription(),
   // Неразрывные пробелы стоят в самом тексте: типографика после оживления его не
   // трогает (см. заголовок главной в App.jsx).
   h1: `Авто ${siteFromPhrase({ nbsp: true })} с\u00a0доставкой в\u00a0Беларусь`,
@@ -1859,7 +1839,7 @@ export const HOME_H1_PARTS = Object.freeze([
 // точной форме, «каталог» и «цены» — ещё сотни в широкой).
 export const CATALOG_INDEX_SEO = Object.freeze({
   title: `Купить авто ${siteFromPhrase()} — каталог и цены с доставкой${TITLE_TAIL}`,
-  description: `Каталог б/у авто ${siteFromPhrase()}: купить электромобиль, гибрид или бензиновую машину с пробегом по цене с доставкой в Беларусь и ориентировочным расчётом растаможки.`,
+  description: catalogDescription(),
   // H1 — «Авто из Китая и Кореи», как у страниц стран «Авто из Китая» / «Авто из Кореи»:
   // выбор страны в заголовке меняет только слова стран, а не всю фразу (Сергей, 29.09.2026).
   h1: `Авто ${siteFromPhrase()}`,

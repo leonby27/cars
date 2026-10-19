@@ -12,6 +12,7 @@ test("home snapshot preserves saved cards/counts and accepts older builds", () =
   assert.deepEqual(homeBootFromSnapshot({ models, showcase: [car], catalogFacts: { total: 125, updatedAt: "2026-10-01" } }), {
     popularModels: models, brandModelTabs: [], homeShowcase: [car], catalogFacts: { total: 125, updatedAt: "2026-10-01" },
   });
+  assert.equal(homeBootFromSnapshot({ catalogFacts: { total: 125088, brandCount: 47 } }).catalogFacts.brandCount, 47);
   assert.deepEqual(homeBootFromSnapshot(models), { popularModels: models, brandModelTabs: [], homeShowcase: [] });
   for (const saved of [null, {}, { models: {}, catalogFacts: { total: "unknown" } }]) assert.deepEqual(homeBootFromSnapshot(saved), {});
 });

@@ -68,7 +68,7 @@ test("заголовок страницы модели: «в Беларусь»,
   const seo = modelCatalogSeo({ name: "BYD Seal", facts: { total: 286, priceFrom: 27400, priceTo: 61900 }, review: { h1: "Купить BYD Seal б/у из Китая с доставкой в Минск" } });
   assert.equal(seo.title, "BYD Seal из Китая и Кореи в Беларусь — 286 в наличии, от 27\u00a0400 $ | abcars.by");
   assert.equal(seo.h1, "Купить BYD Seal из Китая и Кореи с доставкой в Беларусь");
-  assert.match(seo.description, /б\/у/);
+  assert.match(seo.description, /В наличии 286 авто с пробегом/);
   assert.match(seo.description, /Минска/);
 });
 

@@ -1,3 +1,4 @@
+import { homeDescription, vehicleDescription } from "./meta-descriptions.js";
 import { orderPageHead } from "./page-head-order.js";
 import { PasswordField } from "./password-field.jsx";
 import { secondaryPage } from "./secondary-page-load.jsx";
@@ -1043,6 +1044,7 @@ function applyPageHead({ title, description, canonical, indexable }) {
 }
 
 function ClientSeo({ path, car, landing, carPending = false }) {
+  const catalogFacts = useContext(CatalogFactsContext);
   // Страница списка раздела («?page=2») — свой первоисточник и свой заголовок, как
   // отдаёт сервер; номер читаем при каждой отрисовке, а не только при смене пути.
   const listPageRaw = isCatalogPath(path) ? String(new URLSearchParams(window.location.search).get("page") || "") : "";
@@ -1065,10 +1067,10 @@ function ClientSeo({ path, car, landing, carPending = false }) {
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [baseTitle, baseDescription] = detailTitle
-      ? [carPageTitle(car), `${detailTitle} ${fromPhrase(carOrigin(car))}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены с доставкой до Минска.`]
+      ? [carPageTitle(car), vehicleDescription(car, estimateLandedCost(car).totalUsd)]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
     const title = listPage ? String(baseTitle).replace(/ \| abcars\.by$/, ` — страница ${listPage} | abcars.by`) : baseTitle;
-    const description = listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
+    const description = path === "/" ? homeDescription({ ...catalogFacts, brandCount: window.__boot?.catalogFacts?.brandCount }) : listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
     canonicalBase.pathname = "/";
@@ -1087,7 +1089,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
       || Boolean(landing?.kind === "model" && landing.facts && !landing.review && (Number(landing.facts.total) || 0) < 3);
     const indexable = indexingEnabled && !privatePage && !emptyLanding && Boolean(routeSeo[path] || detailTitle || landingSeo);
     applyPageHead({ title, description, canonical, indexable });
-  }, [path, car, landing, listPage, carPending]);
+  }, [path, car, landing, listPage, carPending, catalogFacts]);
   return null;
 }
 

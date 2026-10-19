@@ -429,7 +429,7 @@ test("в разметке списка у машины есть фотограф
   const list = JSON.parse(html.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema\.org","@type":"ItemList".*?)<\/script>/)[1]);
   const first = list.itemListElement[0].item;
   assert.deepEqual(first.image, ["https://example.com/photo.jpg"]);
-  assert.match(first.description, /пробег .* км/);
+  assert.match(first.description, /Пробег .* км/);
   assert.equal(first.offers.price, list.itemListElement[0].item.offers.price);
 });
 
@@ -449,11 +449,9 @@ test("с живыми цифрами заголовок раздела назы�
   assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
   assert.match(description, /BYD из Китая и Кореи/);
-  assert.match(description, /в наличии 5\u00a0204 авто/);
-  assert.match(description, /от 9\u00a0950 до 88\u00a0000 \$ с доставкой до Минска/);
-  assert.match(description, /2021–2025/);
-  // Короткое описание сохраняет «б/у», цены и направление доставки.
-  assert.match(description, /б\/у/);
+  assert.match(description, /В наличии 5\u00a0204 авто с пробегом/);
+  assert.match(description, /➔ С доставкой и подробным расчетом до Минска под ключ/);
+  assert.match(description, /✓ Удобный каталог/);
 });
 
 test("подзаголовок один на все разделы: «китайские и корейские» и у Audi, и у BYD", () => {
@@ -483,9 +481,9 @@ test("Genesis и KGM имеют обычные индексируемые мар
 test("описания разделов сохраняют живые цены и не повторяют длинный вводный текст", () => {
   for (const landing of CATALOG_LANDINGS) {
     const description = landingSeoDescription(landing, { total:132503, priceFrom:12345, priceTo:987654, yearMin:2000, yearMax:2026 });
-    assert.ok(description.length <= 160, `${landing.path}: ${description.length}`);
+    assert.ok(description.length <= 250, `${landing.path}: ${description.length}`);
     assert.match(description, /132[\s ]503/);
-    assert.match(description, /12[\s ]345/);
+    if (landing.kind !== "brand") assert.match(description, /12[\s ]345/);
     assert.match(description, /Минска/);
     if (landing.brand) assert.ok(description.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU")), `${landing.path}: потеряна марка`);
     assert.match(description, landing.kind === "origin" && landing.origin === "korea" ? /из Кореи/ : landing.kind === "origin" ? /из Китая/ : /из Китая и Кореи/);

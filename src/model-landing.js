@@ -10,6 +10,7 @@
 // Одни и те же функции зовут сервер (готовая страница) и приложение (оживление
 // той же разметки), поэтому здесь нет ни обращений к базе, ни к окну браузера:
 // только данные на входе и строки на выходе.
+import { catalogDescription } from "./meta-descriptions.js";
 import { landingFaqDelivery, landingFaqDuty } from "./landing-faq.js";
 import { fromPhrase, siteCountriesGenitive, siteFromPhrase, siteWording, ORIGINS } from "./origin.js";
 
@@ -84,12 +85,11 @@ export function modelCatalogSeo({ name, facts = null, review = null, page = 1, o
   if (!facts) {
     return {
       title: fitModelTitle(base, [" — цены и наличие"], 70),
-      description: `${name} ${from}: объявления с ценами до Минска.${review?.lead ? ` ${review.lead}` : ""}`,
+      description: catalogDescription({ subject: name, origin, model: true }),
       h1,
     };
   }
   const total = Number(facts?.total) || 0;
-  const span = priceSpan(facts?.priceFrom, facts?.priceTo);
   const pageTail = page > 1 ? ` — страница ${page}` : "";
   const price = finite(facts?.priceFrom);
   const title = total
@@ -99,13 +99,8 @@ export function modelCatalogSeo({ name, facts = null, review = null, page = 1, o
         ` — ${number(total)} в наличии${pageTail}`,
       ].filter(Boolean))
     : fitModelTitle(`${name} ${from}`, [" — под заказ в Беларусь, цены и характеристики", " — под заказ в Беларусь", " — под заказ"], 70);
-  // В описании — «б/у», Минск и годы: то, что ушло из заголовка.
-  const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
-  const stock = total
-    ? `${name} б/у ${from}: ${cars(total)} в наличии, цены ${span ? `${span} ` : ""}с доставкой до Минска${years ? `, ${years}` : ""}.`
-    : `${name} ${from}: сейчас в наличии нет, можно привезти под заказ с расчётом цены до Минска.`;
-  const tail = review?.lead || review?.teaser || "";
-  const description = page > 1 ? `${stock} Страница ${page} списка.` : `${stock}${tail ? ` ${tail}` : ""}`.slice(0, 300);
+  const stock = catalogDescription({ subject: name, origin, total, model: true });
+  const description = page > 1 ? `${stock}. Страница ${page} списка.` : stock;
   return { title, description, h1 };
 }
 

@@ -74,7 +74,7 @@ test("страница машины несёт свой заголовок, оп
   // Тема — в описании и в хлебных крошках, а не в названии машины: заголовок остаётся
   // тем, что человек ищет («BYD Han 2023»), а слова «из Китая» идут второй строкой.
   // У машины — её страна (без поля origin это Китай), у крошек — фраза сайта.
-  assert.match(html, /<meta name="description" content="BYD Han 2023 из Китая: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
+  assert.match(html, /<meta name="description" content="BYD Han 2023 из Китая\. ⚡️ В наличии! Пробег 21[^"]*400 км, электромобиль, цена до Минска под ключ — [^"]+\$\."/);
   assert.match(html, /"name":"Каталог авто из Китая и Кореи"/);
   // Приставка источника из адреса убрана, косой черты на конце нет.
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/56135000"/);
@@ -137,7 +137,7 @@ test("машина с Encar говорит «из Кореи», а общие с
   const korean = { ...car, id: "encar-40123456", source: "Encar", origin: "korea", city: "" };
   // У похожей машины есть снимок: без него строки с alt в списке не будет.
   const { html } = render().carPage({ car: korean, related: [{ ...related[0], image: "https://example.com/han-2.jpg" }] });
-  assert.match(html, /<meta name="description" content="BYD Han 2023 из Кореи: пробег 21[^"]*400 км/);
+  assert.match(html, /<meta name="description" content="BYD Han 2023 из Кореи\. ⚡️ В наличии! Пробег 21[^"]*400 км/);
   assert.match(html, /alt="BYD Han 2023 из Кореи" width="750"/);
   assert.match(html, /"name":"Каталог авто из Китая и Кореи"/);
   assert.match(html, /<a href="\/catalog">Весь каталог автомобилей из Китая и Кореи<\/a>/);

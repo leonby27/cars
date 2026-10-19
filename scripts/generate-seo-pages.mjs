@@ -5,6 +5,7 @@ import { catalogRateKey, catalogBuildKey, readCatalogBuildCache, writeCatalogBui
 import { buildMetrics, writeBuildReport } from "./lib/build-metrics.mjs";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { homeDescription } from "../src/meta-descriptions.js";
 import { selectHomeFeed } from "../src/home-feed.js";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
@@ -1018,7 +1019,8 @@ const { models: popularModels, brands: brandModelTabs } = homePopularModels(live
 // Карточка витрины показывает не больше пяти кадров (HoverImagePreview) — остальные
 // фото и история цены в странице только утяжелили бы главную.
 const homeShowcase = live.showcase.map(({ images, priceHistory: _history, ...car }) => ({ ...car, images: Array.isArray(images) ? images.slice(0, 5) : images }));
-const catalogFacts = { total: live.activeCars || 0, updatedAt: live.catalogRefreshedAt || "" };
+const brandCount = new Set([...live.models.keys()].map((key) => key.split("|")[0])).size;
+const catalogFacts = { brandCount, total: live.activeCars || 0, updatedAt: live.catalogRefreshedAt || "" };
 writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase, catalogFacts })}\n`);
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
@@ -1122,7 +1124,7 @@ for (const page of publicPages) {
   if (page.tool?.faq?.length) schemas.push(renderer.faqSchema(page.tool.faq));
   // Первый экран главной браузер рисует целиком — заголовок с поиском, а не только
   // шапку: главная и есть та страница, куда приходят по ссылке из поиска.
-  const options = { ...page, canonical: routeUrl(page.route), image: page.post ? blogPostImage(page.post) : undefined, body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" };
+  const options = { ...page, ...(page.route === "/" ? { description: homeDescription(catalogFacts) } : {}), canonical: routeUrl(page.route), image: page.post ? blogPostImage(page.post) : undefined, body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" };
   // `indexable` без значения убираем: у него в renderHtml свой разумный умолчание,
   // а явный undefined затёр бы его.
   if (options.indexable === undefined) delete options.indexable;

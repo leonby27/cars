@@ -1,3 +1,4 @@
+import { vehicleDescription } from "../src/meta-descriptions.js";
 import { withPageCss } from "./page-css.mjs";
 import { schemaFuelType } from "../src/engine-spec.js";
 import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
@@ -467,7 +468,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // дампе каталога, сервер — на записи из базы; данные приходят в одном виде.
 
   function carDescription(car, landed) {
-    return `${carTitle(car)} ${fromPhrase(car.origin)}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
+    return vehicleDescription(car, landed.totalUsd);
   }
 
   function carFacts(car, landed) {
@@ -748,7 +749,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       html: renderHtml({
         title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | abcars.by` : CATALOG_INDEX.title,
         // Сначала живые цифры (число машин и вилка цен), потом постоянный текст.
-        description: page > 1 ? `${CATALOG_INDEX.descriptionBase} Страница ${page} из ${pages}.` : landingSeoDescription({ seoDescription: CATALOG_INDEX.descriptionBase }, { total, priceFrom: spread?.from, priceTo: spread?.to }),
+        description: `${landingSeoDescription({}, { total, priceFrom: spread?.from })}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
         body,
         type: "website",
@@ -902,7 +903,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // `seo` — заголовок и описание с живыми цифрами (server/catalog-page.mjs); без
         // них — постоянные из справочника разделов.
         title: page > 1 ? `${landing.h1} — страница ${page} | abcars.by` : seo?.title || landing.seoTitle,
-        description: page > 1 ? `${landing.seoDescription} Страница ${page} из ${pages}.` : seo?.description || landing.seoDescription,
+        description: `${seo?.description || landing.seoDescription}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
         body,
         type: "website",
