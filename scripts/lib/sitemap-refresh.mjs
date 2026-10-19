@@ -48,36 +48,33 @@ export async function refreshPublishedSitemaps({ root, env = process.env, genera
     // The generator tolerates an unavailable database for preview builds. A live
     // sitemap refresh must fail closed and preserve the previous files instead.
     if (!prepared.prepared || !prepared.reusable) throw Error('Sitemap: fresh, consistent catalog data unavailable');
-    const index = await readFile(path.join(output, indexName), 'utf8');
-    const origin = new URL(env.SITE_URL || 'https://abcars.by').origin;
-    const children = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => {
-      const url = new URL(match[1]);
-      const name = url.pathname.slice(1);
-      if (url.origin !== origin || name !== `sitemap-${token}-pages.xml`) throw Error('Sitemap: unexpected child URL');
-      return name;
-    });
-    if (!children.includes(`sitemap-${token}-pages.xml`) || new Set(children).size !== children.length) throw Error('Sitemap: invalid index');
-    const pagesName = `sitemap-${token}-pages.xml`;
-    const previousPages = await readFile(path.join(client, pagesName), 'utf8');
-    const freshPages = await readFile(path.join(output, pagesName), 'utf8');
+    const previous = await readFile(path.join(client, indexName), 'utf8');
+    // Accept the previous index layout during the first XML-only refresh.
+    const previousPages = /<sitemapindex\b/.test(previous)
+      ? await readFile(path.join(client, `sitemap-${token}-pages.xml`), 'utf8') : previous;
+    const freshPages = await readFile(path.join(output, indexName), 'utf8');
     if (/xmlns:image|<image:/.test(freshPages)) throw Error('Sitemap: images are forbidden');
     const blocks = xml => [...xml.matchAll(/<url>[\s\S]*?<\/url>/g)].map(match => match[0]);
     const entryPath = entry => {
       const loc = entry.match(/<loc>([^<]+)<\/loc>/)?.[1];
       if (!loc) throw Error('Sitemap: page URL missing');
-      return new URL(loc).pathname;
+      const url = new URL(loc.replace(/&amp;/g, '&'));
+      if (url.origin !== new URL(env.SITE_URL || 'https://abcars.by').origin) throw Error('Sitemap: unexpected page origin');
+      return url.pathname;
     };
+    const paginatedEntry = entry => new URL(entry.match(/<loc>([^<]+)<\/loc>/)[1].replace(/&amp;/g, '&')).searchParams.has('page');
     const catalogEntry = entry => /^\/catalog(?:\/|$)/.test(entryPath(entry));
     const vehicleEntry = entry => /^\/cars(?:\/|$)/.test(entryPath(entry));
     if (!/<urlset\b/.test(previousPages) || !/<urlset\b/.test(freshPages)) throw Error('Sitemap: pages XML missing');
+    if (blocks(freshPages).some(paginatedEntry)) throw Error('Sitemap: pagination is forbidden');
     if (blocks(freshPages).some(vehicleEntry)) throw Error('Sitemap: vehicle cards are forbidden');
     // Catalog pages render from live data. Static articles/tools are not being
     // republished: preserve their existing inclusion and dates. A newly due
     // article must not appear in XML before its HTML is actually published.
-    const pageEntries = [...blocks(previousPages).filter(entry => !catalogEntry(entry) && !vehicleEntry(entry)),
+    const pageEntries = [...blocks(previousPages).filter(entry => !catalogEntry(entry) && !vehicleEntry(entry) && !paginatedEntry(entry)),
       ...blocks(freshPages).filter(catalogEntry)];
-    await writeFile(path.join(output, pagesName), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pageEntries.join('\n')}\n</urlset>\n`);
-    const files = [...children, indexName];
+    await writeFile(path.join(output, indexName), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pageEntries.join('\n')}\n</urlset>\n`);
+    const files = [indexName];
     const suffix = `.pending-${process.pid}-${path.basename(staging)}`;
     for (const name of files) {
       const xml = await readFile(path.join(output, name));
@@ -91,7 +88,7 @@ export async function refreshPublishedSitemaps({ root, env = process.env, genera
       }
     }
     // All XML and compressed copies are ready before replacing any live file.
-    // Children precede the index; obsolete shards are removed only afterwards.
+    // Obsolete parts are removed only after the direct sitemap is published.
     for (const [temporary, target] of pending) await rename(temporary, target);
     const keep = new Set(files.flatMap(name => [name, name + '.gz', name + '.br']));
     for (const name of await readdir(client)) {
@@ -100,7 +97,7 @@ export async function refreshPublishedSitemaps({ root, env = process.env, genera
         name.startsWith(`sitemap-${token}-`) && /\.xml(?:\.(?:gz|br))?$/.test(name);
       if (owned && !keep.has(name)) await rm(path.join(client, name));
     }
-    return { files: files.length, children: children.length };
+    return { files: files.length, children: 0 };
   } finally {
     for (const [temporary] of pending) await rm(temporary, { force: true });
     await rm(staging, { recursive: true, force: true });

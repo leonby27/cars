@@ -40,9 +40,9 @@ the runner refreshes the sitemap before reporting success. It takes the same
 `/run/lock/abcars-deploy.lock` as manual deployments, waiting up to 10 minutes.
 The refresh generates fresh data in a temporary directory and replaces only the
 sitemap XML files and their gzip/Brotli copies. HTML, assets, feeds and running
-services are untouched. Individual vehicle cards and images are never included. The index references
-only the pages sitemap (catalog sections, models, journal and other public
-pages). All former vehicle shards and compressed copies are removed.
+services are untouched. Pagination URLs (`?page=...`), individual vehicle cards and images are never included. The single `sitemap-7c4f19b2.xml` contains a direct URL list (catalog sections,
+models, journal and other public pages). Former `-pages.xml` files, vehicle shards
+and their compressed copies are removed.
 Vehicle pages retain their existing indexing and internal-link behavior. Database/preparation failures preserve the previous
 XML and fail the scheduled run; details are in `runtime/sitemap-refresh.log`.
 

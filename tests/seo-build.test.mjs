@@ -101,7 +101,7 @@ test("корейские Genesis/KGM с достаточным наличием 
       type:"ДВС", sourceFuelType:"Gasoline", engine:"2.0L", usdPrice:15000,
     })));
   const { read, missing } = await build({ SEO_ALLOW_INDEXING:"1", SEO_VEHICLE_PAGES:"1" }, [...fixtureCars, ...korean]);
-  const pages = await read(`sitemap-${sitemapToken}-pages.xml`);
+  const pages = await read(sitemapIndex);
   for (const [brand, model] of [["genesis", "g80"], ["kgm", "torres"]]) {
     assert.ok(pages.includes(`<loc>https://abcars.by/catalog/${brand}</loc>`));
     assert.ok(pages.includes(`<loc>https://abcars.by/catalog/${brand}/${model}</loc>`));
@@ -114,7 +114,7 @@ test("удалённые страницы отсутствуют вместе с
   for (const route of ["delivered", "guarantees", "payment-and-contract"]) {
     await missing(`${route}/index.html`);
   }
-  for (const file of ["index.html", "how-it-works/index.html", "contacts/index.html", `sitemap-${sitemapToken}-pages.xml`]) {
+  for (const file of ["index.html", "how-it-works/index.html", "contacts/index.html", sitemapIndex]) {
     const html = await read(file);
     assert.doesNotMatch(html, /\/delivered(?:[\/"<?#]|$)/, file);
     assert.doesNotMatch(html, /\/guarantees(?:[\/"<?#]|$)/, file);
@@ -130,7 +130,7 @@ test("preview build ships public pages as noindex and no vehicle pages", async (
   // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
   // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
   await missing("catalog/index.html");
-  assert.match(sitemap, /sitemap-testtoken-pages\.xml/);
+  assert.match(sitemap, /<loc>https:\/\/abcars\.by\/catalog<\/loc>/);
   assert.match(robots, /Disallow: \/$/m);
   // Страницы машин выключены — ни ссылок на них, ни карты, ни статического каталога.
   assert.doesNotMatch(home, /<a href="\/cars\//);
@@ -153,14 +153,16 @@ test("внутренняя CRM не содержит счётчиков и по�
 });
 
 test("robots ссылается на единственную карту с токеном, прежний sitemap.xml удаляется", async () => {
-  const oldFiles = ["sitemap.xml", "sitemap.xml.gz", "sitemap.xml.br"];
+  const oldFiles = ["sitemap.xml", "sitemap.xml.gz", "sitemap.xml.br", `sitemap-${sitemapToken}-pages.xml`, `sitemap-${sitemapToken}-pages.xml.gz`, `sitemap-${sitemapToken}-pages.xml.br`];
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" }, fixtureCars,
     Object.fromEntries(oldFiles.map(name => [name, "stale sitemap"])));
   for (const name of oldFiles) await missing(name);
   await missing("sitemap-pages.xml");
   const [robots, sitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex)]);
   assert.deepEqual(robots.match(/^Sitemap: .*$/gm), ["Sitemap: https://abcars.by/sitemap-testtoken.xml"]);
-  assert.match(sitemap, /<loc>https:\/\/abcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
+  assert.match(sitemap, /<urlset\b/);
+  assert.doesNotMatch(sitemap, /<sitemapindex\b/);
+  await missing(`sitemap-${sitemapToken}-pages.xml`);
 });
 
 test("в закрытой сборке robots.txt на карту сайта не ссылается", async () => {
@@ -221,13 +223,11 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
 test("карты сайта содержат постоянные страницы и даты без карточек автомобилей и изображений", async () => {
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
   const index = await read(sitemapIndex);
-  const files = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => new URL(match[1]).pathname.slice(1));
-  assert.deepEqual(files, [`sitemap-${sitemapToken}-pages.xml`]);
-  for (const xml of [index, ...await Promise.all(files.map(read))]) {
-    assert.doesNotMatch(xml, /xmlns:image|<image:|sitemap-image\/|\/photo\/|\/api\/image|example\.com|\/cars\//);
-  }
+  assert.match(index, /<urlset\b/);
+  assert.doesNotMatch(index, /sitemapindex|xmlns:image|<image:|sitemap-image\/|\/photo\/|\/api\/image|example\.com|\/cars\//);
   await missing(sitemapCars);
-  const pages = await read(files[0]);
+  await missing(`sitemap-${sitemapToken}-pages.xml`);
+  const pages = index;
   assert.match(pages, /<loc>https:\/\/abcars\.by\/catalog<\/loc>/);
   assert.match(pages, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
 });
@@ -239,10 +239,18 @@ test("прежние флаги не возвращают карточки в si
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1", SEO_CARS_SITEMAP: "1", SEO_SITEMAP_FULL: "1", SEO_SITEMAP_CARS_PER_MODEL: "100" }, fixtureCars,
     Object.fromEntries(stale.map(name => [name, "old sitemap"])));
   for (const name of stale) await missing(name);
-  for (const name of [sitemapIndex, `sitemap-${sitemapToken}-pages.xml`]) assert.doesNotMatch(await read(name), /\/cars\/|sitemap-[^<]*-cars(?:-\d+)?\.xml/);
+  for (const name of [sitemapIndex]) assert.doesNotMatch(await read(name), /\/cars\/|sitemap-[^<]*-cars(?:-\d+)?\.xml/);
   // Удаление из карты не закрывает саму карточку и не убирает внутренние ссылки.
   assert.match(await read("cars/170268619192114/index.html"), /<meta name="robots" content="index, follow/);
   assert.match(await read("index.html"), /href="\/cars\//);
+});
+
+test('пагинация отсутствует в sitemap даже при прежних настройках полной карты', async () => {
+  const cars = Array.from({length: 100}, (_, i) => ({...fixtureCars[0], id: `guazi-${100000 + i}`}));
+  const {read} = await build({SEO_ALLOW_INDEXING: '1', SEO_VEHICLE_PAGES: '1', SEO_SITEMAP_FULL: '1', SEO_SITEMAP_LIST_PAGES: '100'}, cars);
+  const xml = await read(sitemapIndex);
+  assert.match(xml, /<loc>https:\/\/abcars\.by\/catalog<\/loc>/);
+  assert.doesNotMatch(xml, /[?&](?:amp;)?page=/);
 });
 
 test("static fallback ships a compact catalog and addressable full records", async () => {
@@ -262,7 +270,7 @@ test("обзоры моделей файлами не собираются, но
   // Содержимое обзора проверяется в tests/model-page.test.mjs.
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
   await missing("models/zeekr-007gt/index.html");
-  const [index, pagesXml] = await Promise.all([read("models/index.html"), read(`sitemap-${sitemapToken}-pages.xml`)]);
+  const [index, pagesXml] = await Promise.all([read("models/index.html"), read(sitemapIndex)]);
   // Общая страница «О моделях авто» файлом остаётся: она не зависит от каталога.
   assert.match(index, /<h1>/);
   // С 25.09.2026 обзор живёт на каталожной странице модели `/catalog/<марка>/<модель>`.
@@ -319,7 +327,7 @@ test("страницы-инструменты собираются с живым
   // Страницы, которых больше нет, не должны собираться: калькулятор слит с растаможкой.
   await assert.rejects(read("calculator/index.html"));
   // Все три попадают в карту сайта — с датой обновления.
-  const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
+  const pagesXml = await read(sitemapIndex);
   assert.ok(!pagesXml.includes("/calculator<"), "в карте сайта остался адрес слитой страницы");
   for (const path of ["/ev-quota", "/customs", "/delivery-cost"]) {
     assert.match(pagesXml, new RegExp(`<loc>https://abcars\\.by${path}</loc><lastmod>\\d{4}-\\d{2}-\\d{2}</lastmod>`));
@@ -346,7 +354,7 @@ test("страницы «О нас» больше нет, а её содержи
   // окажется в карте сайта и снова начнёт соревноваться со «О сервисе».
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
   await missing("about/index.html");
-  const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
+  const pagesXml = await read(sitemapIndex);
   assert.doesNotMatch(pagesXml, /<loc>https:\/\/abcars\.by\/about<\/loc>/);
   const service = await read("how-it-works/index.html");
   assert.match(service, /Проверка и связь/);
@@ -461,7 +469,7 @@ test("адреса не оканчиваются косой чертой ни в
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
   const [home, car, pagesXml] = await Promise.all([
     read("index.html"), read("cars/170268619192114/index.html"),
-    read(`sitemap-${sitemapToken}-pages.xml`),
+    read(sitemapIndex),
   ]);
   // Главная — единственный адрес, у которого черта на конце законна.
   for (const [name, html] of [["главная", home], ["машина", car]]) {
@@ -491,7 +499,7 @@ test("выключатель убирает журнал из сборки це�
   const { missing, read } = await build({ SEO_ALLOW_INDEXING: "1", BLOG_ENABLED: "0" });
   await missing("blog/index.html");
   await missing("blog/electric-range-700/index.html");
-  const [pages, home, about] = await Promise.all([read(`sitemap-${sitemapToken}-pages.xml`), read("index.html"), read("how-it-works/index.html")]);
+  const [pages, home, about] = await Promise.all([read(sitemapIndex), read("index.html"), read("how-it-works/index.html")]);
   assert.doesNotMatch(pages, /\/blog/);
   // Ни ссылки в подвале, ни блока на главной: пока раздел выключен, его на сайте нет.
   assert.doesNotMatch(home, /href="\/blog/);
@@ -503,7 +511,7 @@ test("включённый журнал собирается страницам�
   const [index, post, pages, home, about] = await Promise.all([
     read("blog/index.html"),
     read("blog/electric-range-700/index.html"),
-    read(`sitemap-${sitemapToken}-pages.xml`),
+    read(sitemapIndex),
     read("index.html"),
     read("how-it-works/index.html"),
   ]);

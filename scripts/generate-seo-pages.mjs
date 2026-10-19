@@ -82,7 +82,6 @@ const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXI
 // Search Console и Вебмастере. На него же ссылается robots.txt.
 const sitemapToken = String(process.env.SEO_SITEMAP_TOKEN || "7c4f19b2").replace(/[^a-z0-9-]/gi, "") || "7c4f19b2";
 const sitemapIndexName = `sitemap-${sitemapToken}.xml`;
-const pagesSitemapName = `sitemap-${sitemapToken}-pages.xml`;
 const shell = readFileSync(shellPath, "utf8");
 const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
 const { carLinks, footer, hrefRoute, modelLinks, navigation, pathwayLinks, renderHtml, routeUrl } = renderer;
@@ -100,13 +99,7 @@ const vehiclePages = /^(1|true|yes)$/i.test(String(process.env.SEO_VEHICLE_PAGES
 // ── Сколько адресов уходит в карту сайта ──────────────────────────────────────
 // Последнее решение владельца от 19.10.2026: только постоянные публичные страницы,
 // без карточек автомобилей и изображений. Прежние флаги не включают карточки обратно.
-// `SEO_SITEMAP_FULL=1` дополнительно отдаёт все страницы-листалки.
-const fullSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_SITEMAP_FULL || "false"));
-// Сколько страниц-«листалок» раздела попадает в карту сверх первой. Глубокие страницы
-// (в разделе электромобилей их две сотни) для поиска бесполезны: содержание у них
-// одинаковое, а бюджет обхода они забирают наравне с разделами. Робот дойдёт до них
-// по ссылкам «дальше», если захочет.
-const listPagesInSitemap = fullSitemap ? Infinity : Math.max(0, Number(process.env.SEO_SITEMAP_LIST_PAGES ?? 3) || 0);
+// Пагинация ?page= также исключена, независимо от прежних SEO_SITEMAP_* настроек.
 // Наличие и даты разделов берутся из дампа, а на хостинге — из базы,
 // но только по явному `SEO_CARS_FROM_DB=1`. Без этого условия сборка ходила бы
 // в базу и с рабочей машины: `server/db.mjs` сам подхватывает `.env.local` с боевым
@@ -1240,7 +1233,7 @@ async function readLiveCatalog() {
   const cachePath = path.join(buildDir, "catalog-build-data.bin");
   const finishCacheCheck = metrics.start('cache-check');
   const key = catalogBuildKey(root, {
-    siteUrl, fullSitemap, listPagesInSitemap,
+    siteUrl,
     showcaseSize, blogCarsOnPage, blogEnabled:BLOG_ENABLED,
     publishedPosts:blogPosts().map(post=>post.slug),
   });
@@ -1416,17 +1409,6 @@ async function readLiveCatalog() {
 // Разделы каталога (`/catalog/byd`, `/catalog/electric`, `/catalog/suv`) в карту сайта
 // попадают, а файлами не собираются: их отдаёт сервер. Готовый файл по такому адресу
 // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
-// Страницы списка со второй и дальше: `/catalog/electric?page=2`. Каждая — свой
-// первоисточник и живой список машин, поэтому в карте сайта им место наравне с первой.
-const listPageEntries = (route) => {
-  const pages = live.listPages.get(trimRoute(route)) || 1;
-  // Дата у всех страниц одного раздела общая: список машин на них — куски одного набора,
-  // и меняются они вместе.
-  const lastmod = live.changed.get(trimRoute(route)) || null;
-  const deep = Math.min(Math.max(0, pages - 1), listPagesInSitemap);
-  return Array.from({ length: deep }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod }));
-};
-
 // Дата последнего обновления материала журнала: тот же день, что стоит в разметке
 // статьи и виден человеку. Для поисковика это единственный способ узнать, что списки
 // машин и цифры в подборках пересобираются каждую ночь, — без даты он приходит
@@ -1476,26 +1458,22 @@ const pageEntries = [
   // разделов и обзоров уходили в карту сайта вовсе без даты, и поисковик не знал, что
   // раздел обновляется каждую ночь.
   { loc: routeUrl("/catalog/"), lastmod: live.changed.get("/catalog") || null },
-  ...listPageEntries("/catalog/"),
   // Каталожные страницы моделей: все модели с машинами (адрес по марке и модели)
   // плюс обзоры моделей, которых сейчас нет в наличии, — у них есть текст.
   ...modelPageEntries(),
-  ...liveSections.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: live.changed.get(landing.path) || null }, ...listPageEntries(landing.path)]),
+  ...liveSections.map((landing) => ({ loc: routeUrl(landing.path), lastmod: live.changed.get(landing.path) || null })),
 ];
-writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
+writeFileSync(path.join(clientDir, sitemapIndexName), urlset(pageEntries));
 
 // Удаляем все прежние части с карточками, включая сжатые версии и старые токены.
 for (const stale of readdirSync(clientDir).filter((name) => /^sitemap-.*-cars(-\d+)?\.xml(?:\.(?:gz|br))?$/.test(name))) {
   rmSync(path.join(clientDir, stale), { force:true });
 }
 
-const sitemaps = [pagesSitemapName];
-const sitemapIndexXml = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`;
-writeFileSync(path.join(clientDir, sitemapIndexName), sitemapIndexXml);
 // Прежние имена частей карты в сборке не оставляем: устаревший файл уводил бы робота
 // на адреса, которых уже нет.
-for (const stale of ["sitemap.xml", "sitemap.xml.gz", "sitemap.xml.br", "sitemap-pages.xml", "sitemap-cars.xml", "sitemap-cars.xml.gz", "sitemap-cars.xml.br"]) {
-  if (!sitemaps.includes(stale)) rmSync(path.join(clientDir, stale), { force:true });
+for (const stale of ["sitemap.xml", "sitemap.xml.gz", "sitemap.xml.br", "sitemap-pages.xml", "sitemap-pages.xml.gz", "sitemap-pages.xml.br", `sitemap-${sitemapToken}-pages.xml`, `sitemap-${sitemapToken}-pages.xml.gz`, `sitemap-${sitemapToken}-pages.xml.br`, "sitemap-cars.xml", "sitemap-cars.xml.gz", "sitemap-cars.xml.br"]) {
+  rmSync(path.join(clientDir, stale), { force:true });
 }
 
 const robots = allowIndexing
@@ -1719,9 +1697,7 @@ console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length}
 // Что в карту не попало — говорим вслух: молчаливое сокращение читается как
 // «в карте всё», и однажды кто-нибудь будет искать пропавшие адреса руками.
 console.log(`Адресов в карте сайта: ${pageEntries.length} страниц. Карточки автомобилей и изображения не включаются.`);
-if (Number.isFinite(listPagesInSitemap)) {
-  console.log(`  страницы-листалки: не глубже ${listPagesInSitemap + 1}-й в каждом разделе (полная карта — SEO_SITEMAP_FULL=1).`);
-}
+console.log("Пагинация ?page= в карту сайта не включается.");
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.
 console.log(`Карта сайта: ${siteUrl}/${sitemapIndexName} (в robots.txt).`);
