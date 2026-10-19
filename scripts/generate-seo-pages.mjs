@@ -48,7 +48,7 @@ import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
 import { homePopularModels } from "../src/home-popular-models.js";
-import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
+import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, insertPageHead, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const metrics = buildMetrics(process.env.ABCARS_CATALOG_TIMINGS, {report:console.log});
@@ -1162,7 +1162,7 @@ writeFileSync(path.join(clientDir, "404.html"), renderer.notFoundPage({ sections
 // в ней лежат ссылки на стили и скрипты с хешами этой сборки, а место под содержимое
 // оставлено пустым. Собранный `index.html` для этого не подходит — в нём уже лежит
 // текст главной страницы. Файл нигде не упомянут ссылками и закрыт от индексации.
-const appShellHtml = stripSeoHead(shell).replace("</head>", `    <meta name="robots" content="noindex, nofollow, noarchive" />\n  </head>`);
+const appShellHtml = insertPageHead(stripSeoHead(shell), `<meta name="robots" content="noindex, nofollow, noarchive" />`);
 writeFileSync(appShellPath, appShellHtml);
 
 // Заготовка страницы машины на случай, когда собрать её сервером не удалось (база

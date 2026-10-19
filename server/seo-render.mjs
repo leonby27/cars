@@ -107,6 +107,11 @@ export function stripSeoHead(html) {
     .replace(/\s*<script\s+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi, "");
 }
 
+export function insertPageHead(html, metadata) {
+  return html.replace(/(<head\b[^>]*>\s*(?:<meta\b[^>]*\bcharset\s*=[^>]*>\s*)?(?:<meta\b[^>]*\bname\s*=["']viewport["'][^>]*>\s*)?)/i,
+    (_, prefix) => `${prefix}${metadata.trim()}\n    `);
+}
+
 /**
  * Набор функций отрисовки, привязанный к адресу сайта и к тому, разрешена ли индексация.
  * Заготовка страницы (`shell`) — собранный vite `index.html`: из него берутся ссылки на
@@ -417,14 +422,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // его до запуска приложения (правило `html.booting` в index.html), а перед ним рисует
   // первый экран из `boot-screen.mjs`. Поисковику и браузеру без скриптов видно всё.
   function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [], boot = "header", prev = null, next = null, appRoot = null, appRootPath = null, bootData = null }) {
-    const head = metadata({ title, description, canonical, image, type, indexable, schemas, prev, next });
+    const head = metadata({ title, description, canonical, image, type, indexable, prev, next });
+    const structuredData = schemas.map((schema) => `<script type="application/ld+json">${jsonLd(schema)}</script>`).join("\n");
     // Адрес, для которого сервер собрал заголовок и описание: приложение при первом
     // запуске их не переписывает (ClientSeo в App.jsx) — у сервера живые цифры, которых
     // в браузере нет.
     const seoPath = canonical ? (() => { try { const url = new URL(canonical); return `${url.pathname.replace(/\/+$/, "") || "/"}${url.search}`; } catch { return ""; } })() : "";
-    const page = stripSeoHead(shell)
+    const page = insertPageHead(stripSeoHead(shell), head)
       .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}"${seoPath ? ` data-seo-path="${escapeHtml(seoPath)}"` : ""}>`)
-      .replace("</head>", `${head}\n  </head>`);
+      .replace("</head>", `${structuredData}\n  </head>`);
     // Обычная страница: заглушка первого экрана и текст для поисковика, приложение
     // потом рисует себя с нуля.
     if (!appRoot) {

@@ -1,3 +1,4 @@
+import { orderPageHead } from "./page-head-order.js";
 import { PasswordField } from "./password-field.jsx";
 import { secondaryPage } from "./secondary-page-load.jsx";
 
@@ -1038,6 +1039,7 @@ function applyPageHead({ title, description, canonical, indexable }) {
     document.head.appendChild(canonicalLink);
   }
   canonicalLink.href = canonical;
+  orderPageHead(document.head);
 }
 
 function ClientSeo({ path, car, landing, carPending = false }) {
