@@ -2,10 +2,18 @@ import "./config/load-env.mjs";
 import { defineConfig, loadEnv } from "vite";
 import { assertSiteProfile, resolveSiteProfile } from "./config/sites/index.mjs";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
 import { guaziLocalPreview } from "./scripts/vite-guazi-preview.mjs";
 import { encarResizeQuery } from "./src/photo-source.js";
+
+const cssPipelineHash = createHash("sha256");
+for (const file of ["./scripts/split-css.mjs", "./server/page-css.mjs", "./config/critical-classes.json"]) {
+  cssPipelineHash.update(readFileSync(new URL(file, import.meta.url)));
+}
+const cssPipelineVersion = cssPipelineHash.digest("hex").slice(0, 10);
 
 // Сервер разработки — для расчёта популярных моделей теми же модулями, что и сборка.
 let server = null;
@@ -18,6 +26,13 @@ export default defineConfig(({ mode }) => {
   build: {
     outDir: join(process.env.ABCARS_BUILD_DIR || "dist", "client"),
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        assetFileNames: (asset) => String(asset.name || "").endsWith(".css")
+          ? `assets/[name]-${cssPipelineVersion}-[hash][extname]`
+          : "assets/[name]-[hash][extname]",
+      },
+    },
   },
   optimizeDeps: {
     include: ["react", "react-dom/client"],

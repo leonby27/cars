@@ -1774,6 +1774,9 @@ html body #root .app-search-field.home-popular-search {
 }
 /* Страны в заголовке каталога — кнопка с нашим списком (29.09.2026): слова акцентом и
    стрелка, сам список — обычный `.select-menu` сайта, только положение и шрифт свои. */
+.heading-country-root {
+  position: relative;
+}
 .heading-country {
   position: relative;
   display: inline-block;
@@ -1803,18 +1806,18 @@ html[data-theme="dark"] .heading-country-trigger {
 /* По наведению — другой красный, заметно отличный от покоя: в светлой теме темнее, в
    тёмной светлее (смесь с белым), чтобы кнопка читалась кнопкой. */
 .heading-country-trigger:hover,
-.heading-country.open .heading-country-trigger {
+.heading-country-root.open .heading-country-trigger {
   color: var(--accent-dark);
 }
 html[data-theme="dark"] .heading-country-trigger:hover,
-html[data-theme="dark"] .heading-country.open .heading-country-trigger {
+html[data-theme="dark"] .heading-country-root.open .heading-country-trigger {
   color: color-mix(in srgb, var(--accent-on-dark) 70%, #fff);
 }
 
-.heading-country.open .heading-country-caret {
+.heading-country-root.open .heading-country-caret {
   transform: rotate(180deg);
 }
-.heading-country .heading-country-menu {
+.heading-country-root .heading-country-menu {
   left: 0;
   /* На узком экране список помещается целиком, с отступом от краёв. */
   width: min(220px, calc(100vw - 24px));
@@ -1841,7 +1844,7 @@ html[data-theme="dark"] .heading-country.open .heading-country-trigger {
   object-fit: cover;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
-.heading-country.open .select-menu {
+.heading-country-root.open .select-menu {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;

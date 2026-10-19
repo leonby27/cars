@@ -1,3 +1,4 @@
+import { withPageCss } from "./page-css.mjs";
 import { schemaFuelType } from "../src/engine-spec.js";
 import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
 import { COMPANY } from "../src/company-data.js";
@@ -455,8 +456,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const bootScript = bootData
       ? `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(bootData).replace(/</g, "\\u003c")});</script>`
       : "";
-    return page
-      .replace("</head>", `${hoisted.join("")}${bootScript}</head>`)
+    return withPageCss(page, markup)
+      .replace("</head>", `${hoisted.join("")}</head>`)
+      .replace("</body>", `${bootScript}</body>`)
       .replace(/<div id="root"><\/div>/, `<div id="root" data-prerender="${escapeHtml(appRootPath || "/")}">${markup}</div>`);
   }
 

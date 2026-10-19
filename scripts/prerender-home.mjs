@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { withPageCss } from "../server/page-css.mjs";
 import { homeBootFromSnapshot } from "../src/home-boot.js";
 
 const arg = (name, fallback) => {
@@ -101,12 +102,11 @@ const foreignGuard =
   `<script>if(location.pathname.replace(/[/]+$/,"")!=="")document.documentElement.classList.add("foreign-boot");</script>` +
   `<style>html.foreign-boot #root .app-content > :not(header){display:none}</style>`;
 const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}</head>`);
-// Те же данные — в страницу, чтобы браузер нарисовал первый кадр из них. Ставим
-// перед </head>: после загрузочного скрипта, который сам заводит window.__boot.
+// Снимок читается до запуска отложенного модуля приложения.
 const withBoot = Object.keys(homeBoot).length
-  ? replaced.replace("</head>", `<script id="home-data">window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
+  ? replaced.replace("</body>", `<script id="home-data">window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></body>`)
   : replaced;
-writeFileSync(indexPath, withBoot);
+writeFileSync(indexPath, withPageCss(withBoot, body));
 
 const kb = (value) => (value / 1024).toFixed(1);
 console.log(

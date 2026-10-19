@@ -2298,16 +2298,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       </Breadcrumbs>
       <div className="catalog-heading">
         <div>
-          {/* Две половины заголовка — отдельными кусками, чтобы на телефоне каждая
-              встала своей строкой (правило в стилях), а на компьютере они шли одной
-              строкой через пробел. Перенос задан руками: браузер ломал строку в своём
-              месте на каждой ширине, и «с пробегом из Китая» скакало от раздела
-              к разделу. Для поиска текст один и тот же — слова и пробел на месте. */}
-          {/* Под заголовком строки нет (решение Сергея 25.09.2026): подзаголовок
-              разделов был одной фразой на все 155 страниц, а строка наличия модели
-              повторяла заголовок вкладки и блок «что есть и почём» под выдачей. К тому
-              же ни то ни другое не менялось от фильтров. Число машин — над выдачей. */}
-          <h1>{Boolean(heading.tail) ? <><span>{heading.title}</span> <HeadingCountryMenu tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} /></> : heading.title}</h1>
+          <CatalogHeading title={heading.title} tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} />
         </div>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
@@ -7544,26 +7535,17 @@ const goBackTo = (navigate, path) => {
   else navigate(path);
 };
 
-/**
- * Выбор страны прямо в заголовке каталога (решение Сергея 29.09.2026): в «Каталог авто
- * из Китая и Кореи» слова стран выделены и открывают обычный список сайта — «Китай и
- * Корея», «Китай», «Корея». Выбор ставит фильтр `country`, а дальше каталог сам уводит
- * на страницу страны (`/catalog/korea`), как делает с маркой. Текст заголовка для
- * поисковика не меняется: те же слова и пробелы, кнопка — часть фразы.
- */
 const HEADING_FROM = /из(\s|\u00a0)(Китая|Кореи)((\s|\u00a0)и(\s|\u00a0)(Китая|Кореи))?/;
 
-function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
+function CatalogHeading({ title, tail, value = ANY_COUNTRY, onChange }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
+  const rootRef = useRef(null);
   const menuRef = useRef(null);
   const anchorRef = useRef(null);
   const match = HEADING_FROM.exec(String(tail || ""));
   const selected = match ? countryKey(value) : null;
-  // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
   const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
-  // Заголовок центрируется и меняет ширину вместе с выбранной страной. Держим
-  // открытый список у исходной точки, но не выпускаем его за края экрана.
   useLayoutEffect(() => {
     const box = boxRef.current;
     const menu = menuRef.current;
@@ -7574,14 +7556,15 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
     const positionMenu = () => {
       const rect = box.getBoundingClientRect();
       const x = rect.left + window.scrollX;
-      const y = rect.top + window.scrollY;
+      const root = rootRef.current.getBoundingClientRect();
+      const y = rect.bottom + window.scrollY;
       if (!anchorRef.current) anchorRef.current = { x, y };
       const inset = 12;
       const minX = window.scrollX + inset;
       const maxX = window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - inset;
       const targetX = Math.max(minX, Math.min(anchorRef.current.x, maxX));
-      menu.style.setProperty("--heading-menu-dx", `${Math.round(targetX - x)}px`);
-      menu.style.setProperty("--heading-menu-dy", `${Math.round(anchorRef.current.y - y)}px`);
+      menu.style.setProperty("--heading-menu-dx", `${Math.round(targetX - root.left - window.scrollX)}px`);
+      menu.style.setProperty("--heading-menu-dy", `${Math.round(anchorRef.current.y - root.bottom - window.scrollY)}px`);
     };
     positionMenu();
     const onResize = () => {
@@ -7594,7 +7577,7 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
-      if (event.key === "Escape" || (event.type === "pointerdown" && !boxRef.current?.contains(event.target))) setOpen(false);
+      if (event.key === "Escape" || (event.type === "pointerdown" && !boxRef.current?.contains(event.target) && !menuRef.current?.contains(event.target))) setOpen(false);
     };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", close);
@@ -7603,12 +7586,9 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
       document.removeEventListener("keydown", close);
     };
   }, [open]);
-  if (!match) return <span>{tail}</span>;
+  if (!match) return <h1>{tail ? <><span>{title}</span> <span>{tail}</span></> : title}</h1>;
   const prefix = tail.slice(0, match.index);
   const suffix = tail.slice(match.index + match[0].length);
-  // Список — выбор одного пункта: «Все страны», Китай, Корея (Сергей, 29.09.2026
-  // вечером; до этого были галочки, и нажатый Китай при выбранной Корее давал «все
-  // страны» — выглядело как сброс фильтра). Остальные фильтры при выборе не трогаются.
   const options = [{ key: null, label: ANY_COUNTRY }, ...ACTIVE_ORIGINS.map((key) => ({ key, label: countryName(key) }))];
   const checked = (key) => (selected || null) === key;
   const choose = (key) => {
@@ -7617,29 +7597,25 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
     if (label !== (value || ANY_COUNTRY)) onChange?.(label);
   };
   return (
-    <span>
-      {prefix}из{match[1]}
+    <div className={`heading-country-root${open ? " open" : ""}`} ref={rootRef}>
+      <h1><span>{title}</span>{" "}<span>{prefix}из{match[1]}
       <span className={`heading-country${open ? " open" : ""}`} ref={boxRef}>
-        <button type="button" className="heading-country-trigger" aria-haspopup="menu" aria-expanded={open} aria-label="Выбрать страну" onClick={() => setOpen((current) => !current)}>
+        <button type="button" className="heading-country-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={words} title="Выбрать страну" onClick={() => setOpen((current) => !current)}>
           {words}
-          {/* Своя стрелка: толще и короче, чем у значков сайта, с круглыми концами. */}
           <svg className="heading-country-caret" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
+      </span>{suffix}</span></h1>
         <div ref={menuRef} className="select-menu heading-country-menu" role="menu" aria-hidden={!open} inert={open ? undefined : true}>
           <div className="select-options">
             {options.map(({ key, label }) => (
               <button key={key || "all"} type="button" role="menuitemradio" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => choose(key)}>
-                {/* Без галочек (Сергей, 29.09.2026): выбранный пункт выделен подложкой, слева только слово. */}
                 <span className="select-option-label"><span>{label}</span></span>
-                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы; у «Всех стран» — свой «флаг» с глобусом. */}
                 <img className="heading-country-flag" src={`/flags/${key || "all"}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
               </button>
             ))}
           </div>
         </div>
-      </span>
-      {suffix}
-    </span>
+    </div>
   );
 }
 

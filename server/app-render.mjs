@@ -74,10 +74,23 @@ export function catalogBootSearch(params) {
   return kept.toString();
 }
 
-// Лента карточки списка показывает пять кадров — остальные адреса (у машины их
-// бывает сорок) только раздували бы страницу: список встраивается в неё целиком.
-// История цены в браузере не нужна вовсе (стрелка цены берётся из двух полей записи).
-export const bootCars = (items) => items.map(({ priceHistory: _history, ...item }) => ({ ...item, images: (item.images || []).slice(0, 5) }));
+const LISTING_BOOT_FIELDS = new Set([
+  "id", "externalId", "sourceId", "source", "sourceUrl", "origin", "brand", "model", "year", "title",
+  "type", "drive", "bodyType", "bodyStructure", "vehicleClass", "description", "rawModel", "rawSeries",
+  "battery", "electricRange", "combinedRange", "range", "batteryHealth", "appearanceScore",
+  "engine", "engineCc", "engineVolume", "transmission", "sourceFuelType", "fuelType", "horsepower",
+  "bodyColor", "mileage", "owners", "conditionGrade", "acceleration", "tireRim",
+  "city", "manufactureDate", "firstRegistration", "dimensions", "curbWeight",
+  "chinaPrice", "usdPrice", "sourcePrice", "sourceCurrency", "priceBasis", "fobPort", "fobPriceUsd",
+  "previousPriceUsd", "priceChangedAt", "firstSeenAt", "importedAt", "checkedAt",
+  "available", "soldAt", "availabilityStatus", "image",
+]);
+
+export const bootCars = (items) => items.map((item) => ({
+  ...Object.fromEntries(Object.entries(item).filter(([key]) => LISTING_BOOT_FIELDS.has(key))),
+  images: (item.images || []).slice(0, 5),
+  _summary: true,
+}));
 
 // metaValue may be replaced by the browser preload. Hydration reads the immutable
 // API snapshot so its first filter options/counts match the server's HTML.
