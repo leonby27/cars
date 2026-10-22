@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='car-bot-nginx-') as directory:
     path = pathlib.Path(directory)
     networks = path / 'networks.conf'
     families = ['google', 'bing', 'yandex', 'apple', 'duck', 'openai', 'perplexity', 'claude']
-    networks.write_text('\n'.join(f'geo $car_net_{family} {{ default 0; 127.0.0.{10+index}/32 1; }}' for index, family in enumerate(families)))
+    networks.write_text('\n'.join(f'geo $car_net_{family} {{ default 0; 127.0.0.{10+index}/{30 if family == "perplexity" else 32} 1; }}' for index, family in enumerate(families)))
     limits = path / 'limits.conf'
     limits.write_text((root/'deploy/nginx-car-ai-limits.conf').read_text().replace('/etc/nginx/snippets/car-search-networks.conf', str(networks)).replace('127.0.0.0/8 1;', '127.0.0.1/32 1;').replace('$time_iso8601:$remote_addr', '$http_x_fixture_clock:$remote_addr').replace(r'37\.214\.32\.151', r'127\.0\.0\.30'))
     config = path / 'nginx.conf'
@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix='car-bot-nginx-') as directory:
     config.write_text(f'''
 pid {path}/nginx.pid;
 worker_processes 2;
-error_log {path}/error.log notice;
+error_log {path}/error.log error;
 events {{ worker_connections 128; }}
 http {{
     access_log off;
@@ -189,8 +189,31 @@ http {{
         assert request(address='127.0.0.9', host='b.test', url='/api/cars/summary?offset=recovered')[0] == 200
         assert request(address='127.0.0.9', host='a.test', url='/api/cars/summary?offset=still-bounded')[0] == 429
 
-        # Genuine provider IP + matching UA bypass; forged name does not.
-        search_agents = ['Googlebot/2.1','bingbot/2.0','YandexRenderResourcesBot/1.0','Applebot/0.1','DuckDuckBot/1.0','OAI-SearchBot/1.0','PerplexityBot/1.0','Claude-SearchBot/1.0']
+        # A forged Perplexity name keeps ordinary visitor limits and cannot
+        # spend the real crawler's shared origin allowance.
+        assert all(request('PerplexityBot/1.0', address='127.0.0.61', url='/api/cars?fake='+str(n))[0] == 200 for n in range(5))
+        before = Backend.calls
+        crawl_paths = ['/cars/perplexity', '/catalog/petrol', '/models/audi', '/api/%63ars?offset=1', '/api/pages/catalog?slug=petrol', '/api/model-catalog?brand=Audi']
+        perplexity_replies = [request(
+            'Mozilla/5.0 PerplexityBot/1.0', address=f'127.0.0.{16+n%4}',
+            host='a.test' if n%2 else 'b.test', url=crawl_paths[n%len(crawl_paths)],
+        ) for n in range(12)]
+        assert collections.Counter(status for status, _ in perplexity_replies) == {200:3, 429:9}, perplexity_replies
+        assert Backend.calls-before == 3, 'Rejected Perplexity reads reached the backend'
+        assert all(retry == '10' for status, retry in perplexity_replies if status == 429)
+        assert 'by zone "car_perplexity_v1"' in (path/'error.log').read_text(), 'Rejecting zone missing at production log threshold'
+        for url in ['/photo/perplexity.jpg', '/assets/fixture.js', '/robots.txt', '/api/auth/me']:
+            assert request('PerplexityBot/1.0', address='127.0.0.16', url=url)[0] == 200, url
+        assert request('PerplexityBot/1.0', address='127.0.0.16', url='/api/cars', method='POST')[0] == 200
+        # 20/minute recovers one admission every three seconds, still shared
+        # when both the source address and destination domain change.
+        time.sleep(3.15)
+        assert request('PerplexityBot/1.0', address='127.0.0.19', host='b.test', url='/catalog/petrol')[0] == 200
+        assert request('PerplexityBot/1.0', address='127.0.0.18', host='a.test', url='/api/cars') == (429, '10')
+
+        # Other verified search providers and user-directed Perplexity fetches
+        # remain outside the crawler budget; forged names do not gain bypass.
+        search_agents = ['Googlebot/2.1','bingbot/2.0','YandexRenderResourcesBot/1.0','Applebot/0.1','DuckDuckBot/1.0','OAI-SearchBot/1.0','Perplexity-User/1.0','Claude-SearchBot/1.0']
         for index,agent in enumerate(search_agents):
             assert all(request(agent, address=f'127.0.0.{10+index}', url='/api/cars?limit=100')[0] == 200 for n in range(70)), agent
         # Google research and user-directed fetchers share Google's verified
@@ -213,6 +236,7 @@ http {{
         car_pages = [request(address='127.0.0.8',url='/cars/'+str(n))[0] for n in range(70)]
         assert all(code == 429 for code in car_pages[-20:]), car_pages
         assert all(request('ChatGPT-User/1.0',address='127.0.0.15',url='/cars/'+str(n))[0] == 200 for n in range(70))
-        print(json.dumps({'training_and_audit_global_budgets':counts, 'audit_robots_delay_and_private_rules':'passed with legacy robots fixture', 'commercial_bots':'blocked on both hosts before backend', 'browser_export_and_forged_search':'throttled before backend', 'verified_search_and_warmers':'unrestricted', 'normal_burst_and_post_auth_assets':'passed', 'named_rewrites_and_encoded_api':'protected'}))
+        assert 'by zone "car_catalog_' in (path/'error.log').read_text(), 'Visitor rejection zone missing from error log'
+        print(json.dumps({'training_and_audit_global_budgets':counts, 'perplexity_expensive_reads':dict(collections.Counter(status for status, _ in perplexity_replies)), 'perplexity_users_photos_assets_and_forgery':'passed', 'audit_robots_delay_and_private_rules':'passed with legacy robots fixture', 'commercial_bots':'blocked on both hosts before backend', 'browser_export_and_forged_search':'throttled before backend', 'other_verified_search_and_warmers':'unrestricted', 'normal_burst_and_post_auth_assets':'passed', 'named_rewrites_and_encoded_api':'protected'}))
     finally:
         process.terminate(); process.wait(timeout=5); backend.shutdown()

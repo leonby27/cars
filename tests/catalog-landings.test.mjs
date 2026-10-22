@@ -38,7 +38,7 @@ test("у каждого раздела свой адрес, заголовок �
   assert.equal(new Set(titles).size, titles.length, "заголовки разделов повторяются");
   for (const landing of CATALOG_LANDINGS) {
     assert.match(landing.path, /^\/catalog\/[a-z0-9-]+$/, landing.path);
-    if (!isCatalogGroup(landing)) assert.ok(landing.seoTitle.length <= 70, `${landing.path}: заголовок ${landing.seoTitle.length} символов`);
+    if (!isCatalogGroup(landing) && landing.kind !== "brand") assert.ok(landing.seoTitle.length <= 70, `${landing.path}: заголовок ${landing.seoTitle.length} символов`);
     assert.ok(landing.seoDescription.length >= 70 && landing.seoDescription.length <= 160, `${landing.path}: описание ${landing.seoDescription.length} символов`);
     assert.ok(landing.notes.length >= 1, `${landing.path}: нет текста`);
     for (const note of landing.notes) assert.ok(note.length > 80, `${landing.path}: текст слишком короткий`);
@@ -77,9 +77,7 @@ test("страница раздела отдаётся с текстом, маш
   // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
   const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
-  // Формулировку («с пробегом» или «б/у») выбирает набор, закреплённый за слагом марки,
-  // поэтому тест берёт её из самой записи: иначе он падал бы при каждой перестановке наборов.
-  assert.match(html, new RegExp(`<title>${landing.seoTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
+  assert.equal(html.match(/<title>(.*?)<\/title>/)[1], "Купить BYD из Китая с доставкой в Беларусь — 5\u00a0673 в наличии ▶ Абкарс");
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd"/);
   // Длинная фраза раздела разложена на две половины и общую подпись под ними. Слова
   // со страницы не убраны: половины стоят через пробел, а на телефоне стили ставят
@@ -449,7 +447,7 @@ test("заголовки разделов: «в Беларусь», без Ми�
 
 test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
   const byd = findCatalogLanding("/catalog/byd");
-  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "Купить BYD из Китая с доставкой в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
   assert.match(description, /BYD из Китая\./);
   assert.match(description, /В наличии 5\u00a0204 авто с пробегом/);

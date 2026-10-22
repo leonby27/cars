@@ -1753,7 +1753,7 @@ const landingSubject = (landing) => {
 };
 
 /**
- * «BYD из Китая в Беларусь», «Китайские и корейские седаны с доставкой в
+ * «Купить BYD из Китая с доставкой в Беларусь», «Китайские и корейские седаны с доставкой в
  * Беларусь», «Авто из Китая и Кореи до 20 000 $ с доставкой в Беларусь». Метатеги
  * китайских марок называют только Китай; страницы стран используют свою страну.
  */
@@ -1763,6 +1763,7 @@ const landingTitleBase = (landing, { short = false } = {}) => {
   const from = origin ? fromPhrase(origin) : siteFromPhrase();
   // Страница страны: «Каталог авто из Кореи в Беларусь — 110 в наличии, от 9 000 $».
   if (landing.kind === "origin") return `Каталог авто ${from} в Беларусь`;
+  if (landing.kind === "brand") return `Купить ${landing.brand} ${from} с доставкой в Беларусь`;
   let subject = catalogSeoWording(siteWording(landingSubject(landing)), landing.brand, landing.origin);
   const adjective = ADJECTIVE_HEAD();
   // «Китайские и корейские электрокроссоверы с доставкой в Беларусь» не помещается в
@@ -1789,12 +1790,13 @@ const fitTitle = (base, variants, limit) => {
 
 /**
  * Заголовок вкладки раздела. `stats` — живые цифры с сервера: `{ total, priceFrom }`;
- * без них (переход внутри сайта, сборка без базы) — без цифр. У групп сохраняем
+ * без них (переход внутри сайта, сборка без базы) — без цифр. У групп и марок сохраняем
  * полную основу, наличие и цену; у остальных разделов остаётся подбор по длине.
  */
 export const landingSeoTitle = (landing, stats = null) => {
-  if (isCatalogGroup(landing)) {
-    const base = `Каталог ${GROUP_TITLE_SUBJECTS[landing.slug]} ${siteFromPhrase()} с доставкой в Беларусь`;
+  if (isCatalogGroup(landing) || landing.kind === "brand") {
+    const base = landing.kind === "brand" ? landingTitleBase(landing)
+      : `Каталог ${GROUP_TITLE_SUBJECTS[landing.slug]} ${siteFromPhrase()} с доставкой в Беларусь`;
     const total = Number(stats?.total) || 0;
     const price = Number(stats?.priceFrom) || 0;
     const stock = total > 0 ? ` — ${formatCount(total)} в наличии${price > 0 ? `, от ${formatCount(price)} $` : ""}` : "";

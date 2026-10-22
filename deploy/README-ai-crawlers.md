@@ -1,5 +1,15 @@
 # Shared crawler and catalog protection
 
+## Perplexity origin capacity (activated 2026-10-22)
+
+The October 22 incident established a capacity problem rather than a blanket denial of search: heavy PerplexityBot reads began at 10:28 UTC; public origin timeouts followed from 10:29. The crawler reached 242 heavy reads/minute, rotating official provider addresses. Between 09:30 and approximately 11:12 UTC, BY access logs contained 499 HTTP 504 responses, including five requests from verified Google and fifteen from verified Yandex. Subsequent verification against the current official Perplexity feed confirmed all sampled crawler addresses. These counts describe the captured incident window, not all-time totals or measured ranking loss.
+
+Verified `PerplexityBot` now has one shared **20 heavy GET/HEAD reads/minute** budget across its addresses, nginx workers and both domains, with two excess burst requests (up to three immediate admissions). It covers public catalog, car and model pages and related data APIs, including named rewrites and encoded paths. `Perplexity-User`, other verified search providers, ordinary visitors and internal warmers do not enter this budget. Photos/assets, robots, auth and POST forms remain outside it. A forged agent cannot consume the verified crawler's allowance. Excess reads receive 429 with the existing ten-second Retry-After; this slows automatic indexing without denying the crawler altogether.
+
+Dynamic rejection messages now use nginx's production error-log threshold, recording the rejecting zone. Previously `limit_req_log_level notice` was below the installed default error threshold, so historical visitor 429s could not be attributed to an individual zone. The visitor budgets themselves have not changed in this release.
+
+The owner authorized activation and publication on October 22. Installation used `install-car-bot-protection.sh`; nginx validation passed and services remained active. Backup: `/var/backups/car-bot-protection.ouBM3n`. The extra budget was activated at **11:24:40 UTC / 14:24:40 Minsk**. Isolated nginx/backend verification covered shared worker/address/domain limits, request recovery, rejected reads stopping before the application, Google/Yandex and other search exemptions, user-directed fetches, forged names, photos, auth/forms, ordinary visitor bursts and rejection logs. No production database or catalog requests were used by that fixture.
+
 ## Selective geographic campaign verification (activated 2026-10-17)
 
 The additional rule is **country outside the explicit exemptions AND an observed coordinated export campaign**, never a general foreign-visitor challenge. The 62-country exemption list covers the owner's expanded CIS selection, Europe, Cyprus, Georgia and Turkey. Existing IP/session/network budgets still apply in every country. Country, browser version, absent cookies and ordinary browsing do not independently trigger this rule.

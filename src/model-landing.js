@@ -62,45 +62,32 @@ const cleanModelHeading = (h1) => siteWording(String(h1 || "")
   .replace(/\s{2,}/g, " ")
   .trim());
 
-/** Первый вариант заголовка, который помещается в `limit` символов. */
-const fitModelTitle = (base, variants, limit = 80) => {
-  for (const variant of variants) {
-    const title = `${base}${variant} ▶ Абкарс`;
-    if (title.length <= limit) return title;
-  }
-  return `${base} ▶ Абкарс`;
-};
-
 /**
  * Заголовок вкладки, описание и заголовок страницы модели. `facts` — живые цифры
  * (modelCatalogFacts на сервере), `review` — обзор, если написан, `page` — номер
  * страницы списка. В метатегах китайских марок — только Китай, у остальных —
  * фраза сайта; явно заданная страна имеет приоритет. Видимый H1 не меняется.
- * В заголовке — число машин и цена «от», как у разделов каталога (решение 25.09.2026).
+ * В заголовке сохраняем полную основу, число машин и цену «от» без сокращения.
  */
 export function modelCatalogSeo({ name, brand, facts = null, review = null, page = 1, origin = null }) {
   const seoOrigin = catalogSeoOrigin(brand, origin);
   const from = seoOrigin ? fromPhrase(seoOrigin) : siteFromPhrase();
-  const base = `${name} ${from} в Беларусь`;
+  const base = `Купить ${name} ${from} с доставкой в Беларусь`;
+  const pageTail = page > 1 ? ` — страница ${page}` : "";
   const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${origin ? fromPhrase(origin) : siteFromPhrase()} с доставкой в Беларусь`;
   // Цифры ещё не пришли (переход внутри сайта): нейтральный заголовок, а не «под заказ».
   if (!facts) {
     return {
-      title: fitModelTitle(base, [" — цены и наличие"], 70),
+      title: `${base} — цены и наличие${pageTail} ▶ Абкарс`,
       description: catalogDescription({ subject: name, origin: seoOrigin, model: true }),
       h1,
     };
   }
   const total = Number(facts?.total) || 0;
-  const pageTail = page > 1 ? ` — страница ${page}` : "";
   const price = finite(facts?.priceFrom);
-  const title = total
-    ? fitModelTitle(base, [
-        price ? ` — ${number(total)} в наличии, от ${usd(price)}${pageTail}` : null,
-        price ? ` — от ${usd(price)}${pageTail}` : null,
-        ` — ${number(total)} в наличии${pageTail}`,
-      ].filter(Boolean))
-    : fitModelTitle(`${name} ${from}`, [" — под заказ в Беларусь, цены и характеристики", " — под заказ в Беларусь", " — под заказ"], 70);
+  const title = total > 0
+    ? `${base} — ${number(total)} в наличии${price ? `, от ${usd(price)}` : ""}${pageTail} ▶ Абкарс`
+    : `${base} — под заказ${pageTail} ▶ Абкарс`;
   const stock = catalogDescription({ subject: name, origin: seoOrigin, total, model: true });
   const description = page > 1 ? `${stock}. Страница ${page} списка.` : stock;
   return { title, description, h1 };
