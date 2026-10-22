@@ -1694,6 +1694,13 @@ const RU_NUMBER = new Intl.NumberFormat("ru-RU");
 const formatCount = (value) => RU_NUMBER.format(Math.round(Number(value) || 0));
 const TITLE_TAIL = " ▶ Абкарс";
 
+const PAGE_TITLE_OVERRIDES = Object.freeze({
+  "/": "Пригнать авто в Беларусь под заказ с расчётом под ключ  ▶ Каталог Абкарс",
+  "/catalog/china": "Купить авто из Китая в Беларусь под заказ ▶ Каталог Абкарс",
+  "/catalog/korea": "Купить авто из Кореи в Беларусь под заказ ▶ Каталог Абкарс",
+  "/catalog/electric": "Купить электромобиль из Китая в Беларусь под заказ ▶ Каталог Абкарс",
+});
+
 const GROUP_TITLE_SUBJECTS = Object.freeze({
   electric: "электромобилей",
   hybrid: "гибридов",
@@ -1725,7 +1732,7 @@ export const isCatalogGroup = (landing) => Boolean(landing && !landing.brand
   && Object.hasOwn(GROUP_TITLE_SUBJECTS, landing.slug));
 
 export const catalogPageTitle = (title, page = 1) => Number(page) > 1
-  ? String(title).replace(/ ▶ Абкарс$/, ` — страница ${page}${TITLE_TAIL}`)
+  ? String(title).replace(/( ▶ (?:Каталог )?Абкарс)$/, ` — страница ${page}$1`)
   : title;
 
 /**
@@ -1753,7 +1760,7 @@ const landingSubject = (landing) => {
 };
 
 /**
- * «Купить BYD из Китая с доставкой в Беларусь», «Китайские и корейские седаны с доставкой в
+ * «Купить BYD из Китая в Беларусь под заказ», «Китайские и корейские седаны с доставкой в
  * Беларусь», «Авто из Китая и Кореи до 20 000 $ с доставкой в Беларусь». Метатеги
  * китайских марок называют только Китай; страницы стран используют свою страну.
  */
@@ -1763,7 +1770,7 @@ const landingTitleBase = (landing, { short = false } = {}) => {
   const from = origin ? fromPhrase(origin) : siteFromPhrase();
   // Страница страны: «Каталог авто из Кореи в Беларусь — 110 в наличии, от 9 000 $».
   if (landing.kind === "origin") return `Каталог авто ${from} в Беларусь`;
-  if (landing.kind === "brand") return `Купить ${landing.brand} ${from} с доставкой в Беларусь`;
+  if (landing.kind === "brand") return `Купить ${landing.brand} ${from} в Беларусь под заказ`;
   let subject = catalogSeoWording(siteWording(landingSubject(landing)), landing.brand, landing.origin);
   const adjective = ADJECTIVE_HEAD();
   // «Китайские и корейские электрокроссоверы с доставкой в Беларусь» не помещается в
@@ -1790,13 +1797,14 @@ const fitTitle = (base, variants, limit) => {
 
 /**
  * Заголовок вкладки раздела. `stats` — живые цифры с сервера: `{ total, priceFrom }`;
- * без них (переход внутри сайта, сборка без базы) — без цифр. У групп и марок сохраняем
- * полную основу, наличие и цену; у остальных разделов остаётся подбор по длине.
+ * без них (переход внутри сайта, сборка без базы) — без цифр. У групп сохраняем
+ * полную основу, наличие и цену; марки используют фиксированный шаблон.
  */
 export const landingSeoTitle = (landing, stats = null) => {
-  if (isCatalogGroup(landing) || landing.kind === "brand") {
-    const base = landing.kind === "brand" ? landingTitleBase(landing)
-      : `Каталог ${GROUP_TITLE_SUBJECTS[landing.slug]} ${siteFromPhrase()} с доставкой в Беларусь`;
+  if (PAGE_TITLE_OVERRIDES[landing.path]) return PAGE_TITLE_OVERRIDES[landing.path];
+  if (landing.kind === "brand") return `${landingTitleBase(landing)} ▶ Каталог Абкарс`;
+  if (isCatalogGroup(landing)) {
+    const base = `Каталог ${GROUP_TITLE_SUBJECTS[landing.slug]} ${siteFromPhrase()} с доставкой в Беларусь`;
     const total = Number(stats?.total) || 0;
     const price = Number(stats?.priceFrom) || 0;
     const stock = total > 0 ? ` — ${formatCount(total)} в наличии${price > 0 ? `, от ${formatCount(price)} $` : ""}` : "";
@@ -1858,8 +1866,7 @@ export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSe
 // «под заказ» в заголовке и «под ключ» в описании — с 26.09.2026: эти слова Сергей
 // отдал главной, а на странице их не было ни разу. «с доставкой» осталось в H1.
 export const HOME_SEO = Object.freeze({
-  // До 80 знаков: «под заказ» из заголовка ушло в описание (с Кореей фраза длиннее).
-  title: `Авто ${siteFromPhrase()} в Беларусь — ${siteAdjective()} автомобили${TITLE_TAIL}`,
+  title: PAGE_TITLE_OVERRIDES["/"],
   description: homeDescription(),
   // Неразрывные пробелы стоят в самом тексте: типографика после оживления его не
   // трогает (см. заголовок главной в App.jsx).

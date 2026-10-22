@@ -69,7 +69,7 @@ test("явная страна сохраняет приоритет, общие 
   assert.match(seo.description, /из Кореи/);
   for (const path of ["electric", "suv", "under-20000"]) {
     const landing = findCatalogLanding(`/catalog/${path}`);
-    assert.match(landingSeoTitle(landing, stats), /Китая и Кореи|китайские и корейские/i);
+    assert.match(landingSeoTitle(landing, stats), path === "electric" ? /из Китая/ : /Китая и Кореи|китайские и корейские/i);
     assert.match(landingSeoDescription(landing, stats), /Китая и Кореи/);
   }
   for (const [path, from] of [["china", /из Китая/], ["korea", /из Кореи/]]) {

@@ -27,7 +27,7 @@ test("общие страницы говорят «из Китая и Кореи
   assert.equal(originFromParam("KR"), "korea");
   assert.equal(originFromParam("china"), "china");
   assert.equal(originFromParam("mars"), null);
-  assert.match(HOME_SEO.title, /^Авто из Китая и Кореи в Беларусь — китайские и корейские автомобили/);
+  assert.equal(HOME_SEO.title, "Пригнать авто в Беларусь под заказ с расчётом под ключ  ▶ Каталог Абкарс");
   assert.match(CATALOG_INDEX_SEO.title, /^Купить авто из Китая и Кореи — каталог и цены/);
   assert.equal(CATALOG_INDEX_SEO.h1, "Авто из Китая и Кореи");
   // Главные запросы — «в Беларусь» и «китайские автомобили» — остаются за главной:

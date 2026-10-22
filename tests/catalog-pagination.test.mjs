@@ -66,7 +66,7 @@ test("вторая страница сама себе первоисточник
   assert.match(page.html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/electric\?page=2"/);
   assert.match(page.html, /<link rel="prev" href="https:\/\/abcars\.by\/catalog\/electric"/);
   assert.match(page.html, /<link rel="next" href="https:\/\/abcars\.by\/catalog\/electric\?page=3"/);
-  assert.match(page.html, /<title>[^<]*— страница 2 ▶ Абкарс<\/title>/);
+  assert.match(page.html, /<title>[^<]*— страница 2 ▶ Каталог Абкарс<\/title>/);
   // Заголовок собран из двух половин в тегах, поэтому проверяем не «только текст», а конец.
   assert.match(page.html, /<h1>.*— страница 2<\/h1>/);
   assert.match(page.html, rangeLine(2, 50, CATALOG_PAGE_SIZE));

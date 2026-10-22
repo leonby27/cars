@@ -77,7 +77,7 @@ test("страница раздела отдаётся с текстом, маш
   // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
   const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
-  assert.equal(html.match(/<title>(.*?)<\/title>/)[1], "Купить BYD из Китая с доставкой в Беларусь — 5\u00a0673 в наличии ▶ Абкарс");
+  assert.equal(html.match(/<title>(.*?)<\/title>/)[1], "Купить BYD из Китая в Беларусь под заказ ▶ Каталог Абкарс");
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd"/);
   // Длинная фраза раздела разложена на две половины и общую подпись под ними. Слова
   // со страницы не убраны: половины стоят через пробел, а на телефоне стили ставят
@@ -445,9 +445,9 @@ test("заголовки разделов: «в Беларусь», без Ми�
   assert.equal(new Set(CATALOG_LANDINGS.map((landing) => landing.seoTitle)).size, CATALOG_LANDINGS.length, "у двух разделов одинаковый заголовок");
 });
 
-test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
+test("у марки title фиксирован, а описание сохраняет живые остатки и цену", () => {
   const byd = findCatalogLanding("/catalog/byd");
-  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "Купить BYD из Китая с доставкой в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "Купить BYD из Китая в Беларусь под заказ ▶ Каталог Абкарс");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
   assert.match(description, /BYD из Китая\./);
   assert.match(description, /В наличии 5\u00a0204 авто с пробегом/);

@@ -901,9 +901,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        // `seo` — метатеги с живыми цифрами; для групп и марок без них используем
-        // доступные остатки и цены, у остальных разделов — справочник.
-        title: isCatalogGroup(landing) || landing.kind === "brand"
+        // Группы используют доступные остатки и цены, марки и страны — свой шаблон.
+        title: isCatalogGroup(landing) || landing.kind === "brand" || landing.kind === "origin"
           ? catalogPageTitle(seo?.title || landingSeoTitle(landing, { total, priceFrom: spread?.from }), page)
           : page > 1 ? `${catalogSeoWording(landing.h1, landing.brand, landing.origin)} — страница ${page} ▶ Абкарс` : seo?.title || landing.seoTitle,
         description: `${seo?.description || landing.seoDescription}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
