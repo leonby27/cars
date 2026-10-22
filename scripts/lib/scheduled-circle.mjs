@@ -1,5 +1,6 @@
 // Weekly launches share the existing collectors and their durable progress.
 import { circleSummary, circleFailure } from './circle-report.mjs';
+import { encarCanRetry } from './encar-result.mjs';
 export const CIRCLE_SOURCES = Object.freeze({ '1': 'che', '2': 'guazi', '3': 'encar' });
 
 export function circlePlan(source, state) {
@@ -30,24 +31,46 @@ export function encarImportPlan(discoveries, report, startedAt) {
   return { command: 'node', args: ['scripts/import-encar.mjs', '--discoveries', `--limit=${discoveries.items.length}`], log: 'runtime/encar-circle.log' };
 }
 
-export async function runScheduledCircle(source, { readState, running, run, afterRefresh = async () => {}, notify = async () => {}, diagnostics = async () => ({}), now = Date.now }) {
+export async function runScheduledCircle(source, { readState, running, run, afterRefresh = async () => {}, notify = async () => {}, diagnostics = async () => ({}), now = Date.now, stop = () => false, wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   const number = Object.keys(CIRCLE_SOURCES).find(key => CIRCLE_SOURCES[key] === source);
   if (!number) throw Error(`Unknown circle source: ${source}`);
   const label = `Круг ${number} · ${source === 'che' ? 'Che168' : source === 'guazi' ? 'Guazi' : 'Encar'}`;
   const startedAt = now();
   let report, state, cursor, importReport;
+  const runEncarStep = async (initialStep, reportPath) => {
+    let step = initialStep;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (stop()) throw Error('Запуск остановлен');
+      let failure;
+      try { await run(step); } catch (error) { failure = error; }
+      let latest;
+      try { latest = await readState(reportPath); }
+      catch (error) { throw failure || error; }
+      const current = Date.parse(latest?.attempt?.startedAt ?? latest?.resumedAt ?? latest?.startedAt) >= startedAt;
+      if (attempt === 0 && current && encarCanRetry(latest) && !stop()) {
+        await wait(300_000);
+        if (reportPath === 'runtime/encar-refresh-report.json') step = circlePlan('encar', await readState('runtime/encar-refresh-checkpoint.json'))[0];
+        continue;
+      }
+      if (failure) throw failure;
+      return latest;
+    }
+  };
   try {
     if (await running(source)) {
       await notify(`${label}: запуск по расписанию пропущен — источник уже работает.`);
       return 'busy';
     }
     state = source === 'guazi' ? await readState('runtime/guazi-refresh/current.json') : source === 'encar' ? await readState('runtime/encar-refresh-checkpoint.json') : null;
-    for (const step of circlePlan(source, state)) await run(step);
+    for (const step of circlePlan(source, state)) {
+      if (source === 'encar') await runEncarStep(step, 'runtime/encar-refresh-report.json');
+      else await run(step);
+    }
     if (source === 'encar') {
       report = await readState('runtime/encar-refresh-report.json');
       const step = encarImportPlan(await readState('runtime/encar-discoveries.json'), report, startedAt);
       if (step) {
-        await run(step);
+        await runEncarStep(step, 'runtime/encar-import-report.json');
         importReport = await readState('runtime/encar-import-report.json');
         if (!importReport?.final || !Number.isFinite(Date.parse(importReport.startedAt)) || Date.parse(importReport.startedAt) < startedAt) throw Error('Нет свежего итогового отчёта пополнения Encar');
         if (importReport.fatal || importReport.complete === false || importReport.walk?.broken) throw Error(`Encar: пополнение не завершено${importReport.fatal ? `: ${importReport.fatal}` : ''}`);
@@ -70,6 +93,7 @@ export async function runScheduledCircle(source, { readState, running, run, afte
     await notify(circleSummary(source, { report, state, importReport, elapsedMs: now() - startedAt }));
     return 'complete';
   } catch (error) {
+    if (stop()) error = Object.assign(new Error('Остановлено по команде; прогресс сохранён'), { code: 'ABCARS_STOPPED' });
     let details;
     try { details = await diagnostics(source, startedAt); } catch (diagnosticError) { details = { logTail: `Не удалось прочитать диагностику: ${diagnosticError.message}` }; }
     await notify(circleFailure(source, error, { report, state, cursor, importReport, elapsedMs: now() - startedAt, ...details }));

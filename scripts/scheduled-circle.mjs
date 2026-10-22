@@ -4,13 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
 import { runScheduledCircle, sourceIsRunning } from './lib/scheduled-circle.mjs';
 import { sendTelegram } from './lib/telegram.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exec = promisify(execFile);
 let child, stopping = false, currentStep, logOffset = 0;
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { stopping = true; child?.kill(signal); });
+const stopWaiting = new AbortController();
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { stopping = true; stopWaiting.abort(); child?.kill(signal); });
 const readState = async relative => {
   try { return JSON.parse(await fs.readFile(path.join(root, relative), 'utf8')); }
   catch (error) { if (error.code === 'ENOENT') return null; throw error; }
@@ -62,6 +64,7 @@ const diagnostics = async (source, startedAt) => {
 };
 try {
   const result = await runScheduledCircle(process.argv[2], {
+    stop: () => stopping, wait: ms => delay(ms, undefined, { signal: stopWaiting.signal }),
     readState, run: async step => {
       try { await run(step); }
       catch (error) { error.stage = step.args.find(arg => arg.endsWith('.mjs')); throw error; }

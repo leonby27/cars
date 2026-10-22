@@ -22,17 +22,31 @@ export const ENCAR_MAX_OFFSET = 10_000;
 
 // API 407 can hide both live and sold ads. Confirm the public SSR state, never the
 // status code or a generic error-page sentence alone. Do not execute page JS.
-export function encarPublicDetail(html, id) {
+function encarPublicState(html) {
   const match = String(html).match(/<script\b[^>]*>\s*(?:window\.)?__PRELOADED_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/);
+  try { return JSON.parse(match?.[1] || 'null'); } catch { return null; }
+}
+
+export function encarPublicBaseFailed(html) {
+  const state = encarPublicState(html);
+  const base = state?.cars?.base;
+  return Boolean(base && !Array.isArray(base) && typeof base === 'object' && !Object.keys(base).length
+    && state.cars.detailFlags === null && state?.pender?.failure?.['cars/GET_BASE'] === true
+    && state?.pender?.success?.['cars/GET_BASE'] === false
+    && state?.pender?.pending?.['cars/GET_BASE'] === false);
+}
+
+export function encarPublicDetail(html, id) {
   try {
-    const cars = JSON.parse(match?.[1] || 'null')?.cars;
+    const cars = encarPublicState(html)?.cars;
     const base = cars?.base;
     const requested = String(id);
     if (!/^\d+$/.test(requested) || String(base?.queryCarId) !== requested
       || ![base?.vehicleId, base?.manage?.dummyVehicleId].some(value => String(value) === requested)) return null;
     const status = base?.advertisement?.status;
     if (!((status === 'SOLD' && cars?.detailFlags?.adStatus === 'soldOut')
-      || (status === 'ADVERTISE' && cars?.detailFlags?.adStatus === 'advertise'))) return null;
+      || (status === 'ADVERTISE' && cars?.detailFlags?.adStatus === 'advertise')
+      || (status === 'WAIT' && cars?.detailFlags?.adStatus === 'wait'))) return null;
     return base;
   } catch { return null; }
 }
@@ -217,31 +231,38 @@ const exteriorCount = (detail) => (Array.isArray(detail?.photos) ? detail.photos
  * Страховая история (record summary) и осмотр — в короткие поля записи.
  * Оба ответа необязательны: без них машина заводится с пустыми полями.
  */
+const sourceBoolean = value => value === true || value === 1 ? true : value === false || value === 0 ? false : null;
+export function encarIncident({ inspection, totalLoss, owners }) {
+  const notes = [];
+  if (inspection?.accident === true) notes.push('осмотр: было ДТП');
+  else if (inspection?.accident === false) notes.push(inspection.simpleRepair ? 'осмотр: без ДТП, мелкий ремонт' : 'осмотр: без ДТП');
+  if (inspection?.waterlog) notes.push('затопление');
+  if (totalLoss) notes.push('списание по страховке');
+  if (owners !== null && owners !== undefined) notes.push(`владельцев ${owners}`);
+  return notes.length ? `Encar: ${notes.join(', ')}` : null;
+}
 export function encarHistory(record, inspection) {
   const my = numeric(record?.myAccidentCnt);
   const other = numeric(record?.otherAccidentCnt);
-  const accidents = numeric(record?.accidentCnt) ?? (my === null && other === null ? null : (my || 0) + (other || 0));
+  const accidents = numeric(record?.accidentCnt) ?? (my !== null && other !== null ? my + other : null);
   const ownerChanges = numeric(record?.ownerChangeCnt);
-  const totalLoss = (numeric(record?.totalLossCnt) || 0) + (numeric(record?.floodTotalLossCnt) || 0);
+  const losses = [numeric(record?.totalLossCnt), numeric(record?.floodTotalLossCnt)];
+  const totalLoss = losses.some(value => value > 0) ? true : losses.every(value => value !== null) ? false : null;
   const master = inspection?.master || null;
   // В API поле называется «accdient» — опечатка площадки, а не наша.
-  const inspected = master ? { accident: Boolean(master.accdient ?? master.accident), simpleRepair: Boolean(master.simpleRepair), waterlog: Boolean(master.detail?.waterlog), tuning: Boolean(master.detail?.tuning), state: master.detail?.carStateType?.title || null } : null;
+  let inspected = master ? { accident: sourceBoolean(master.accdient ?? master.accident), simpleRepair: sourceBoolean(master.simpleRepair), waterlog: sourceBoolean(master.detail?.waterlog), tuning: sourceBoolean(master.detail?.tuning), state: master.detail?.carStateType?.title || null } : null;
+  if (inspected && Object.values(inspected).every(value => value === null)) inspected = null;
   const claims = accidents === null ? null
     : accidents === 0 ? "Без страховых случаев"
-      : `Страховых случаев: ${accidents}${my !== null || other !== null ? ` (по своей вине ${my || 0}, по чужой ${other || 0})` : ""}`;
-  const notes = [];
-  if (inspected) notes.push(inspected.accident ? "осмотр: было ДТП" : inspected.simpleRepair ? "осмотр: без ДТП, мелкий ремонт" : "осмотр: без ДТП");
-  if (inspected?.waterlog) notes.push("затопление");
-  if (totalLoss) notes.push("списание по страховке");
-  if (ownerChanges !== null) notes.push(`владельцев ${ownerChanges + 1}`);
+      : `Страховых случаев: ${accidents}${my !== null && other !== null ? ` (по своей вине ${my}, по чужой ${other})` : ""}`;
   return {
     claims,
     claimsCount: accidents,
     owners: ownerChanges === null ? null : ownerChanges + 1,
     transfers: ownerChanges,
-    totalLoss: totalLoss > 0,
+    totalLoss,
     inspection: inspected,
-    incident: notes.length ? `Encar: ${notes.join(", ")}` : "Отчёт источника может быть неполным",
+    incident: encarIncident({ inspection: inspected, totalLoss, owners: ownerChanges === null ? null : ownerChanges + 1 }),
   };
 }
 
@@ -504,7 +525,7 @@ const panelName = (title) => {
   return side ? `${name} (${side})` : name;
 };
 
-const yesNo = (value) => (value ? "да" : "нет");
+const yesNo = value => sourceBoolean(value) === null ? null : sourceBoolean(value) ? 'да' : 'нет';
 const ymd = (value) => {
   const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})$/);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : null;

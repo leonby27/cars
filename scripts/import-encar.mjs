@@ -79,10 +79,12 @@ const log = (line) => console.log(`${new Date().toISOString().slice(11, 19)} ${l
 // новое объявление, а активная не должна появляться в каталоге дважды.
 let identity = createEncarImportIdentity();
 let pool = null;
+let controlId = null;
 if (writeDatabase) {
   ({ pool } = await import("../server/db.mjs"));
-  const { rows } = await pool.query("SELECT external_id, status, source_payload->>'sourceVehicleId' AS source_vehicle_id FROM listings WHERE source='Encar'");
+  const { rows } = await pool.query("SELECT external_id, status, source_payload->>'sourceVehicleId' AS source_vehicle_id FROM listings WHERE source='Encar' ORDER BY last_checked_at DESC NULLS LAST");
   identity = createEncarImportIdentity(rows);
+  controlId = rows.find(row => row.status === 'active')?.external_id || null;
   log(`[skip] в базе уже ${identity.knownIds.size} корейских объявлений`);
 }
 const { knownIds } = identity;
@@ -92,7 +94,7 @@ const rejected = new Map();
 const rejectionExamples = [];
 let checkpointed = 0;
 let detailReads = 0;
-let walkStats = null, discoveryFailure = null, fatal = null;
+let walkStats = null, discoveryFailure = null, fatal = null, failure = null;
 const reject = (reason, externalId) => {
   rejected.set(reason, (rejected.get(reason) || 0) + 1);
   if (rejectionExamples.length < 40) rejectionExamples.push({ externalId, reason });
@@ -102,7 +104,7 @@ const reject = (reason, externalId) => {
 // scripts/build-korea-specs.mjs): без него карточки заводятся без мощности и размеров.
 const koreaSpecs = await loadKoreaSpecs(path.join(ROOT, "config", "korea-specs"));
 log(`[specs] справочник характеристик: марок ${Object.keys(koreaSpecs).length}`);
-const client = new EncarClient({ pace, log, specs: koreaSpecs });
+const client = new EncarClient({ pace, log, specs: koreaSpecs, controlId });
 
 const report = (extra = {}) => ({
   startedAt,
@@ -118,10 +120,14 @@ const report = (extra = {}) => ({
   detailReads,
   accepted: accepted.length,
   imported: checkpointed,
+  historyDeferred: accepted.slice(0, checkpointed).filter(car => car.historyUnavailable).length,
   importedByBrand: Object.fromEntries([...Map.groupBy(accepted.slice(0, checkpointed), (car) => car.brand)].map(([brand, cars]) => [brand, cars.length])),
   importedByType: Object.fromEntries([...Map.groupBy(accepted.slice(0, checkpointed), (car) => car.type)].map(([type, cars]) => [type, cars.length])),
   walk: walkStats,
   fatal: fatal || discoveryFailure,
+  failureCode: failure?.code,
+  failureStatus: failure?.status,
+  failureStage: failure?.stage,
   complete: !fatal && !discoveryFailure && !walkStats?.broken && (accepted.length >= limit || (!outOfTime() && cursor >= candidates.length)),
   rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
   rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
@@ -141,8 +147,14 @@ async function writeBatch(final = false) {
   if (!fresh.length && !final) return;
   let databaseRows = null;
   if (writeDatabase && fresh.length) {
-    const { importCars } = await import("../server/repository.mjs");
-    databaseRows = await importCars(fresh);
+    const { withTransaction } = await import('../server/db.mjs');
+    const { upsertEncarCar } = await import('./lib/encar-write.mjs');
+    for (let offset = 0; offset < fresh.length; offset += 250) {
+      await withTransaction(async db => {
+        for (const car of fresh.slice(offset, offset + 250)) Object.assign(car, await upsertEncarCar(car, db));
+      });
+    }
+    databaseRows = fresh.length;
   }
   if (outPath) {
     await fs.mkdir(path.dirname(outPath), { recursive: true });
@@ -171,6 +183,7 @@ async function discover() {
   if (repair) {
     if (!pool) throw new Error("--repair работает только с базой (--database=0 не сочетается)");
     const missing = await pool.query("SELECT external_id FROM listings WHERE source='Encar' AND status='active' AND (source_payload->'technicalSpecs') IS NULL ORDER BY first_seen_at DESC LIMIT $1", [limit]);
+    if (missing.rows.length) await client.verifyAccess?.({ brands, yearFrom, sampleId: String(controlId || missing.rows[0].external_id) });
     for (const row of missing.rows) { knownIds.delete(String(row.external_id)); candidates.push({ externalId: String(row.external_id) }); }
     log(`[repair] без полной техкарты ${missing.rows.length} машин — перечитываю`);
     return;
@@ -198,6 +211,8 @@ async function discover() {
     const ageMinutes = Math.round((Date.now() - new Date(file.generatedAt).getTime()) / 60000);
     log(`[new] ${file.items?.length ?? 0} находок от актуализации, файлу ${ageMinutes} мин`);
     if (ageMinutes > 24 * 60) log("[new] файлу находок больше суток — актуализация могла не отработать");
+    const probe = (file.items || []).find(item => !knownIds.has(String(item.externalId)) && (!brandFilter || brandFilter.includes(canonicalImportBrand(item.brand))));
+    if (probe) await client.verifyAccess?.({ brands, yearFrom, sampleId: String(controlId || probe.externalId) });
     let known = 0;
     for (const item of file.items || []) {
       if (candidates.length >= limit) break;
@@ -258,7 +273,7 @@ async function worker() {
 
 try {
   const results = await Promise.allSettled([
-    discover().catch((error) => { discoveryFailure = safeDiagnostic(error.message); log(`[walk] обход оборван: ${discoveryFailure}`); }).finally(() => { discovering = false; }),
+    discover().catch((error) => { failure = error; discoveryFailure = safeDiagnostic(error.message); log(`[walk] обход оборван: ${discoveryFailure}`); }).finally(() => { discovering = false; }),
     ...Array.from({ length: concurrency }, worker),
   ]);
   const failed = results.find(result => result.status === 'rejected');
@@ -271,6 +286,7 @@ try {
   log(`[done] принято ${final.imported}, отклонено ${final.rejected}, запросов ${final.requests}`);
   console.log(JSON.stringify({ importedByBrand: final.importedByBrand, importedByType: final.importedByType, rejectedByReason: final.rejectedByReason }, null, 2));
 } catch (error) {
+  if (error.code || !failure) failure = error;
   fatal = safeDiagnostic(error.message);
   await checkpoint(true).catch(() => {});
   console.error(`[fail] ${error.message}`);

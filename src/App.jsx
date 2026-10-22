@@ -104,7 +104,7 @@ const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
 // Заголовок страницы машины. Он же уходит в Метрику, когда карточку открывают
 // быстрым просмотром: в отчётах такой просмотр должен выглядеть ровно так же,
 // как открытая страница этой машины, а не как что-то отдельное.
-const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${carTitleDetails(car, estimateLandedCost(car).totalUsd)} | abcars.by`;
+const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${carTitleDetails(car, estimateLandedCost(car).totalUsd)} ▶ Абкарс`;
 // Адрес несёт короткий номер, а карточки и избранное — полный идентификатор,
 // поэтому сравниваем их по номеру.
 const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingNumber(left) === listingNumber(right);
@@ -973,7 +973,7 @@ const routeSeo = {
   // Пять инфостраниц — из src/info-pages-seo.js: те же записи читает сборка
   // поисковых копий, чтобы заголовки не расходились.
   ...Object.fromEntries(Object.entries(INFO_PAGES_SEO).map(([key, page]) => [`/${key}`, [page.title, page.description]])),
-  "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
+  "/privacy": ["Политика конфиденциальности ▶ Абкарс", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
 };
 // Страницы моделей описаны в model-pages.js; их заголовки попадают в ту же карту,
 // чтобы SEO-механика работала для них без отдельной ветки.
@@ -997,17 +997,17 @@ if (BLOG_ENABLED) {
 }
 
 const privateRouteSeo = {
-  "/favorites": ["Избранные автомобили | abcars.by", "Сохранённые автомобили в вашем личном кабинете abcars.by."],
-  "/searches": ["Мои поиски | abcars.by", "Сохранённые поиски автомобилей в вашем личном кабинете abcars.by."],
-  "/login": ["Вход в личный кабинет | abcars.by", "Вход в личный кабинет клиента abcars.by."],
-  "/register": ["Регистрация личного кабинета | abcars.by", "Создание личного кабинета клиента abcars.by."],
-  "/account": ["Личный кабинет | abcars.by", "Заказы, избранные автомобили и личные данные клиента abcars.by."],
+  "/favorites": ["Избранные автомобили ▶ Абкарс", "Сохранённые автомобили в вашем личном кабинете abcars.by."],
+  "/searches": ["Мои поиски ▶ Абкарс", "Сохранённые поиски автомобилей в вашем личном кабинете abcars.by."],
+  "/login": ["Вход в личный кабинет ▶ Абкарс", "Вход в личный кабинет клиента abcars.by."],
+  "/register": ["Регистрация личного кабинета ▶ Абкарс", "Создание личного кабинета клиента abcars.by."],
+  "/account": ["Личный кабинет ▶ Абкарс", "Заказы, избранные автомобили и личные данные клиента abcars.by."],
   // Закрытый раздел статистики. Без своей строки заголовок вкладки брался из
   // запасного варианта — «Страница не найдена», — хотя раздел открывался
   // нормально. Из поиска он всё равно закрыт: ниже все эти адреса помечаются
   // «не индексировать».
-  "/partner": ["Кабинет партнёра | abcars.by", "Закрытый кабинет партнёра abcars.by."],
-  "/analytics": ["Аналитика | abcars.by", "Закрытый раздел статистики и заявок abcars.by."],
+  "/partner": ["Кабинет партнёра ▶ Абкарс", "Закрытый кабинет партнёра abcars.by."],
+  "/analytics": ["Аналитика ▶ Абкарс", "Закрытый раздел статистики и заявок abcars.by."],
 };
 
 // Заголовок вкладки, описание, запрет индексации и адрес-первоисточник — одним
@@ -1068,8 +1068,8 @@ function ClientSeo({ path, car, landing, carPending = false }) {
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [baseTitle, baseDescription] = detailTitle
       ? [carPageTitle(car), vehicleDescription(car, estimateLandedCost(car).totalUsd)]
-      : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
-    const title = listPage ? String(baseTitle).replace(/ \| abcars\.by$/, ` — страница ${listPage} | abcars.by`) : baseTitle;
+      : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля ▶ Абкарс", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена ▶ Абкарс", "Запрошенная страница не найдена."];
+    const title = listPage ? String(baseTitle).replace(/ ▶ Абкарс$/, ` — страница ${listPage} ▶ Абкарс`) : baseTitle;
     const description = path === "/" ? homeDescription({ ...catalogFacts, brandCount: window.__boot?.catalogFacts?.brandCount }) : listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);

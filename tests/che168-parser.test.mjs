@@ -27,6 +27,30 @@ const specs = [{ name:"Battery & Charging", paramitems:[
   { name:"Unavailable", value:"--", sublist:[] },
 ] }];
 
+test("imports Flight details with null specification groups and rows without losing valid data", () => {
+  const specGroups = [null, { name:"Empty", paramitems:null }, ...specs.map((group) => ({
+    ...group, paramitems:[null, ...group.paramitems, null],
+  })), null];
+  const encoded = `self.__next_f.push([1,${JSON.stringify(`20:${JSON.stringify({ ssrCarDetail:detail, ssrSpecParam:specGroups })}`)}])`;
+  const payload = extractChe168DetailPayload([encoded]);
+  const options = { importedAt:"2026-10-19T12:00:00.000Z", expectedLocale:"en" };
+  assert.deepEqual(buildChe168Car(payload, options), buildChe168Car({ detail, specGroups:specs }, options));
+  assert.deepEqual(normalizeChe168TechnicalSpecs(specGroups), normalizeChe168TechnicalSpecs(specs));
+});
+
+test("empty specification groups leave unavailable values empty and preserve locale validation", () => {
+  const options = { importedAt:"2026-10-19T12:00:00.000Z", expectedLocale:"en" };
+  const payload = { detail, specGroups:[null, { name:"Empty", paramitems:[null] }] };
+  const car = buildChe168Car(payload, options);
+  assert.deepEqual(car, buildChe168Car({ detail, specGroups:[] }, options));
+  assert.equal(car.battery, null);
+  assert.equal(car.electricRange, null);
+  assert.equal(car.technicalSpecs.count, 0);
+  assert.throws(() => buildChe168Car({ ...payload, specGroups:[null, {
+    name:"Батарея", paramitems:[null, { name:"Энергия батареи (кВт·ч)", value:"79.05" }],
+  }] }, options), { code:"CHE168_LOCALE_MISMATCH" });
+});
+
 test("decodes Next flight payloads and extracts Che168 detail data", () => {
   const encoded = `self.__next_f.push([1,${JSON.stringify(`20:{"ssrCarDetail":${JSON.stringify(detail)},"ssrSpecParam":${JSON.stringify(specs)}}`)}])`;
   assert.match(decodeNextFlightScript(encoded), /ssrCarDetail/);

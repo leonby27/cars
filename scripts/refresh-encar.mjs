@@ -10,7 +10,7 @@ import { ENCAR_MANUFACTURERS } from './lib/encar-parser.mjs';
 import { canonicalImportBrand, importPolicyViolation } from '../config/import-policy.mjs';
 import { sourceUsdRate } from '../src/pricing.js';
 import { pool, withTransaction } from '../server/db.mjs';
-import { upsertCar } from '../server/repository.mjs';
+import { upsertEncarCar } from './lib/encar-write.mjs';
 import { refreshAfterManualCatalog } from './lib/sitemap-refresh.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,7 +48,7 @@ try {
   await runEncarRefresh({
     client, db: pool,
     // A failed card write rolls back facts, listing, media and history together.
-    upsert: car => withTransaction(db => upsertCar(car, db)),
+    upsert: car => withTransaction(db => upsertEncarCar(car, db)),
     policyViolation: importPolicyViolation, canonicalBrand: canonicalImportBrand,
     brands, yearFrom, usdPerKrw, concurrency, detailLimit,
     dryRun, resume: args.get('resume') === 'true',

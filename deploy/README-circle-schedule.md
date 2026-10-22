@@ -103,19 +103,94 @@ HTTP 407 is read with the existing Undici `request` dependency: browser-style
 `fetch` hides this response as a network failure. A 407 is not a sale. The client
 checks the normal public Encar page's JSON state without executing JavaScript.
 It requires the exact query/listing identity (including dummy advertisements),
-and matching `ADVERTISE`/`advertise` or `SOLD`/`soldOut` states. Active public
+and matching `ADVERTISE`/`advertise`, `WAIT`/`wait` or `SOLD`/`soldOut` states. Active public
 details follow the normal parser and import policy. Unconfirmed pages and
 verification redirects remain errors; they are never followed as a bypass.
 No proxy/cookie/agent-rotation configuration is added.
 
 Resume checks access first. If lists return 407 but a matching public card is
-verified, it may continue the saved queue while requiring public confirmation
-for API 404s too. This prevents treating an API access problem as mass sales.
+verified, it may continue the saved queue. API 404 always checks the public page;
+a valid public WAIT or active card takes precedence over that HTTP status.
 If no lists could be confirmed during a fresh walk, details are not processed.
 HTML/geographic error pages cannot prove a sale. Failed history, inspection or
 battery requests cannot overwrite saved records with empty history; absence
 responses are accepted only while the API is verified. Database connection or
 resource failures stop processing with the queue retained.
+
+Consolidated follow-up installed after explicit owner approval on 2026-10-20.
+Only the 11 agreed runtime modules and 10 test files were replaced; the catalog
+backup and installation receipt are in
+`/srv/abcars-backups/encar-system-20261020-lmvoqnkm/`. The retained queue was
+expanded from 291 to 780 by requeuing the 489 removals from the last run, preserving
+the original round and discovery dates. No catalog rows were bulk-reactivated.
+Availability has four outcomes in the installed version of `encar-result.mjs`: active,
+explicitly sold, temporarily hidden, or unconfirmed. Only matching explicit SOLD
+sets `unavailable` and a sale date. WAIT, ordinary policy exclusions and a
+verified API 404 paired with the site's structured failed detail load use
+`skipped`, without a sale date. An unconfirmed response stays queued and keeps
+the last stored state. The outcome, reason, source statuses and observation time
+are recorded together with the listing in `sourceAvailability`.
+
+Skipped listings are included in the next snapshot. Known unavailable ads that
+reappear in current source lists also re-enter detail verification. Returning
+ads use the same physical-vehicle identity guard as imports, including safe
+replay after a successful write that preceded the last saved checkpoint.
+
+Once the active card and price are verified, HTTP 407 on optional history,
+inspection or battery data no longer blocks those facts. The Encar writer locks
+the existing listing inside its transaction and retains its prior history,
+battery facts and technical sheet, verifying the physical vehicle identity.
+New listings keep unknown history instead of a clean-history claim. The payload
+records `historyUnavailable`, the report counts deferred history explicitly,
+and the next refresh rereads marked cars even when their price is unchanged.
+A successful history response removes the marker through the ordinary rewrite.
+Partial successful responses preserve previously known history values and rows;
+missing facts remain null instead of becoming zero or "no accident". Explicit
+new facts can still update the old values. The existing row is locked and its
+physical identity checked for every Encar rewrite.
+Transport/server/schema failures and unverified main-card availability still
+remain errors; this exception is limited to optional HTTP 407 responses.
+
+The existing scheduled runner retries an Encar phase once after five minutes
+for a typed temporary source interruption or an incomplete live list. It resumes
+the saved refresh queue or repeats the checkpointed import, whose known-ID guard
+skips saved cars. The source lock stays held. Parse errors, write failures and
+stale reports never trigger this automatic retry. A stop interrupts the pause.
+Only one final notification is sent; persistent source interruptions are reported
+as paused, without claiming completion. No extra timer or queue is required.
+
+Status updates must acknowledge exactly one row; round totals must match the
+original snapshot. Damaged queues or inconsistent totals are rejected before
+resumption. The combined regression scenario covers the original response types,
+a database interruption, an access outage, history preservation, revival and
+resumption of only unresolved IDs.
+
+Owner policy update installed after explicit approval on 2026-10-20: API 404/407
+paired with an explicit structured failed public detail load becomes
+`unavailable`, leaves the pending queue and does not block discovery import.
+Keep the record and facts, record `source-unavailable`, and omit a sale date for
+this assumption. The removed total includes these records and separately shows
+`unverifiedUnavailable`. A streak of 15 missing cards checks a known readable
+control; a failed control still stops a source-wide outage. Other transport,
+schema, identity and write failures retain their safeguards. This supersedes the
+previous hidden/queued behavior for these missing-data responses. Five runtime
+modules and ten test files were installed, with 119/119 checks passing on the
+installed files. Backup and receipt:
+`/srv/abcars-backups/encar-unavailable-install-20261020-w8nc2xis/`.
+The existing service resumed the original queue of 503 IDs without an installer
+rewrite of the checkpoint or catalog. Unrelated website changes were excluded.
+
+Optional-history follow-up installed with explicit owner approval on 2026-10-21,
+without stopping or restarting the active circle. Optional HTTP 404 without a
+transport error during the API access problem now uses `historyUnavailable`,
+like optional HTTP 407. Verified main-card data remains usable and saved history
+is retained. This does not relax main-card, transport, schema or write checks.
+Only `encar-client.mjs` and its regression test were replaced; 119/119 installed
+checks passed. Backup and receipt:
+`/srv/abcars-backups/encar-optional-history-install-20261021-d3zj8lan/`.
+The scheduler/importer PID and start time remained unchanged. Existing processes
+keep their previously loaded module; the change takes effect in a new process.
+Already recorded rejections remain in the current attempt's final report.
 
 Reports keep cumulative round totals and a separate `attempt` with current
 completed/error counts and examples. Old queued failures are not presented as

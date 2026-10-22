@@ -64,10 +64,10 @@ const cleanModelHeading = (h1) => siteWording(String(h1 || "")
 /** Первый вариант заголовка, который помещается в `limit` символов. */
 const fitModelTitle = (base, variants, limit = 80) => {
   for (const variant of variants) {
-    const title = `${base}${variant} | abcars.by`;
+    const title = `${base}${variant} ▶ Абкарс`;
     if (title.length <= limit) return title;
   }
-  return `${base} | abcars.by`;
+  return `${base} ▶ Абкарс`;
 };
 
 /**

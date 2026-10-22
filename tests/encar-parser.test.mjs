@@ -108,7 +108,12 @@ test("страховая история и осмотр — в короткие 
   const empty = encarHistory(null, null);
   assert.equal(empty.claims, null);
   assert.equal(empty.owners, null);
-  assert.equal(empty.incident, "Отчёт источника может быть неполным");
+  assert.equal(empty.incident, null);
+  assert.equal(empty.totalLoss, null);
+  const partial = encarHistory({ myAccidentCnt: 0 }, { master: {} });
+  assert.equal(partial.claims, null);
+  assert.equal(partial.inspection, null);
+  assert.equal(partial.totalLoss, null);
   const crashed = encarHistory({ accidentCnt: 1, myAccidentCnt: 1, otherAccidentCnt: 0, ownerChangeCnt: 0, totalLossCnt: 1 }, { master: { accdient: true, simpleRepair: false, detail: { waterlog: true } } });
   assert.equal(crashed.incident, "Encar: осмотр: было ДТП, затопление, списание по страховке, владельцев 1");
   assert.equal(crashed.totalLoss, true);

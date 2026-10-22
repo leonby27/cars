@@ -54,13 +54,145 @@ test('completed refresh persists discoveries, success counts and an empty checkp
   assert.equal(encarImportPlan(discoveries, report, Date.parse(report.startedAt)).args.at(-1), '--limit=1');
 });
 
+test('WAIT is hidden temporarily without a sale, and skipped cars are rechecked even at an unchanged price',async t=>{
+  const {options,client,queries,reads}=await fixture(t,['waiting']);
+  client.car=async()=>({status:200,car:null,detail:{advertisement:{status:'WAIT'}}});
+  const report=await runEncarRefresh(options);
+  assert.equal(report.complete,true);
+  assert.equal(report.skipped,1);
+  assert.equal(report.sold,0);
+  assert.ok(queries.some(q=>q.sql.includes("status='skipped'")&&q.sql.includes('sold_at=NULL')));
+  assert.ok(!queries.some(q=>q.sql.includes("status='unavailable'")));
+  assert.match(queries[0].sql,/status IN \('active','skipped'\)/);
+  const baseQuery=options.db.query;
+  options.db.query=async(sql,args)=>sql.startsWith('SELECT l.id')
+    ?{rows:[{id:'same',external_id:'same',price_cny:10000000,status:'skipped'}]}:baseQuery(sql,args);
+  client.car=async id=>{reads.push(id);return {status:200,car:{externalId:id,sourceVehicleId:100},detail:{advertisement:{status:'ADVERTISE'}}};};
+  const next=await runEncarRefresh(options);
+  assert.deepEqual(reads,['same']);
+  assert.equal(next.seenSamePrice,0);
+  assert.equal(next.priceChanged,0);
+  assert.equal(next.rewritten,1);
+  reads.length=0;
+  options.db.query=async(sql,args)=>sql.startsWith('SELECT l.id')
+    ?{rows:[{id:'same',external_id:'same',price_cny:10000000,status:'active',history_unavailable:'true'}]}:baseQuery(sql,args);
+  await runEncarRefresh(options);
+  assert.deepEqual(reads,['same'],'deferred history is retried next round even at the same price');
+});
+
+test('an optional-history refusal is counted separately after the verified car is successfully saved',async t=>{
+  const {options,client}=await fixture(t,['missing']);
+  client.car=async()=>({status:200,car:{externalId:'missing',historyUnavailable:true},detail:{advertisement:{status:'ADVERTISE'}},historyUnavailable:true});
+  const report=await runEncarRefresh(options);
+  assert.equal(report.complete,true);
+  assert.equal(report.historyDeferred,1);
+  assert.equal(report.readFailed,0);
+  assert.equal(report.rewritten,1);
+  options.upsert=async()=>{throw Error('write failed');};
+  const failed=await runEncarRefresh(options);
+  assert.equal(failed.historyDeferred,undefined);
+  assert.equal(failed.writeFailed,1);
+  assert.equal(failed.remainingListings,1);
+});
+
+test('an unavailable source card is removed without a sale date and no longer blocks discoveries',async t=>{
+  const {options,client,queries}=await fixture(t,['same','missing']);
+  const query=options.db.query;
+  options.db.query=async(sql,args)=>sql.startsWith('SELECT external_id')?{rows:[
+    {external_id:'missing',status:'active'},{external_id:'same',status:'active'},
+  ]}:query(sql,args);
+  const probes=[];
+  client.verifyAccess=async({sampleId})=>probes.push(sampleId);
+  client.car=async()=>({status:404,car:null,detail:null,unverifiedUnavailable:true,apiStatus:407,publicStatus:200,availabilitySource:'public-missing'});
+  const initial=await runEncarRefresh({...options,stop:()=>true});
+  assert.equal(initial.remainingListings,1);
+  const report=await runEncarRefresh({...options,resume:true});
+  assert.deepEqual(probes,['same'],'access control must be outside the unverified tail');
+  assert.equal(report.complete,true);
+  assert.equal(report.sold,1);
+  assert.equal(report.unverifiedUnavailable,1);
+  assert.equal(report.readFailed+report.parseFailed+report.writeFailed,0);
+  assert.equal(report.remainingListings,0);
+  const update=queries.find(row=>row.sql.includes("status='unavailable'"));
+  assert.ok(update.sql.includes('sold_at=NULL'));
+  assert.deepEqual(JSON.parse(update.values[1]),{state:'unavailable',reason:'source-unavailable',checkedAt:JSON.parse(update.values[1]).checkedAt,sourceState:null,source:'public-missing',apiStatus:407,publicStatus:200});
+  const checkpoint=await readEncarCheckpoint(options.checkpointPath);
+  assert.deepEqual(checkpoint.pending,[]);
+  assert.deepEqual(checkpoint.failures,{});
+  const discoveries=JSON.parse(await fs.readFile(options.discoveriesPath));
+  assert.ok(encarImportPlan(discoveries,report,Date.parse(report.startedAt)));
+});
+
+test('returning advertisements cannot create a second active record of the same physical car',async t=>{
+  const {options,client,writes,queries}=await fixture(t,['same']);
+  const query=options.db.query;
+  options.db.query=async(sql,args)=>sql.startsWith('SELECT external_id')?{rows:[
+    {external_id:'same',status:'active',source_vehicle_id:'100'},
+    {external_id:'returning',status:'unavailable',source_vehicle_id:'100'},
+  ]}:query(sql,args);
+  client.walk=async({onItem})=>{onItem({externalId:'same',priceMan:1000});onItem({externalId:'returning',priceMan:1000});return {slices:1,broken:0};};
+  client.car=async()=>({status:200,car:{externalId:'returning',sourceVehicleId:100},detail:{advertisement:{status:'ADVERTISE'}}});
+  const report=await runEncarRefresh(options);
+  assert.equal(report.complete,true);
+  assert.equal(report.skipped,1);
+  assert.equal(report.reactivated,undefined);
+  assert.deepEqual(writes,[]);
+  assert.ok(queries.some(q=>q.sql.includes("status='skipped'")));
+});
+
+test('replay after an unsaved successful reactivation does not hide the already activated advertisement',async t=>{
+  const {options,client,writes}=await fixture(t,[]);
+  let active=false;
+  options.db.query=async sql=>sql.startsWith('SELECT external_id')
+    ?{rows:[{external_id:'returning',status:active?'active':'unavailable',source_vehicle_id:'100'}]}:{rows:[],rowCount:1};
+  client.walk=async({onItem})=>{onItem({externalId:'returning',priceMan:1000});return {slices:1,broken:0};};
+  client.car=async()=>({status:200,car:{externalId:'returning',sourceVehicleId:100},detail:{advertisement:{status:'ADVERTISE'}}});
+  const partial=await runEncarRefresh({...options,stop:()=>true});
+  assert.equal(partial.remainingListings,1);
+  active=true; // The DB write survived a hard kill, but the last checkpoint did not.
+  const report=await runEncarRefresh({...options,resume:true});
+  assert.equal(report.complete,true);
+  assert.equal(report.skipped,undefined);
+  assert.equal(report.reactivated,1);
+  assert.deepEqual(writes,['returning']);
+});
+
+test('an unacknowledged database status write remains queued instead of being counted as sold',async t=>{
+  const {options,client}=await fixture(t,['missing']);
+  const query=options.db.query;
+  options.db.query=async(sql,args)=>sql.startsWith('UPDATE listings SET status')?{rows:[],rowCount:0}:query(sql,args);
+  client.car=async()=>({status:200,car:null,detail:{advertisement:{status:'SOLD'}}});
+  const report=await runEncarRefresh(options);
+  assert.equal(report.complete,false);
+  assert.equal(report.sold,0);
+  assert.equal(report.writeFailed,1);
+  assert.deepEqual((await readEncarCheckpoint(options.checkpointPath)).pending,['missing']);
+});
+
+test('a corrupted queue or mismatched round totals are rejected before source or database writes',async t=>{
+  const {options,client}=await fixture(t,['missing1','missing2']);
+  await runEncarRefresh({...options,detailLimit:1});
+  const initial=await readEncarCheckpoint(options.checkpointPath);
+  client.car=()=>assert.fail('must validate the checkpoint before card reads');
+  client.verifyAccess=()=>assert.fail('must validate the checkpoint before access probes');
+  for(const corrupt of [
+    {...initial,pending:[...initial.pending,...initial.pending]},
+    {...initial,summary:{...initial.summary,active:initial.summary.active+1}},
+  ]){
+    const raw=JSON.stringify(corrupt);
+    await fs.writeFile(options.checkpointPath,raw);
+    await assert.rejects(runEncarRefresh({...options,resume:true}),/очеред|исходным набором/);
+    assert.equal(await fs.readFile(options.checkpointPath,'utf8'),raw);
+  }
+});
+
 test('network, parsing and database failures remain queued; resume only retries failures and clears their counters', async t => {
   const { options, client, reads, writes } = await fixture(t, ['changed', 'network', 'parse', 'database', 'sold']);
   client.car = async id => {
     reads.push(id); client.requests++;
     if (id === 'network') return { status: 503, car: null };
     if (id === 'parse') throw Object.assign(Error('Malformed vehicle'), { stage: 'parse', code: 'ENCAR_INVALID_DETAIL' });
-    if (id === 'sold') return { status: 404, car: null };
+    if (id === 'sold') return { status: 200, car: null, detail: { advertisement: { status: 'SOLD' } } };
     return { status: 200, car: { externalId: id }, detail: { advertisement: { status: 'ADVERTISE' } } };
   };
   options.upsert = async car => {

@@ -132,7 +132,7 @@ const publicPages = [
   { route: "/faq/", ...INFO_PAGES_SEO.faq },
   { route: "/tracking/", ...INFO_PAGES_SEO.tracking },
   { route: "/contacts/", ...INFO_PAGES_SEO.contacts },
-  { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
+  { route: "/privacy/", title: "Политика конфиденциальности ▶ Абкарс", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", ...INFO_PAGES_SEO.terms },
   // Общая страница «О моделях авто». Сами обзоры файлами не собираются: их отдаёт
   // сервер, потому что в них нужны живые цены и наличие. Готовый файл по такому адресу
@@ -164,7 +164,7 @@ const publicPages = [
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/", "/partner/"];
 // Названия закрытых разделов по-русски. Без них заголовок вкладки собирался из
-// самого адреса — «analytics | abcars.by», — а у аналитики он ещё и подменялся
+// самого адреса — «analytics ▶ Абкарс», — а у аналитики он ещё и подменялся
 // приложением на «Страница не найдена»: закрытые разделы в перечень заголовков
 // не входили (см. privateRouteSeo в src/App.jsx).
 const PRIVATE_ROUTE_NAMES = {
@@ -1147,11 +1147,11 @@ for (const car of cars) {
 
 for (const route of privateRoutes) {
   const name = PRIVATE_ROUTE_NAMES[route] || "Личный раздел";
-  const html = renderHtml({ title: `${name} | abcars.by`, description: "Личный раздел пользователя abcars.by.", canonical: route === "/analytics/" ? null : routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
+  const html = renderHtml({ title: `${name} ▶ Абкарс`, description: "Личный раздел пользователя abcars.by.", canonical: route === "/analytics/" ? null : routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
   writeRoute(route, ["/analytics/", "/partner/"].includes(route) ? withoutMetrika(html) : html);
 }
 
-const privateHtml = renderHtml({ title: "Личный раздел | abcars.by", description: "Личный раздел пользователя abcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
+const privateHtml = renderHtml({ title: "Личный раздел ▶ Абкарс", description: "Личный раздел пользователя abcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
 writeFileSync(path.join(clientDir, "private.html"), privateHtml);
 
 // Страница «такой страницы нет». С 30.08.2026 её показывает nginx вместо главной,
@@ -1174,7 +1174,7 @@ writeFileSync(appShellPath, appShellHtml);
 // здесь общий, по `SEO_ALLOW_INDEXING`: оставить `noindex` в готовом HTML насовсем
 // нельзя — поисковик выбрасывает страницу, не дожидаясь, пока скрипт запрет снимет.
 const carShellHtml = renderHtml({
-  title: "Автомобиль с пробегом — цена с доставкой до Минска | abcars.by",
+  title: "Автомобиль с пробегом — цена с доставкой до Минска ▶ Абкарс",
   description: "Характеристики, пробег, состояние и ориентировочная стоимость автомобиля с пробегом с доставкой в Минск.",
   canonical: null,
   body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Автомобиль с пробегом</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,

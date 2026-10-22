@@ -106,7 +106,9 @@ export function extractChe168DetailPayload(scripts) {
 }
 
 function flattenedSpecs(groups) {
-  return (groups || []).flatMap((group) => (group.paramitems || []).map((item) => ({ ...item, group:group.name })));
+  return (groups || []).flatMap((group) => (group?.paramitems || [])
+    .filter(Boolean)
+    .map((item) => ({ ...item, group:group.name })));
 }
 
 function actualSpecValue(item) {

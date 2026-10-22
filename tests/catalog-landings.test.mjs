@@ -446,7 +446,7 @@ test("заголовки разделов: «в Беларусь», без Ми�
 
 test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
   const byd = findCatalogLanding("/catalog/byd");
-  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
   assert.match(description, /BYD из Китая и Кореи/);
   assert.match(description, /В наличии 5\u00a0204 авто с пробегом/);

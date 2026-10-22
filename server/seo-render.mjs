@@ -620,7 +620,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: sold ? `${titleText} — продано | abcars.by` : `${titleText}, ${carTitleDetails(car, landed.totalUsd)} | abcars.by`,
+        title: sold ? `${titleText} — продано ▶ Абкарс` : `${titleText}, ${carTitleDetails(car, landed.totalUsd)} ▶ Абкарс`,
         description,
         canonical,
         body,
@@ -747,7 +747,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | abcars.by` : CATALOG_INDEX.title,
+        title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} ▶ Абкарс` : CATALOG_INDEX.title,
         // Сначала живые цифры (число машин и вилка цен), потом постоянный текст.
         description: `${landingSeoDescription({}, { total, priceFrom: spread?.from })}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
@@ -902,7 +902,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       html: renderHtml({
         // `seo` — заголовок и описание с живыми цифрами (server/catalog-page.mjs); без
         // них — постоянные из справочника разделов.
-        title: page > 1 ? `${landing.h1} — страница ${page} | abcars.by` : seo?.title || landing.seoTitle,
+        title: page > 1 ? `${landing.h1} — страница ${page} ▶ Абкарс` : seo?.title || landing.seoTitle,
         description: `${seo?.description || landing.seoDescription}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
         body,
@@ -930,7 +930,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function landingMissingPage() {
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Такого раздела каталога нет</h1><p>Возможно, ссылка устарела. Все автомобили с пробегом ${siteFromPhrase()} собраны в каталоге.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p></main>${footer()}`;
     return renderHtml({
-      title: "Раздел каталога не найден | abcars.by",
+      title: "Раздел каталога не найден ▶ Абкарс",
       description: `Такого раздела каталога нет. Все автомобили с пробегом ${siteFromPhrase()} собраны в каталоге abcars.by.`,
       canonical: null,
       body,
@@ -954,7 +954,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function notFoundPage({ sections = [] } = {}) {
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>Такой страницы нет</h1><p>Возможно, ссылка устарела или в адресе опечатка. Автомобили с пробегом ${siteFromPhrase()} собраны в каталоге — там же расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p><p><a href="${hrefRoute("/models/")}">Обзоры моделей</a> · <a href="${hrefRoute("/customs/")}">Растаможка</a> · <a href="${hrefRoute("/how-it-works/")}">Как это работает</a></p>${sections.length ? sectionLinks(sections, { heading: "Разделы каталога" }) : ""}</main>${footer()}`;
     return renderHtml({
-      title: "Страница не найдена | abcars.by",
+      title: "Страница не найдена ▶ Абкарс",
       description: `Такой страницы на abcars.by нет. Автомобили с пробегом ${siteFromPhrase()} собраны в каталоге.`,
       canonical: null,
       body,
@@ -1112,7 +1112,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function carGonePage() {
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Объявление больше не доступно</h1><p>Эта машина продана или снята с продажи у источника. Похожие автомобили с пробегом есть в каталоге — там же можно получить расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p></main>${footer()}`;
     return renderHtml({
-      title: "Объявление больше не доступно | abcars.by",
+      title: "Объявление больше не доступно ▶ Абкарс",
       description: `Это объявление снято с продажи. Похожие автомобили с пробегом ${siteFromPhrase()} есть в каталоге abcars.by.`,
       canonical: null,
       body,

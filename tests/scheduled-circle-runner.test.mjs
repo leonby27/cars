@@ -11,7 +11,7 @@ for (const failed of [false, true]) test(`actual scheduler runner sends one ${fa
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'circle-notifications-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   for (const directory of ['scripts/lib', 'bin', 'runtime/guazi-refresh']) await fs.mkdir(path.join(root, directory), { recursive: true });
-  for (const file of ['scripts/scheduled-circle.mjs', 'scripts/lib/scheduled-circle.mjs', 'scripts/lib/circle-report.mjs']) {
+  for (const file of ['scripts/scheduled-circle.mjs', 'scripts/lib/scheduled-circle.mjs', 'scripts/lib/circle-report.mjs', 'scripts/lib/encar-result.mjs']) {
     await fs.copyFile(new URL(`../${file}`, import.meta.url), path.join(root, file));
   }
   await fs.writeFile(path.join(root, 'scripts/lib/telegram.mjs'), `import fs from 'node:fs/promises';

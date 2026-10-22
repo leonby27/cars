@@ -54,6 +54,85 @@ test('Encar refresh and import run in order', async () => {
   });
   assert.deepEqual(steps, ['scripts/refresh-encar.mjs', 'scripts/import-encar.mjs']);
 });
+
+test('Encar source outage waits once and resumes the saved queue, with a single final notification',async()=>{
+  const messages=[],delays=[],steps=[];
+  let current,checkpoint=null;
+  const result=await runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,
+    readState:async name=>name.includes('checkpoint')?checkpoint:name.includes('discoveries')?{generatedAt:iso,items:[]}:current,
+    run:async step=>{
+      steps.push(step.args);
+      if(steps.length===1){
+        checkpoint={phase:'partial',detailsReady:true,pending:['one']};
+        current={...report,complete:false,fatal:'source unavailable',failureCode:'ENCAR_UNAVAILABLE',failureStatus:407};
+        throw Error('child failed');
+      }
+      assert.ok(step.args.includes('--resume'));
+      assert.deepEqual(checkpoint.pending,['one']);
+      current={...report,complete:true,resumedAt:iso,remainingListings:0};
+    },wait:async ms=>delays.push(ms),notify:async text=>messages.push(text),
+  });
+  assert.equal(result,'complete');assert.equal(steps.length,2);
+  assert.deepEqual(delays,[300000]);assert.equal(messages.length,1);assert.match(messages[0],/^✅/);
+});
+
+test('Encar retry is bounded and persistent refusal produces one paused report',async()=>{
+  const messages=[],delays=[];let calls=0;
+  const current={...report,complete:false,fatal:'HTTP 407',failureCode:'ENCAR_UNAVAILABLE',failureStatus:407};
+  await assert.rejects(runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,
+    readState:async name=>name.includes('checkpoint')?{phase:'partial',detailsReady:true}:current,
+    run:async()=>{calls++;throw Error('child failed');},wait:async ms=>delays.push(ms),
+    diagnostics:async()=>({report:current}),notify:async text=>messages.push(text),
+  }));
+  assert.equal(calls,2);assert.deepEqual(delays,[300000]);assert.equal(messages.length,1);
+  assert.match(messages[0],/^⏸/);assert.doesNotMatch(messages[0],/завершён|✅/);
+});
+
+test('a manual stop during the source pause never starts another child and reports a manual stop',async()=>{
+  let stopped=false,calls=0;const messages=[];
+  const current={...report,complete:false,fatal:'HTTP 407',failureCode:'ENCAR_UNAVAILABLE',failureStatus:407};
+  await assert.rejects(runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,stop:()=>stopped,
+    readState:async name=>name.includes('checkpoint')?null:current,
+    run:async()=>{calls++;throw Error('child failed');},wait:async()=>{stopped=true;},
+    diagnostics:async()=>({report:current}),notify:async text=>messages.push(text),
+  }),error=>error.code==='ABCARS_STOPPED');
+  assert.equal(calls,1);assert.equal(messages.length,1);assert.match(messages[0],/^⏹/);
+});
+
+test('the automatic retry also handles a nonfatal partial refresh and a checkpointed import',async()=>{
+  let refreshCalls=0,importCalls=0;const delays=[],messages=[];
+  let refreshed,imported;
+  const result=await runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,
+    readState:async name=>name.includes('checkpoint')?{phase:'partial',detailsReady:true}:name.includes('discoveries')?{generatedAt:iso,items:[{},{}]}:name.includes('import-report')?imported:refreshed,
+    run:async step=>{
+      if(step.args[0].includes('refresh-encar')){
+        refreshCalls++;
+        refreshed=refreshCalls===1?{...report,complete:false,remainingListings:1,failureCode:'ENCAR_SOURCE_PARTIAL',failureStatus:407,attempt:{startedAt:iso,readFailed:1,writeFailed:0,parseFailed:0}}:{...report,complete:true,resumedAt:iso};
+      }else{
+        importCalls++;
+        imported={...report,final:true,imported:importCalls,complete:importCalls===2};
+        if(importCalls===1){Object.assign(imported,{failureCode:'ENCAR_UNAVAILABLE',failureStatus:0,fatal:'network unavailable'});throw Error('child failed');}
+      }
+    },wait:async ms=>delays.push(ms),notify:async text=>messages.push(text),
+  });
+  assert.equal(result,'complete');assert.equal(refreshCalls,2);assert.equal(importCalls,2);
+  assert.deepEqual(delays,[300000,300000]);assert.equal(messages.length,1);assert.match(messages[0],/^✅/);
+});
+
+test('Encar never retries parse/DB failures or a stale source report',async()=>{
+  for(const current of [
+    {...report,failureCode:'22P02',failureStage:'write'},
+    {...report,failureCode:'ENCAR_UNAVAILABLE',failureStatus:200,failureStage:'parse'},
+    {...report,startedAt:'2026-10-04',failureCode:'ENCAR_UNAVAILABLE',failureStatus:407},
+  ]){
+    let calls=0;
+    await assert.rejects(runScheduledCircle('encar',{now:()=>startedAt,running:async()=>false,
+      readState:async name=>name.includes('checkpoint')?null:current,
+      run:async()=>{calls++;throw Error('failed');},wait:()=>assert.fail('must not retry'),
+    }));
+    assert.equal(calls,1);
+  }
+});
 test('sitemap refresh follows successful import and precedes completion, failures remain failures', async () => {
   for (const fails of [false, true]) {
     const events = [];

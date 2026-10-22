@@ -10,9 +10,10 @@
 // и правила у неё строгие (research/encar-2026-09-28/README.md).
 import {
   ENCAR_MANUFACTURERS, ENCAR_MAX_OFFSET, ENCAR_PAGE_SIZE, buildEncarCar, encarCandidate, encarDetailUrl,
-  encarInspectionUrl, encarListQuery, encarListUrl, encarModelGroups, encarRecordUrl, encarPublicDetail, ENCAR_API, ENCAR_SITE,
+  encarInspectionUrl, encarListQuery, encarListUrl, encarModelGroups, encarRecordUrl, encarPublicDetail, encarPublicBaseFailed, ENCAR_API, ENCAR_SITE,
 } from "./encar-parser.mjs";
 import { request } from 'undici';
+import { encarEvidence } from './encar-result.mjs';
 
 import { applyKoreaSpecs } from "./korea-specs.mjs";
 
@@ -53,7 +54,7 @@ export class EncarGeoBlockedError extends Error {
 }
 
 export class EncarClient {
-  constructor({ fetcher = sourceFetch, pace = 250, timeoutMs = 30_000, attempts = 4, log = () => {}, specs = null, wait = sleep } = {}) {
+  constructor({ fetcher = sourceFetch, pace = 250, timeoutMs = 30_000, attempts = 4, log = () => {}, specs = null, wait = sleep, controlId = null } = {}) {
     this.fetcher = fetcher;
     // Справочник характеристик (scripts/lib/korea-specs.mjs): дописывает мощность,
     // размеры и батарею в каждую прочитанную карточку.
@@ -69,6 +70,8 @@ export class EncarClient {
     this.cooldown = null;
     this.unavailable = null;
     this.failedCards = 0;
+    this.controlId = controlId;
+    this.apiVerified = false;
     this.requirePublicMissing = false;
     this.nextRequestAt = 0;
     this.paceQueue = Promise.resolve();
@@ -148,6 +151,7 @@ export class EncarClient {
 
   // Resume does not walk lists, so verify API access before changing any cars.
   async verifyAccess({ brands, yearFrom, sampleId }) {
+    if (sampleId) this.controlId = String(sampleId);
     try { await this.modelGroups(brands[0], { yearFrom }); }
     catch (error) {
       if (error.status !== 407 || !sampleId) throw error;
@@ -160,7 +164,8 @@ export class EncarClient {
 
   async publicDetail(id) {
     const page = await this.response(`${ENCAR_SITE}${encodeURIComponent(id)}`, { format: 'html' });
-    return { ...page, detail: page.status === 200 ? encarPublicDetail(page.text, id) : null };
+    return { ...page, detail: page.status === 200 ? encarPublicDetail(page.text, id) : null,
+      baseFailed: page.status === 200 && encarPublicBaseFailed(page.text) };
   }
 
   async list(query, offset = 0, count = ENCAR_PAGE_SIZE, { facets = false } = {}) {
@@ -173,19 +178,27 @@ export class EncarClient {
   /** Карточка с историей: { status, detail, record, inspection }. 404 — машина снята. */
   async vehicle(id, { history = true } = {}) {
     let detail = await this.json(encarDetailUrl(id));
-    let availabilitySource;
+    const apiStatus = detail.status;
+    let availabilitySource = 'api-detail', publicStatus;
     if (/has_been_cr_blocked|configured to block access from your country/i.test(detail.text || '')) {
       this.unavailable = new EncarGeoBlockedError(encarDetailUrl(id));
       throw this.unavailable;
     }
     if (detail.status === 404 && /<(?:!doctype|html|body)\b/i.test(detail.text || '')) throw this.sourceUnavailable('Encar: HTTP 404 с HTML вместо ответа API; снятие с продажи не подтверждено', 404);
-    if (detail.status === 407 || (detail.status === 404 && this.requirePublicMissing)) {
+    if (detail.status === 407 || detail.status === 404) {
       const page = await this.publicDetail(id);
+      publicStatus = page.status;
       if (page.detail) {
         detail = { status: 200, json: page.detail };
         availabilitySource = page.detail.advertisement.status === 'SOLD' ? 'public-sold' : 'public-detail';
+      } else if (page.baseFailed) {
+        // Owner policy: skip missing source data instead of blocking the round.
+        // A run of these answers still checks a known readable control below.
+        return { status: 404, detail: null, unverifiedUnavailable: true,
+          availabilitySource: 'public-missing', apiStatus, publicStatus };
       } else {
-        const error = Object.assign(new Error(`Encar: HTTP ${detail.status}; публичная карточка (HTTP ${page.status}) не подтверждает статус объявления ${id}`), { code: 'ENCAR_UNVERIFIED_STATUS', status: detail.status });
+        const reason = page.baseFailed ? 'сайт не смог загрузить данные карточки' : 'публичный статус не подтверждён';
+        const error = Object.assign(new Error(`Encar: HTTP ${detail.status}; ${reason} (HTTP ${page.status}), объявление ${id}`), { code: 'ENCAR_UNVERIFIED_STATUS', status: detail.status });
         return { status: detail.status, error, detail: null };
       }
     }
@@ -195,7 +208,15 @@ export class EncarClient {
     if (!detail.json.vehicleId || !detail.json.advertisement?.status) {
       throw Object.assign(new Error("Encar: incomplete vehicle response"), { code: "ENCAR_INVALID_DETAIL", stage: 'parse' });
     }
-    if (detail.json.advertisement.status !== 'ADVERTISE') return { status: 200, detail: detail.json, record: null, inspection: null, battery: null, availabilitySource };
+    if (String(detail.json.queryCarId ?? id) !== String(id)
+      || ![detail.json.vehicleId, detail.json.manage?.dummyVehicleId].some(value => String(value) === String(id))) {
+      throw Object.assign(new Error('Encar: карточка принадлежит другому объявлению'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
+    }
+    if (!['ADVERTISE', 'SOLD', 'WAIT'].includes(detail.json.advertisement.status)) {
+      throw Object.assign(new Error(`Encar: unknown advertisement status ${detail.json.advertisement.status}`), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
+    }
+    this.controlId = String(id);
+    if (detail.json.advertisement.status !== 'ADVERTISE') return { status: 200, detail: detail.json, record: null, inspection: null, battery: null, availabilitySource, apiStatus, publicStatus };
     if (!detail.json.spec?.fuelName || !detail.json.category || !Array.isArray(detail.json.photos)
       || detail.json.category.formYear == null || detail.json.advertisement.price == null || detail.json.spec.mileage == null) {
       throw Object.assign(new Error('Encar: incomplete vehicle response'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
@@ -204,6 +225,7 @@ export class EncarClient {
     let record = null;
     let inspection = null;
     let battery = null;
+    let historyUnavailable = false;
     if (history && vehicleId) {
       // История и осмотр необязательны: без них машина заводится с пустыми полями.
       // Данные о батарее площадка отдаёт только там, где сама их показывает.
@@ -216,28 +238,43 @@ export class EncarClient {
       // Missing optional history is fine; a failed request is not empty history.
       for (const result of [recordResult, inspectionResult, batteryResult].filter(Boolean)) {
         if (result.status === 200 && result.error) throw Object.assign(result.error, { stage: 'parse' });
-        if (![200, 204, 404].includes(result.status) || result.error || (this.requirePublicMissing && result.status === 404)) return { status: result.status, detail: null, error: result.error || new Error(`Encar: история/осмотр не подтверждены (HTTP ${result.status})`) };
+        if (result.status === 407 || (this.requirePublicMissing && result.status === 404 && !result.error)) { historyUnavailable = true; continue; }
+        if (![200, 204, 404].includes(result.status) || result.error) return { status: result.status, detail: null, error: result.error || new Error(`Encar: история/осмотр не подтверждены (HTTP ${result.status})`) };
       }
-      record = recordResult.status === 200 ? recordResult.json : null;
-      inspection = inspectionResult.status === 200 ? inspectionResult.json : null;
-      battery = batteryResult?.status === 200 ? batteryResult.json : null;
+      if (!historyUnavailable) {
+        record = recordResult.status === 200 ? recordResult.json : null;
+        inspection = inspectionResult.status === 200 ? inspectionResult.json : null;
+        battery = batteryResult?.status === 200 ? batteryResult.json : null;
+      }
     }
-    return { status: 200, detail: detail.json, record, inspection, battery, availabilitySource };
+    return { status: 200, detail: detail.json, record, inspection, battery, availabilitySource, historyUnavailable, apiStatus, publicStatus };
   }
 
-  /** 404 without error means removed; an unverified 404 stays a read failure. */
+  /** Missing cards are terminal; an unreadable control still stops a source outage. */
   async car(id, { usdPerKrw, importedAt, history = true } = {}) {
     let stage = 'read';
     try {
       const fetched = await this.vehicle(id, { history });
       if (fetched.status !== 200) {
-        if (fetched.status === 404 && !fetched.error) this.failedCards = 0;
+        if (fetched.unverifiedUnavailable) {
+          if (++this.failedCards >= 15) {
+            const control = this.controlId && String(this.controlId) !== String(id)
+              ? await this.vehicle(this.controlId, { history: false }) : null;
+            if (control?.status !== 200 || !control.detail) throw this.sourceUnavailable('Encar: серия недоступных карточек; контрольная карточка тоже не подтвердилась', fetched.apiStatus);
+            this.failedCards = 0;
+          }
+        } else if (fetched.status === 404 && !fetched.error) this.failedCards = 0;
         else if (++this.failedCards >= 15) throw this.sourceUnavailable(`Encar: 15 карточек подряд не удалось проверить (HTTP ${fetched.status}); ${fetched.error?.message || 'ответ источника не подтверждён'}`, fetched.status, fetched.error);
         return { ...fetched, car: null };
       }
       stage = 'parse';
       const built = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
       const car = built && this.specs ? applyKoreaSpecs(built, this.specs) : built;
+      if (car) car.sourceAvailability = encarEvidence(fetched, { state: 'active', reason: 'advertised' }, importedAt || new Date().toISOString());
+      if (car && fetched.historyUnavailable) {
+        car.historyUnavailable = true;
+        car.totalLoss = null;
+      }
       this.failedCards = 0;
       return { ...fetched, car };
     } catch (error) {
@@ -275,12 +312,14 @@ export class EncarClient {
   async modelGroups(brand, filters = {}) {
     const manufacturer = ENCAR_MANUFACTURERS[brand];
     if (!manufacturer) return [];
+    this.apiVerified = false;
     const { status, json, error } = await this.patientList(encarListQuery({ manufacturer, ...filters }), 0, 1, { facets: true });
     if (status !== 200 || !json || !Array.isArray(json.iNav?.Nodes) || !validListCount(json)) {
       throw Object.assign(new Error(`Encar: model groups for ${brand}: HTTP ${status}${error ? ` (${error.code || error.message})` : ""}`), { code: "ENCAR_LIST_FAILED", status });
     }
     const groups = encarModelGroups(json);
     if (Number(json.Count) > 0 && !groups.length) throw Object.assign(new Error(`Encar: missing model groups for ${brand}`), { code: 'ENCAR_LIST_FAILED', status });
+    this.apiVerified = true;
     return groups;
   }
 
@@ -341,7 +380,7 @@ export class EncarClient {
         if (!rows.length || offset >= total || offset >= ENCAR_MAX_OFFSET) {
           if (offset < total) {
             stats.broken = (stats.broken || 0) + 1;
-            if (stats.errors.length < 20) stats.errors.push({ label, offset, status, error: `Incomplete list: ${offset} of ${total}` });
+            if (stats.errors.length < 20) stats.errors.push({ label, offset, status, code: 'ENCAR_LIST_INCOMPLETE', error: `Incomplete list: ${offset} of ${total}` });
             this.log(`[list] ${label}: неполная выдача ${offset} из ${total}`);
           }
           break;

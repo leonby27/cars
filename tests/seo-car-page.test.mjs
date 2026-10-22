@@ -70,7 +70,7 @@ test("разметка карточки: полная цепочка кроше�
 
 test("страница машины несёт свой заголовок, описание и адрес-первоисточник", () => {
   const { html } = render().carPage({ car });
-  assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ с доставкой в Беларусь \| abcars\.by<\/title>/);
+  assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ с доставкой в Беларусь ▶ Абкарс<\/title>/);
   // Тема — в описании и в хлебных крошках, а не в названии машины: заголовок остаётся
   // тем, что человек ищет («BYD Han 2023»), а слова «из Китая» идут второй строкой.
   // У машины — её страна (без поля origin это Китай), у крошек — фраза сайта.
@@ -165,7 +165,7 @@ test("на закрытой сборке страница машины не ин
 
 test("временная страница проданной машины закрыта от поиска и помечена SoldOut", () => {
   const { html } = render().carPage({ car:{ ...car, available:false, soldAt:"2026-09-10T12:00:00.000Z" }, indexable:false });
-  assert.match(html, /<title>BYD Han 2023 — продано \| abcars\.by<\/title>/);
+  assert.match(html, /<title>BYD Han 2023 — продано ▶ Абкарс<\/title>/);
   assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   assert.match(html, /"availability":"https:\/\/schema\.org\/SoldOut"/);
   assert.match(html, /BYD Han 2023 продан/);

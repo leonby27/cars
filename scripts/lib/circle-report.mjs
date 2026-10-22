@@ -1,3 +1,4 @@
+import { encarCanRetry } from './encar-result.mjs';
 const labels = { che: 'Круг 1 · Che168', guazi: 'Круг 2 · Guazi', encar: 'Круг 3 · Encar' };
 const count = (label, value) => Number.isFinite(value) ? `${label}: ${value.toLocaleString('ru-RU')}` : null;
 const duration = ms => Number.isFinite(ms) ? `Длительность: ${Math.max(1, Math.round(ms / 60000))} мин` : null;
@@ -27,28 +28,33 @@ export function circleSummary(source, { report, state, importReport, elapsedMs }
   } else {
     checked = report?.active; changed = report?.priceChanged; sold = report?.sold;
     added = importReport?.imported ?? 0; rejected = importReport?.rejected;
+    reactivated = report?.reactivated;
   }
   return [
     `✅ ${labels[source]} завершён`,
     source === 'guazi' || (source === 'encar' && report?.resumedAt) ? 'Итоги всего круга:' : 'Итоги этого запуска:',
     count('Проверено объявлений', checked), count(source === 'guazi' && state?.summary?.priceChangeThresholdUsd === 100 ? 'Изменилось цен (от $100)' : 'Изменилось цен', changed),
     count('Добавлено', added), count('Снято с продажи', sold),
+    source === 'encar' && report?.unverifiedUnavailable ? count('Из них недоступные карточки', report.unverifiedUnavailable) : null,
     reactivated ? count('Вернулось в продажу', reactivated) : null,
     count('Осталось в каталоге источника', remaining),
-    skipped ? count('Пропущено автоматически', skipped) : null,
+    source === 'encar' ? count('Скрыто до следующей проверки', report?.skipped) : skipped ? count('Пропущено автоматически', skipped) : null,
+    source === 'encar' && (report?.historyDeferred || importReport?.historyDeferred) ? count('Историю/осмотр обновить не удалось', (report?.historyDeferred || 0) + (importReport?.historyDeferred || 0)) : null,
     rejected ? count('Отклонено по правилам отбора', rejected) : null,
     duration(elapsedMs),
   ].filter(Boolean).join('\n');
 }
 
 export function circleFailure(source, error, { report, state, importReport, cursor, elapsedMs, logTail, logPath } = {}) {
-  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', recheck: 'автоматическая перепроверка', audit: 'проверка целостности каталога', dedupe: 'сверка дублей', complete: 'завершение' };
+  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', partial: 'неполная проверка', recheck: 'автоматическая перепроверка', audit: 'проверка целостности каталога', dedupe: 'сверка дублей', complete: 'завершение' };
   const counts = state?.counts;
   const attempt = source === 'encar' ? report?.attempt : null;
   const failures = attempt || report;
-  const reason = source === 'encar' && (importReport?.fatal || report?.fatal) || error.message || error;
+  const stopped = error.code === 'ABCARS_STOPPED';
+  const reason = !stopped && source === 'encar' && (importReport?.fatal || report?.fatal) || error.message || error;
+  const paused = !stopped && source === 'encar' && encarCanRetry(importReport?.fatal ? importReport : report);
   return safeDiagnostic([
-    `❌ ${labels[source]} не завершён`,
+    `${stopped ? '⏹' : paused ? '⏸' : '❌'} ${labels[source]} ${stopped ? 'остановлен по команде' : paused ? 'приостановлен: источник не дал подтвердить данные' : 'не завершён'}`,
     `Причина: ${String(reason).slice(0, 650)}`,
     error.code ? `Код ошибки: ${error.code}` : null,
     error.stage ? `Этап запуска: ${error.stage}` : null,
@@ -56,12 +62,15 @@ export function circleFailure(source, error, { report, state, importReport, curs
     state?.brand ? `Последняя марка: ${state.brand}` : null,
     state?.error && !String(error.message).includes(state.error) ? `Ошибка источника: ${state.error}` : null,
     report?.note || (reason !== report?.fatal ? report?.fatal : null),
-    state ? `Марок завершено: ${state.brandsDone?.length || 0} из ${state.brandsTotal ?? '?'}` : null,
+    state && (Array.isArray(state.brandsDone) || Number.isFinite(state.brandsTotal)) ? `Марок завершено: ${state.brandsDone?.length || 0} из ${state.brandsTotal ?? '?'}` : null,
     count('Сохранено проверок', counts?.checked ?? report?.checkedThisRun),
     count('Добавлено', counts?.added ?? importReport?.imported ?? report?.added),
     count(source === 'encar' && report?.resumedAt ? 'Снято с продажи за круг' : 'Снято с продажи', counts?.unavailable ?? report?.sold),
+    source === 'encar' && report?.unverifiedUnavailable ? count('Из них недоступные карточки', report.unverifiedUnavailable) : null,
     count('Осталось проверить объявлений', report?.remainingListings),
     count('Завершено за этот запуск', attempt?.completed),
+    source === 'encar' ? count('Скрыто до следующей проверки', report?.skipped) : null,
+    source === 'encar' ? count('Историю/осмотр обновить не удалось', report?.historyDeferred) : null,
     count('Незавершённых марок', report?.remainingBrands),
     count(attempt ? 'Ошибок чтения за этот запуск' : source === 'encar' && Number.isFinite(report?.readFailed) ? 'Ошибок чтения карточек' : 'Карточек без ответа', failures?.readFailed ?? report?.unknown ?? report?.noAnswer),
     count('Ошибок разбора карточек', failures?.parseFailed),

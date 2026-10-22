@@ -12,9 +12,10 @@ test('success summaries use each source actual metrics and duration', () => {
   assert.match(guazi, /Итоги всего круга/);
   assert.match(guazi, /Пропущено автоматически: 1/);
   assert.match(guazi, /Длительность: 3 мин/);
-  const encar = circleSummary('encar', { report: { active: 20, priceChanged: 6, sold: 2 }, importReport: { imported: 8, rejected: 4 } });
+  const encar = circleSummary('encar', { report: { active: 20, priceChanged: 6, sold: 2, unverifiedUnavailable:1 }, importReport: { imported: 8, rejected: 4 } });
   assert.match(encar, /Добавлено: 8/);
   assert.match(encar, /Отклонено по правилам отбора: 4/);
+  assert.match(encar, /Из них недоступные карточки: 1/);
 });
 test('failure details carry source code, stage, saved progress, and bounded current log', () => {
   const text = circleFailure('guazi', Object.assign(Error('access failed'), { code: 'SOURCE_BLOCKED', stage: 'refresh' }), {
@@ -69,4 +70,13 @@ test('Encar resume report shows current-attempt failures and cause instead of ol
   assert.match(text,/Ошибок чтения за этот запуск: 27/);
   assert.match(text,/HTTP 407 — 27/);
   assert.doesNotMatch(text,/old fetch failed|сеть\/таймаут|Ошибок чтения карточек: 18/);
+});
+
+test('Encar reports temporary availability and deferred history without invented brand progress',()=>{
+  const text=circleSummary('encar',{report:{skipped:1156,historyDeferred:296},importReport:{historyDeferred:5}});
+  assert.match(text,/Скрыто до следующей проверки: 1\D156/);
+  assert.match(text,/Историю\/осмотр обновить не удалось: 301/);
+  const failed=circleFailure('encar',Error('incomplete'),{state:{phase:'partial'},report:{skipped:12,historyDeferred:3}});
+  assert.doesNotMatch(failed,/Марок завершено|partial/);
+  assert.match(failed,/неполная проверка/);
 });
