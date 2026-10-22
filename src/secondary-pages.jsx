@@ -3779,7 +3779,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   const openFilteredCatalog = (withModel) => {
     const stored = readCatalogReturn();
     const model = withModel ? [car.model] : [];
-    const target = `/catalog?brand=${encodeURIComponent(car.brand)}${withModel ? `&model=${encodeURIComponent(car.model)}` : ""}`;
+    const target = withModel ? modelCrumbHref : brandCrumbHref;
     if (!stored || stored.openedCarId !== car.id) {
       navigate(target);
       return;
