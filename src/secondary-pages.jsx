@@ -1829,12 +1829,9 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
   // Filters and sort come from the URL; history restores only the loaded list and scroll.
-  // Адрес со страницей списка («?page=7») приходит из поисковой выдачи, а сервер режет
-  // список по возрастанию цены. Оставить здесь перемешанный порядок по умолчанию значит
-  // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
-  // На странице модели порядок по умолчанию — по цене: так же режет список сервер,
-  // и готовая разметка совпадает с первым кадром.
-  const urlSort = catalogSort(params, landing?.kind === "model");
+  // Без sort используем «По умолчанию» на всех страницах; выбранный другой порядок
+  // хранится в адресе и одинаково восстанавливается сервером и браузером.
+  const urlSort = catalogSort(params);
   const [sort, setSort] = useState(urlSort);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
@@ -2101,7 +2098,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   }, [useApi, filters, sort]);
   useEffect(() => {
     persistCatalogState();
-  }, [filters, sort, loadedLimit, remoteCars.length, startOffset]);
+  }, [filters, sort, loadedLimit, remoteCars, startOffset]);
   useEffect(
     () => () => {
       const controller = loadMoreRequest.current;

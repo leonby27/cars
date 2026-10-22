@@ -83,7 +83,7 @@ const requestedPage = (params) => {
 
 /** Параметры списка из адреса — те, что понимает страница. */
 export function modelListQuery(params) {
-  return { sort: catalogSort(params, true) };
+  return { sort: catalogSort(params) };
 }
 
 // Готовую первую страницу выдачи встраиваем только для адреса без своих фильтров

@@ -58,11 +58,11 @@ export const plainCatalogSearch = (params) => [...params.keys()].every((key) => 
 export { CATALOG_SORTS };
 
 /**
- * Порядок первой выдачи — так же, как решает каталог в браузере: порядок из адреса,
- * иначе у страницы списка («?page=7») и у страницы модели — по цене, иначе перемешано.
+ * Порядок первой выдачи совпадает с браузером: выбранный порядок из адреса,
+ * иначе перемешанная выдача, включая модели и пагинацию.
  */
-export function catalogSortFor(params, { model = false } = {}) {
-  return catalogSort(params, model);
+export function catalogSortFor(params) {
+  return catalogSort(params);
 }
 
 /** Строка запроса для оживления: только номер страницы и порядок. */

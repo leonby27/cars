@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {CATALOG_LANDINGS,findCatalogLanding,landingFilterParams,parseModelLandingPath} from '../src/catalog-landings.js';
-import {catalogHref,catalogLocationKey,catalogRedirect,catalogSort,catalogUrlParams} from '../src/catalog-url.js';
+import {CATALOG_SORTS,catalogHref,catalogLocationKey,catalogRedirect,catalogSort,catalogUrlParams} from '../src/catalog-url.js';
 
 function selection(href, modelName) {
   const url=new URL(href,'https://abcars.by');
@@ -39,17 +39,20 @@ test('all remaining filters, multiselections and exclusions survive route change
   assert.ok(href.startsWith('/catalog/byd?'));
 });
 
-test('pagination preserves filters and selected sort even when the route default changes',()=>{
-  for(const sort of ['default','price_asc','price_desc','newest','year_desc']) {
+test('pagination preserves filters and sort, omitting only the default sort',()=>{
+  for(const sort of CATALOG_SORTS) {
     const p=new URLSearchParams({brand:'Zeekr',model:'7X',country:'china',sort});
     for(const page of [1,2,5]) {
       const href=catalogHref(p,{page}),restored=selection(href,'7X');
       assert.equal(restored.get('country'),'china');
-      assert.equal(catalogSort(restored,true),sort,href);
+      assert.equal(catalogSort(restored),sort,href);
+      assert.equal(restored.get('sort'),sort==='default'?null:sort,href);
       assert.equal(Number(restored.get('page')||1),page);
     }
   }
-  assert.equal(catalogHref('country=china&sort=default',{page:2}),'/catalog/china?page=2&sort=default');
+  assert.equal(catalogHref('country=china&sort=default',{page:2}),'/catalog/china?page=2');
+  assert.equal(catalogHref('brand=Audi&model=A4&sort=default'),'/catalog/audi/a4');
+  assert.equal(catalogHref('brand=Audi&model=A4&sort=price_asc'),'/catalog/audi/a4?sort=price_asc');
 });
 
 test('query overrides path defaults, placeholders and tracking are not selection filters',()=>{
@@ -84,12 +87,20 @@ test('the catalog HTTP entry uses the same destination without reading the datab
   const response=await renderCatalogIndex(new URLSearchParams('brand=Zeekr&model=7X&country=china&yearFrom=2023&utm_source=mail'));
   assert.equal(response.status,301);
   assert.equal(response.location,'/catalog/zeekr/7x?country=china&utm_source=mail&yearFrom=2023');
+  const cleaned=await renderCatalogIndex(new URLSearchParams('brand=Audi&model=A4&sort=default&page=2&utm_source=mail'));
+  assert.equal(cleaned.status,301);
+  assert.equal(cleaned.location,'/catalog/audi/a4?page=2&utm_source=mail');
+  const landing={path:'/catalog/audi/a4',brand:'Audi',model:'A4'};
+  assert.equal(catalogRedirect(landing,'sort=default&page=2',landing.path),'/catalog/audi/a4?page=2');
+  assert.equal(catalogRedirect(landing,'page=2',landing.path),null);
+  assert.equal(catalogRedirect(landing,'page=2&sort=price_asc',landing.path),null);
 });
 
 test('server model sorting agrees with the shared URL defaults and explicit sort', async()=>{
   const {modelListQuery}=await import('../server/model-page.mjs');
-  for(const sort of ['default','price_desc','newest','year_desc']) {
+  for(const sort of CATALOG_SORTS) {
     assert.equal(modelListQuery(new URLSearchParams({sort})).sort,sort);
   }
-  assert.equal(modelListQuery(new URLSearchParams()).sort,'price_asc');
+  assert.equal(modelListQuery(new URLSearchParams()).sort,'default');
+  assert.equal(modelListQuery(new URLSearchParams('page=2')).sort,'default');
 });

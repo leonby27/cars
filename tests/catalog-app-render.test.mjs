@@ -11,10 +11,10 @@ import { createSeoRenderer } from "../server/seo-render.mjs";
 
 test("порядок первой выдачи — как решает каталог в браузере", () => {
   assert.equal(catalogSortFor(new URLSearchParams()), "default");
-  assert.equal(catalogSortFor(new URLSearchParams("page=3")), "price_asc");
+  assert.equal(catalogSortFor(new URLSearchParams("page=3")), "default");
   assert.equal(catalogSortFor(new URLSearchParams("sort=newest&page=2")), "newest");
   assert.equal(catalogSortFor(new URLSearchParams("sort=что-то")), "default");
-  assert.equal(catalogSortFor(new URLSearchParams(), { model: true }), "price_asc");
+  assert.equal(catalogSortFor(new URLSearchParams("sort=price_asc&page=3")), "price_asc");
 });
 
 test("ключ перемешивания один на минские сутки и из того же набора, что у приложения", () => {

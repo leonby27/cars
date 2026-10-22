@@ -10,6 +10,8 @@ import { catalogMetaBoot } from '../server/app-render.mjs';
 import { findCatalogLanding, landingApiParams, parseModelLandingPath } from '../src/catalog-landings.js';
 import { modelLandingObject } from '../src/model-landing.js';
 import { modelSlug } from '../src/model-slug.js';
+import { catalogShuffleSeed } from '../src/catalog-url.js';
+import { sortCars } from '../src/car-filters.js';
 
 const build = pathToFileURL(resolve(process.env.TEST_BUILD_DIR || 'dist') + '/');
 const client = new URL('client/', build);
@@ -25,8 +27,8 @@ const cars = Array.from({ length: 240 }, (_, i) => {
     id: `che168-${99900000 + i}`, brand, model, origin, title: `${brand} ${model} 2024`, year: 2024,
     source: origin === 'china' ? 'Che168' : 'Encar', type: i % 3 ? 'Электромобиль' : 'ДВС',
     sourceFuelType: i % 3 ? 'Electric' : 'Gasoline', bodyType: i % 2 ? 'SUV / кроссовер' : 'Седан',
-    chinaPrice: 150000, usdPrice: 21000, sourcePriceUsd: 21000, mileage: 10000, drive: 'Задний',
-    battery: 75, range: 500, available: true, image: null, images: [], _summary: true,
+    chinaPrice: 150000, usdPrice: 21000, sourcePriceUsd: 21000, estimatedTotalUsd: 24000 + i * 10, mileage: 10000 + i * 100, drive: 'Задний',
+    battery: 75, range: 500 + i, available: true, image: null, images: [], _summary: true,
   };
 });
 const matching = p => cars.filter(c =>
@@ -37,7 +39,8 @@ const matching = p => cars.filter(c =>
   (!p.has('bodyType') || p.getAll('bodyType').includes(c.bodyType)) &&
   (!p.get('yearMin') || c.year >= Number(p.get('yearMin'))));
 const listing = p => {
-  const all = matching(p), offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || 48);
+  const all = sortCars(matching(p), p.get('sort') || 'default', p.get('seed') || catalogShuffleSeed());
+  const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || 48);
   return { items: all.slice(offset, offset + limit), total: all.length, hasMore: offset + limit < all.length };
 };
 const counts = (items, field, name) => [...new Set(items.map(c => c[field]))]
@@ -166,7 +169,7 @@ try {
 
       await page.getByRole('button', { name: /Сортировка:/ }).click();
       await page.getByRole('option', { name: 'Дешёвые', exact: true }).click();
-      await page.waitForURL(url => !url.searchParams.has('sort'));
+      await page.waitForURL(url => url.searchParams.get('sort') === 'price_asc');
       assert.equal((await freshState(page.url())).sort, 'price_asc');
       await page.getByRole('button', { name: /Год от:/ }).first().click();
       await page.getByRole('option', { name: /2022/ }).first().click();
@@ -186,8 +189,34 @@ try {
       assert.equal(reset.filters.text, '');
 
     }
+    await ready('/catalog/audi/a4');
+    assert.equal((await state(page)).sort, 'default');
+    assert.equal(new URL(page.url()).searchParams.has('sort'), false);
+    const displayedIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
+    for (const [sort, label] of [
+      ['price_asc', 'Дешёвые'], ['price_desc', 'Дорогие'], ['newest', 'Новые объявления'],
+      ['mileage_asc', 'С наименьшим пробегом'], ['range_desc', 'С наибольшим запасом хода'],
+      ['year_desc', 'Новые по году'], ['year_asc', 'Старые по году'], ['default', 'По умолчанию'],
+    ]) {
+      await page.getByRole('button', { name: /Сортировка:/ }).click();
+      const listingResponse = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/cars' && url.searchParams.get('brand') === 'Audi'
+          && url.searchParams.get('model') === 'A4' && url.searchParams.get('sort') === sort;
+      });
+      await page.getByRole('option', { name: label, exact: true }).click();
+      await page.waitForURL(url => sort === 'default' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
+      await listingResponse; await settle();
+      const before = await displayedIds();
+      assert.ok(before.length > 0, sort);
+      await page.reload();
+      await page.waitForFunction(expected => history.state?.catalog?.sort === expected && document.querySelectorAll('main.catalog [data-car-id]').length > 0, sort);
+      await settle();
+      assert.equal((await state(page)).sort, sort);
+      assert.deepEqual(await displayedIds(), before, `${sort}: reload preserves the vehicle order`);
+    }
     assert.deepEqual(errors, []);
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: country/type order, copied links, pagination, model/year/price/text/sort, API selection${mobile ? "" : ", back/forward"}`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: filters, pagination, model navigation, all 8 sorts and vehicle order after reload${mobile ? "" : ", back/forward"}`);
     await context.close();
   }
 } finally {
