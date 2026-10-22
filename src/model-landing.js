@@ -11,6 +11,7 @@
 // той же разметки), поэтому здесь нет ни обращений к базе, ни к окну браузера:
 // только данные на входе и строки на выходе.
 import { catalogDescription } from "./meta-descriptions.js";
+import { catalogSeoOrigin } from "./catalog-seo-origin.js";
 import { landingFaqDelivery, landingFaqDuty } from "./landing-faq.js";
 import { fromPhrase, siteCountriesGenitive, siteFromPhrase, siteWording, ORIGINS } from "./origin.js";
 
@@ -73,19 +74,20 @@ const fitModelTitle = (base, variants, limit = 80) => {
 /**
  * Заголовок вкладки, описание и заголовок страницы модели. `facts` — живые цифры
  * (modelCatalogFacts на сервере), `review` — обзор, если написан, `page` — номер
- * страницы списка. Страна — фраза сайта «из Китая и Кореи» у всех моделей (решение
- * 29.09.2026, src/origin.js); `origin` задаёт одну страну только страницам стран.
+ * страницы списка. В метатегах китайских марок — только Китай, у остальных —
+ * фраза сайта; явно заданная страна имеет приоритет. Видимый H1 не меняется.
  * В заголовке — число машин и цена «от», как у разделов каталога (решение 25.09.2026).
  */
-export function modelCatalogSeo({ name, facts = null, review = null, page = 1, origin = null }) {
-  const from = origin ? fromPhrase(origin) : siteFromPhrase();
+export function modelCatalogSeo({ name, brand, facts = null, review = null, page = 1, origin = null }) {
+  const seoOrigin = catalogSeoOrigin(brand, origin);
+  const from = seoOrigin ? fromPhrase(seoOrigin) : siteFromPhrase();
   const base = `${name} ${from} в Беларусь`;
-  const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${from} с доставкой в Беларусь`;
+  const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${origin ? fromPhrase(origin) : siteFromPhrase()} с доставкой в Беларусь`;
   // Цифры ещё не пришли (переход внутри сайта): нейтральный заголовок, а не «под заказ».
   if (!facts) {
     return {
       title: fitModelTitle(base, [" — цены и наличие"], 70),
-      description: catalogDescription({ subject: name, origin, model: true }),
+      description: catalogDescription({ subject: name, origin: seoOrigin, model: true }),
       h1,
     };
   }
@@ -99,7 +101,7 @@ export function modelCatalogSeo({ name, facts = null, review = null, page = 1, o
         ` — ${number(total)} в наличии${pageTail}`,
       ].filter(Boolean))
     : fitModelTitle(`${name} ${from}`, [" — под заказ в Беларусь, цены и характеристики", " — под заказ в Беларусь", " — под заказ"], 70);
-  const stock = catalogDescription({ subject: name, origin, total, model: true });
+  const stock = catalogDescription({ subject: name, origin: seoOrigin, total, model: true });
   const description = page > 1 ? `${stock}. Страница ${page} списка.` : stock;
   return { title, description, h1 };
 }
@@ -222,7 +224,7 @@ export const modelFaqTitle = (name) => `Частые вопросы про ${nam
 export function modelLandingObject(data) {
   if (!data?.model) return null;
   const { model, review = null, facts = null, links = null } = data;
-  const seo = modelCatalogSeo({ name: model.name, facts, review, page: 1 });
+  const seo = modelCatalogSeo({ name: model.name, brand: model.brand, facts, review, page: 1 });
   const powertrains = facts?.powertrains || [];
   return {
     kind: "model",

@@ -1,4 +1,5 @@
 import { vehicleDescription } from "../src/meta-descriptions.js";
+import { catalogSeoWording } from "../src/catalog-seo-origin.js";
 import { withPageCss } from "./page-css.mjs";
 import { schemaFuelType } from "../src/engine-spec.js";
 import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
@@ -25,7 +26,7 @@ import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 import { carFaq, carFaqTitle } from "../src/car-faq.js";
-import { CATALOG_INDEX_SEO, brandLandingPath, landingHeading, landingSeoDescription, modelLandingPath } from "../src/catalog-landings.js";
+import { CATALOG_INDEX_SEO, brandLandingPath, catalogPageTitle, isCatalogGroup, landingHeading, landingSeoDescription, landingSeoTitle, modelLandingPath } from "../src/catalog-landings.js";
 import { brandGuideConfig, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, ZEEKR_BUDGETS } from "../src/brand-guide.js";
 
 // Заголовок каталога и его разделов: две половины отдельными кусками, между ними пробел.
@@ -902,7 +903,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       html: renderHtml({
         // `seo` — заголовок и описание с живыми цифрами (server/catalog-page.mjs); без
         // них — постоянные из справочника разделов.
-        title: page > 1 ? `${landing.h1} — страница ${page} ▶ Абкарс` : seo?.title || landing.seoTitle,
+        title: isCatalogGroup(landing)
+          ? catalogPageTitle(seo?.title || landingSeoTitle(landing, { total, priceFrom: spread?.from }), page)
+          : page > 1 ? `${catalogSeoWording(landing.h1, landing.brand, landing.origin)} — страница ${page} ▶ Абкарс` : seo?.title || landing.seoTitle,
         description: `${seo?.description || landing.seoDescription}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
         body,

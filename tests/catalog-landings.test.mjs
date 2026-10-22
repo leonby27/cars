@@ -4,7 +4,8 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { EXCLUDED_BRANDS, IMPORT_BRANDS, KOREA_IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
-import { landingSeoDescription, landingSeoTitle, landingSubtitle } from "../src/catalog-landings.js";
+import { isCatalogGroup, landingSeoDescription, landingSeoTitle, landingSubtitle } from "../src/catalog-landings.js";
+import { catalogSeoOrigin } from "../src/catalog-seo-origin.js";
 import { CATALOG_LANDINGS, parseModelLandingPath, modelLandingPath, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 import { isEvQuotaExhausted } from "../src/ev-quota.js";
@@ -35,7 +36,7 @@ test("у каждого раздела свой адрес, заголовок �
   assert.equal(new Set(titles).size, titles.length, "заголовки разделов повторяются");
   for (const landing of CATALOG_LANDINGS) {
     assert.match(landing.path, /^\/catalog\/[a-z0-9-]+$/, landing.path);
-    assert.ok(landing.seoTitle.length <= 70, `${landing.path}: заголовок ${landing.seoTitle.length} символов`);
+    if (!isCatalogGroup(landing)) assert.ok(landing.seoTitle.length <= 70, `${landing.path}: заголовок ${landing.seoTitle.length} символов`);
     assert.ok(landing.seoDescription.length >= 70 && landing.seoDescription.length <= 160, `${landing.path}: описание ${landing.seoDescription.length} символов`);
     assert.ok(landing.notes.length >= 1, `${landing.path}: нет текста`);
     for (const note of landing.notes) assert.ok(note.length > 80, `${landing.path}: текст слишком короткий`);
@@ -446,9 +447,9 @@ test("заголовки разделов: «в Беларусь», без Ми�
 
 test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
   const byd = findCatalogLanding("/catalog/byd");
-  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ ▶ Абкарс");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
-  assert.match(description, /BYD из Китая и Кореи/);
+  assert.match(description, /BYD из Китая\./);
   assert.match(description, /В наличии 5\u00a0204 авто с пробегом/);
   assert.match(description, /➔ С доставкой и подробным расчетом до Минска под ключ/);
   assert.match(description, /✓ Удобный каталог/);
@@ -486,7 +487,8 @@ test("описания разделов сохраняют живые цены �
     if (landing.kind !== "brand") assert.match(description, /12[\s ]345/);
     assert.match(description, /Минска/);
     if (landing.brand) assert.ok(description.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU")), `${landing.path}: потеряна марка`);
-    assert.match(description, landing.kind === "origin" && landing.origin === "korea" ? /из Кореи/ : landing.kind === "origin" ? /из Китая/ : /из Китая и Кореи/);
+    const origin = catalogSeoOrigin(landing.brand, landing.origin);
+    assert.match(description, origin === "korea" ? /из Кореи/ : origin === "china" ? /из Китая/ : /из Китая и Кореи/);
   }
   assert.notEqual(landingSeoTitle(findCatalogLanding("/catalog/denza-minivan")), landingSeoTitle(findCatalogLanding("/catalog/denza")));
   assert.match(landingSeoTitle(findCatalogLanding("/catalog/nio-wagon")), /Универсалы NIO/);

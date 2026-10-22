@@ -233,7 +233,7 @@ export async function renderCatalogPage(slug, searchParams) {
   const others = [...related, ...priceBandsForLanding(landing).filter((band) => !seen.has(band.path))];
 
   // Заголовок и описание с живыми цифрами: число машин, цена «от» (тем же расчётом,
-  // что в карточке) и годы. Только у первой страницы — дальше свой шаблон «страница N».
+  // что в карточке) и годы. На пагинации групп сохраняем цифры и добавляем номер.
   const stats = {
     total,
     priceFrom: edges?.cheapest ? estimateLandedCost(edges.cheapest).totalUsd : null,

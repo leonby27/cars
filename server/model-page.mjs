@@ -170,7 +170,7 @@ function fallbackBody(renderer, data, { faq, autoText, review }) {
   const text = page > 1 ? "" : `<section><h2>${model.name}: что есть в каталоге</h2>${autoText.map((p) => `<p>${p}</p>`).join("")}</section>${review ? renderer.modelPageArticle(review) : ""}`;
   const questions = page > 1 || !faq.length ? "" : `<section><h2>${modelFaqTitle(model.name)}</h2>${faq.map((item) => `<h3>${item.q}</h3><p>${item.a}</p>`).join("")}</section>`;
   const ways = pathwayLinks({ heading: `Где смотреть ${model.name} и похожие машины`, links: [...(links.brandPath ? [[links.brandPath, `Все ${model.brand} ${siteFromPhrase()}`, null]] : []), ...links.sections.map((s) => [s.path, s.name, null]), ...links.siblings.map((s) => [s.path, s.name, null]), ...(links.similar || []).map((s) => [s.path, s.name, null]), ...links.journal.map((s) => [s.path, s.name, null])] });
-  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто ${siteFromPhrase()}</a>${links.brandPath ? ` → <a href="${hrefRoute(links.brandPath)}">${model.brand}</a>` : ""}</p><h1>${modelCatalogSeo({ name: model.name, facts: data.facts, review, page }).h1}${page > 1 ? ` — страница ${page}` : ""}</h1><p>${stock}</p>${renderer.freshnessLine(data.changedAt)}${list}${paging}${text}${questions}${ways}</main>${footer()}`;
+  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто ${siteFromPhrase()}</a>${links.brandPath ? ` → <a href="${hrefRoute(links.brandPath)}">${model.brand}</a>` : ""}</p><h1>${modelCatalogSeo({ name: model.name, brand: model.brand, facts: data.facts, review, page }).h1}${page > 1 ? ` — страница ${page}` : ""}</h1><p>${stock}</p>${renderer.freshnessLine(data.changedAt)}${list}${paging}${text}${questions}${ways}</main>${footer()}`;
 }
 
 /**
@@ -187,7 +187,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   if (params.get("page") !== null && data.page === 1) return { status: 301, location: path };
   if (data.page > data.pages && data.total) return { status: 404, html: renderer.landingMissingPage() };
   const review = data.review ? modelPageWithText(MODEL_PAGES.find((item) => item.slug === data.review.slug)) : null;
-  const seo = modelCatalogSeo({ name: data.model.name, facts: data.facts, review, page: data.page });
+  const seo = modelCatalogSeo({ name: data.model.name, brand: data.model.brand, facts: data.facts, review, page: data.page });
   const faq = data.page > 1 ? [] : modelFaq({ name: data.model.name, facts: data.facts, review });
   const autoText = modelAutoText({ name: data.model.name, facts: data.facts });
   const pageRoute = (n) => (n > 1 ? `${path}?page=${n}` : path);

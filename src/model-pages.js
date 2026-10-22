@@ -1,4 +1,5 @@
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
+import { catalogSeoWording } from "./catalog-seo-origin.js";
 import { modelLandingPath } from "./catalog-landings.js";
 import { siteAdjectiveCapital, siteCountriesGenitive, siteFromPhrase } from "./origin.js";
 // Страницы моделей: одна запись — одна страница /models/<slug> плюс блок «О модели»
@@ -6368,6 +6369,8 @@ export const MODELS_INDEX = rewriteEvDutyCopyDeep(MODELS_INDEX_SOURCE);
 // перебросом. Остальной код ссылается на `page.path` и переезжает вместе с ним.
 export const MODEL_PAGES = rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE).map((page) => ({
   ...page,
+  seoTitle: catalogSeoWording(page.seoTitle, page.brand),
+  seoDescription: catalogSeoWording(page.seoDescription, page.brand),
   legacyPath: page.path,
   path: modelLandingPath(page.brand, page.model) || page.path,
 }));

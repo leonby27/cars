@@ -1,4 +1,5 @@
 import { catalogDescription, homeDescription } from "./meta-descriptions.js";
+import { catalogSeoOrigin, catalogSeoWording } from "./catalog-seo-origin.js";
 import { fuelType } from "./engine-spec.js";
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
@@ -1687,11 +1688,45 @@ const CATALOG_LANDINGS_SOURCE = ([
 // Правила по Вордстату Беларуси: «из Китая в Беларусь» (1 295 запросов в месяц)
 // вместо «Минск» (134) — Минск остаётся в описании; «б/у» и «с пробегом» (86 + 17) из
 // заголовков ушли в описание и подзаголовок; в заголовке — число машин и цена «от»,
-// когда сервер их знает. Страна — из src/origin.js: у всех разделов фраза сайта «из Китая
-// и Кореи» (решение 29.09.2026), своя страна только у страниц стран (`kind: "origin"`).
+// когда сервер их знает. Метатеги китайских марок используют только Китай;
+// остальные разделы — общую фразу сайта или страну раздела (`kind: "origin"`).
 const RU_NUMBER = new Intl.NumberFormat("ru-RU");
 const formatCount = (value) => RU_NUMBER.format(Math.round(Number(value) || 0));
 const TITLE_TAIL = " ▶ Абкарс";
+
+const GROUP_TITLE_SUBJECTS = Object.freeze({
+  electric: "электромобилей",
+  hybrid: "гибридов",
+  petrol: "бензиновых автомобилей",
+  suv: "кроссоверов",
+  sedan: "седанов",
+  hatchback: "хэтчбеков",
+  minivan: "минивэнов",
+  liftback: "лифтбеков",
+  wagon: "универсалов",
+  coupe: "купе",
+  convertible: "кабриолетов",
+  "electric-suv": "электрокроссоверов",
+  "hybrid-suv": "гибридных кроссоверов",
+  "electric-sedan": "электрических седанов",
+  "electric-hatchback": "электрических хэтчбеков",
+  "hybrid-sedan": "гибридных седанов",
+  "electric-liftback": "электрических лифтбеков",
+  "hybrid-minivan": "гибридных минивэнов",
+  "petrol-suv": "бензиновых кроссоверов",
+  "petrol-sedan": "бензиновых седанов",
+  "petrol-hatchback": "бензиновых хэтчбеков",
+  "petrol-liftback": "бензиновых лифтбеков",
+  "petrol-minivan": "бензиновых минивэнов",
+});
+
+export const isCatalogGroup = (landing) => Boolean(landing && !landing.brand
+  && ["powertrain", "bodyType", "combo"].includes(landing.kind)
+  && Object.hasOwn(GROUP_TITLE_SUBJECTS, landing.slug));
+
+export const catalogPageTitle = (title, page = 1) => Number(page) > 1
+  ? String(title).replace(/ ▶ Абкарс$/, ` — страница ${page}${TITLE_TAIL}`)
+  : title;
 
 /**
  * Предмет раздела для заголовка: «BYD», «Кроссоверы Li Auto», «Buick GL8»,
@@ -1718,16 +1753,17 @@ const landingSubject = (landing) => {
 };
 
 /**
- * «BYD из Китая и Кореи в Беларусь», «Китайские и корейские седаны с доставкой в
- * Беларусь», «Авто из Китая и Кореи до 20 000 $ с доставкой в Беларусь». Фраза сайта —
- * у всех разделов; своя страна — только у страниц стран (`kind: "origin"`).
+ * «BYD из Китая в Беларусь», «Китайские и корейские седаны с доставкой в
+ * Беларусь», «Авто из Китая и Кореи до 20 000 $ с доставкой в Беларусь». Метатеги
+ * китайских марок называют только Китай; страницы стран используют свою страну.
  */
 const ADJECTIVE_HEAD = () => new RegExp(`^(${siteAdjective()}|${Object.values(ORIGINS).map((origin) => origin.adjective).join("|")})\\s`, "i");
 const landingTitleBase = (landing, { short = false } = {}) => {
-  const from = landing.kind === "origin" ? fromPhrase(originOf(landing.origin).key) : siteFromPhrase();
+  const origin = catalogSeoOrigin(landing.brand, landing.origin);
+  const from = origin ? fromPhrase(origin) : siteFromPhrase();
   // Страница страны: «Каталог авто из Кореи в Беларусь — 110 в наличии, от 9 000 $».
   if (landing.kind === "origin") return `Каталог авто ${from} в Беларусь`;
-  let subject = siteWording(landingSubject(landing));
+  let subject = catalogSeoWording(siteWording(landingSubject(landing)), landing.brand, landing.origin);
   const adjective = ADJECTIVE_HEAD();
   // «Китайские и корейские электрокроссоверы с доставкой в Беларусь» не помещается в
   // 70 знаков — тогда та же мысль короче: «Электрокроссоверы из Китая и Кореи в Беларусь».
@@ -1753,11 +1789,17 @@ const fitTitle = (base, variants, limit) => {
 
 /**
  * Заголовок вкладки раздела. `stats` — живые цифры с сервера: `{ total, priceFrom }`;
- * без них (переход внутри сайта, сборка без базы) — без цифр. Длина — до 70 символов
- * без цифр и до 80 с цифрами: поисковик показывает около 70, а цифры в начале хвоста
- * всё равно видны.
+ * без них (переход внутри сайта, сборка без базы) — без цифр. У групп сохраняем
+ * полную основу, наличие и цену; у остальных разделов остаётся подбор по длине.
  */
 export const landingSeoTitle = (landing, stats = null) => {
+  if (isCatalogGroup(landing)) {
+    const base = `Каталог ${GROUP_TITLE_SUBJECTS[landing.slug]} ${siteFromPhrase()} с доставкой в Беларусь`;
+    const total = Number(stats?.total) || 0;
+    const price = Number(stats?.priceFrom) || 0;
+    const stock = total > 0 ? ` — ${formatCount(total)} в наличии${price > 0 ? `, от ${formatCount(price)} $` : ""}` : "";
+    return `${base}${stock}${TITLE_TAIL}`;
+  }
   const long = landingTitleBase(landing);
   const base = `${long}${TITLE_TAIL}`.length > 70 ? landingTitleBase(landing, { short: true }) : long;
   const total = Number(stats?.total) || 0;
@@ -1779,7 +1821,7 @@ export const landingSeoDescription = (landing, stats = null) => {
   if (landing.brand && !subject.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU"))) subject = `${landing.brand} ${subject}`;
   return catalogDescription({
     subject: landing.kind === "origin" ? "Каталог авто" : subject.charAt(0).toUpperCase() + subject.slice(1),
-    origin: landing.origin,
+    origin: catalogSeoOrigin(landing.brand, landing.origin),
     total: stats?.total,
     priceFrom: stats?.priceFrom,
     brand: landing.kind === "brand",

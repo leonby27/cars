@@ -32,7 +32,7 @@ import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVar
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels } from "./colors.js";
 import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
-import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, HOME_H1_PARTS, HOME_SEO, brandLandingPath, modelFromSlug, findCatalogLanding, landingFilterParams, parseModelLandingPath } from "./catalog-landings.js";
+import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, HOME_H1_PARTS, HOME_SEO, brandLandingPath, catalogPageTitle, isCatalogGroup, landingApiParams, landingSeoTitle, modelFromSlug, findCatalogLanding, landingFilterParams, parseModelLandingPath } from "./catalog-landings.js";
 import { modelLandingObject } from "./model-landing.js";
 import { modelSlug } from "./model-slug.js";
 
@@ -1043,12 +1043,34 @@ function applyPageHead({ title, description, canonical, indexable }) {
   orderPageHead(document.head);
 }
 
+function useCatalogGroupSeoStats(path, landing, page) {
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    const serverPath = `${path.replace(/\/+$/, "") || "/"}${page > 1 ? `?page=${page}` : ""}`;
+    if (!isCatalogGroup(landing) || document.documentElement.dataset.seoPath === serverPath) return undefined;
+    const controller = new AbortController();
+    const query = landingApiParams(landing);
+    query.set("sort", "price_asc");
+    query.set("limit", "1");
+    fetchCarsJson(`/api/cars?${query}`, controller.signal)
+      .then((catalog) => {
+        if (controller.signal.aborted || !Number.isFinite(Number(catalog.total))) return;
+        const cheapest = catalog.items?.[0] ? normalizeImportedCar(catalog.items[0]) : null;
+        setResult({ path, stats: { total: Number(catalog.total), priceFrom: cheapest ? estimateLandedCost(cheapest).totalUsd : null } });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [path, landing, page]);
+  return result?.path === path ? result.stats : null;
+}
+
 function ClientSeo({ path, car, landing, carPending = false }) {
   const catalogFacts = useContext(CatalogFactsContext);
   // Страница списка раздела («?page=2») — свой первоисточник и свой заголовок, как
   // отдаёт сервер; номер читаем при каждой отрисовке, а не только при смене пути.
   const listPageRaw = isCatalogPath(path) ? String(new URLSearchParams(window.location.search).get("page") || "") : "";
   const listPage = /^[1-9]\d{0,4}$/.test(listPageRaw) && listPageRaw !== "1" ? Number(listPageRaw) : 0;
+  const groupStats = useCatalogGroupSeoStats(path, landing, listPage);
   useEffect(() => {
     // Сервер уже поставил заголовок, описание и адрес-первоисточник для этого адреса —
     // с живыми цифрами, которых у приложения нет. Не переписываем их, пока человек на
@@ -1065,11 +1087,11 @@ function ClientSeo({ path, car, landing, carPending = false }) {
     // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
     // описании (src/catalog-landings.js) — там же, откуда их берёт сервер, когда
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
-    const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
+    const landingSeo = landing ? [isCatalogGroup(landing) ? landingSeoTitle(landing, groupStats) : landing.seoTitle, landing.seoDescription] : null;
     const [baseTitle, baseDescription] = detailTitle
       ? [carPageTitle(car), vehicleDescription(car, estimateLandedCost(car).totalUsd)]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля ▶ Абкарс", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена ▶ Абкарс", "Запрошенная страница не найдена."];
-    const title = listPage ? String(baseTitle).replace(/ ▶ Абкарс$/, ` — страница ${listPage} ▶ Абкарс`) : baseTitle;
+    const title = catalogPageTitle(baseTitle, listPage);
     const description = path === "/" ? homeDescription({ ...catalogFacts, brandCount: window.__boot?.catalogFacts?.brandCount }) : listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
@@ -1089,7 +1111,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
       || Boolean(landing?.kind === "model" && landing.facts && !landing.review && (Number(landing.facts.total) || 0) < 3);
     const indexable = indexingEnabled && !privatePage && !emptyLanding && Boolean(routeSeo[path] || detailTitle || landingSeo);
     applyPageHead({ title, description, canonical, indexable });
-  }, [path, car, landing, listPage, carPending, catalogFacts]);
+  }, [path, car, landing, listPage, carPending, catalogFacts, groupStats]);
   return null;
 }
 

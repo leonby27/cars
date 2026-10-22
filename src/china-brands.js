@@ -235,6 +235,10 @@ export const BRAND_POWERTRAINS = Object.freeze({
   Nissan: ["Бензин", "Гибрид", "Электро"],
 });
 
+// Экспортные марки Chery присутствуют в каталоге, но ещё не имеют карточек
+// в информационном справочнике выше. Для правил каталога учитываем и их.
+export const CHINA_CATALOG_BRANDS = Object.freeze([...CHINA_BRANDS.map(({ brand }) => brand), "Jaecoo", "Omoda"]);
+
 /** Марка по названию из каталога. */
 export const chinaBrandByName = (name) => CHINA_BRANDS.find((item) => item.brand === name) || null;
 
