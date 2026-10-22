@@ -6,11 +6,12 @@
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
 import { brandCatalogGuide, brandModels, brandStock, getCatalogMeta, listCars, catalogYearRange, priceEdges } from "./repository.mjs";
 import { bootCars, catalogBootSearch, catalogMetaBoot, catalogSortFor, dailyShuffleSeed, plainCatalogSearch, renderCatalogAppMarkup } from "./app-render.mjs";
+import { catalogRedirect } from "../src/catalog-url.js";
 import { estimateLandedCost } from "../src/pricing.js";
 import { isBrandGuideLanding } from "../src/brand-guide.js";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, modelLandingRedirect, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogPageCount, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 import { withoutTrackingParams } from "../src/tracking-params.js";
 // Вычеркнутые марки: из наличия их убрали, но раздел оставили с предложением
@@ -79,7 +80,7 @@ export const landingIndexable = ({ total, allowIndexing: allowed = allowIndexing
  */
 async function firstListing(filters, query, number) {
   const sort = catalogSortFor(query);
-  const seed = sort === "default" ? dailyShuffleSeed() : null;
+  const seed = sort === "default" ? (/^s\d{1,2}$/.test(query.get("seed") || "") ? query.get("seed") : dailyShuffleSeed()) : null;
   const params = new URLSearchParams(filters);
   params.set("sort", sort);
   if (seed) params.set("seed", seed);
@@ -130,12 +131,8 @@ async function catalogApp(path, boot, query) {
 
 export async function renderCatalogIndex(searchParams) {
   const params = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
-  const location = catalogLandingRedirect(params) || modelLandingRedirect(null, params);
+  const location = catalogRedirect(null, params);
   if (location) return { status: 301, location };
-  // Раздела в фильтрах нет, а подписи «не выбрано» в адресе есть — убираем их.
-  // Переброс тут один: адрес раздела выше собирается уже без них.
-  const cleaned = catalogPlaceholderRedirect("/catalog", params);
-  if (cleaned) return { status: 301, location: cleaned };
 
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
@@ -184,12 +181,8 @@ export async function renderCatalogPage(slug, searchParams) {
   }
 
   const query = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
-  const cleaned = catalogPlaceholderRedirect(landing.path, query);
-  if (cleaned) return { status: 301, location: cleaned };
-  // Фильтр «модель» на странице марки — это каталожная страница модели: `/catalog/byd?model=Seal`
-  // уводит на `/catalog/byd/seal`, иначе одна выдача жила бы по двум адресам.
-  const modelPage = modelLandingRedirect(landing, query);
-  if (modelPage) return { status: 301, location: modelPage };
+  const location = catalogRedirect(landing, query);
+  if (location) return { status: 301, location };
   const number = requestedPage(query);
   if (number === null) return { status: 404, html: renderer.landingMissingPage() };
   if (query.get("page") !== null && number === 1) return { status: 301, location: pageLocation(landing.path, 1, query) };

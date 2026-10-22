@@ -1,6 +1,7 @@
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
-import { withoutTrackingParams } from "./tracking-params.js";
+import { catalogHref, catalogShuffleSeed, catalogSort, catalogUrlParams } from "./catalog-url.js";
+import { isTrackingParam, withoutTrackingParams } from "./tracking-params.js";
 import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -18,7 +19,7 @@ import { matchesSearchText, searchTextWords } from "./car-search-text.js";
 import { listSearchMatches, listSearchVariants, searchNormalize } from "./search-dictionary.js";
 import { colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { CITY_NAMES } from "./city-names.js";
-import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
 import { modelAutoText, modelFaq, modelFaqTitle } from "./model-landing.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
@@ -66,7 +67,7 @@ import { FAQ_GROUPS } from "./purchase-info.js";
 import { leadAttribution, trackEvent, trackYandexGoal } from "./analytics.js";
 import { missingFavoriteIsExpired } from "./favorite-cars.js";
 import { listingNumber } from "./listing-id.js";
-import { ANY_ACCEL, ANY_BATTERY, ANY_BODY_TYPE, ANY_COLOR, ANY_CONDITION, ANY_COUNTRY, ANY_ENGINE, ANY_FUEL, ANY_GEARBOX, ANY_MILEAGE, ANY_MODEL, ANY_OWNERS, ANY_POWER, ANY_PRICE_MAX, ANY_PRICE_MIN, ANY_RANGE, ANY_TIRE, ANY_YEAR_MAX, ANY_YEAR_MIN, ActionTooltip, AppLink, ApproxSign, AuthContext, AvailabilityContext, BlogCollectionCard, BlogCoverImage, BlogShareMenu, BrandMark, CarRow, CardSkeleton, CatalogFactsContext, ConsentField, CurrencySwitch, DecreePricingButton, EMPTY_AVAILABILITY, EMPTY_CATALOG_FACTS, EMPTY_CATALOG_META, EMPTY_ORDERED_LISTINGS, EXTERNAL_LINK_REL, EvQuotaButton, ExternalLink, FeaturedCard, FilterSheet, HomeFaqList, HoverImagePreview, IMAGE_ORIGINAL, IMAGE_WIDTH_CARD, NARROW_VIEWPORT, NotFound, OrderedListingsContext, POWERTRAIN_TABS, PasswordField, ScrollToTopButton, SegmentedControl, SelectField, SetOrderedListingsContext, SiteLogo, SoldVehiclePhoto, TotalPrice, VehicleSearch, ViewToggle, appendEngineRange, appendExclusions, appendMileageRange, appendMulti, appendPowerRange, appendPriceRange, appendYearRange, authMessages, batteryFloor, bootCatalogMeta, brandModelsCache, bynify, carHref, carOrigin, catalogFiltersFromParams, catalogMetaQuery, catalogUpdatedDate, catalogViewKey, clampPriceMax, clampYearMax, conditionGrades, countryKey, countryOptionsFor, createLocalOrder, currentAppPath, displayValue, emptyExclusions, exclusionValues, fetchCarsJson, filterNumber, formatDayAgo, hasExclusions, hasPriceRange, hasYearRange, heroCatalogHref, imageSource, itemsMatchingQuery, loadStaticCar, localAvailability, matchesAdvancedFilters, matchesExclusions, matchesMileageRange, matchesMulti, matchesPriceRange, matchesYears, matchingCatalogReturn, money, multiValues, normalizeImportedCar, normalizeLocalPhone, normalizeSavedFilters, number, parseHeroSearchOnce, patchHistoryState, pendingOrderKey, pluralRu, powertrainName, randomShuffleSeed, readCatalogView, readLocalOrders, renderInlineText, replaceHistoryEntry, requestCatalogMeta, retryWithFullImage, sameListing, sanitizePhoneInput, savedSearchCatalogHref, savedSearchKey, skeletonCards, startOfDayMs, storeLocalOrders, tabLabel, tabSelection, trackAvailabilityRequest, translateCity, typeValue, uniqueSorted, updateLocalOrder, useArticlePhotos, useCollectionCover, useCurrency, useDuelSides, useMediaQuery, useNarrowViewport, useQuotaPricing, useSetCurrency, useVehicleQuickView, withApprox } from "./App.jsx";
+import { ANY_ACCEL, ANY_BATTERY, ANY_BODY_TYPE, ANY_COLOR, ANY_CONDITION, ANY_COUNTRY, ANY_ENGINE, ANY_FUEL, ANY_GEARBOX, ANY_MILEAGE, ANY_MODEL, ANY_OWNERS, ANY_POWER, ANY_PRICE_MAX, ANY_PRICE_MIN, ANY_RANGE, ANY_TIRE, ANY_YEAR_MAX, ANY_YEAR_MIN, ActionTooltip, AppLink, ApproxSign, AuthContext, AvailabilityContext, BlogCollectionCard, BlogCoverImage, BlogShareMenu, BrandMark, CarRow, CardSkeleton, CatalogFactsContext, ConsentField, CurrencySwitch, DecreePricingButton, EMPTY_AVAILABILITY, EMPTY_CATALOG_FACTS, EMPTY_CATALOG_META, EMPTY_ORDERED_LISTINGS, EXTERNAL_LINK_REL, EvQuotaButton, ExternalLink, FeaturedCard, FilterSheet, HomeFaqList, HoverImagePreview, IMAGE_ORIGINAL, IMAGE_WIDTH_CARD, NARROW_VIEWPORT, NotFound, OrderedListingsContext, POWERTRAIN_TABS, PasswordField, ScrollToTopButton, SegmentedControl, SelectField, SetOrderedListingsContext, SiteLogo, SoldVehiclePhoto, TotalPrice, VehicleSearch, ViewToggle, appendEngineRange, appendExclusions, appendMileageRange, appendMulti, appendPowerRange, appendPriceRange, appendYearRange, authMessages, batteryFloor, bootCatalogMeta, brandModelsCache, bynify, carHref, carOrigin, catalogFiltersFromParams, catalogFiltersParams, catalogMetaQuery, catalogUpdatedDate, catalogViewKey, clampPriceMax, clampYearMax, conditionGrades, countryKey, countryOptionsFor, createLocalOrder, currentAppPath, displayValue, emptyExclusions, exclusionValues, fetchCarsJson, filterNumber, formatDayAgo, hasExclusions, hasPriceRange, hasYearRange, heroCatalogHref, imageSource, itemsMatchingQuery, loadStaticCar, localAvailability, matchesAdvancedFilters, matchesExclusions, matchesMileageRange, matchesMulti, matchesPriceRange, matchesYears, matchingCatalogReturn, money, multiValues, normalizeImportedCar, normalizeLocalPhone, normalizeSavedFilters, number, parseHeroSearchOnce, patchHistoryState, pendingOrderKey, pluralRu, powertrainName, randomShuffleSeed, readCatalogView, readLocalOrders, renderInlineText, replaceHistoryEntry, requestCatalogMeta, retryWithFullImage, sameListing, sanitizePhoneInput, savedSearchCatalogHref, savedSearchKey, skeletonCards, startOfDayMs, storeLocalOrders, tabLabel, tabSelection, trackAvailabilityRequest, translateCity, typeValue, uniqueSorted, updateLocalOrder, useArticlePhotos, useCollectionCover, useCurrency, useDuelSides, useMediaQuery, useNarrowViewport, useQuotaPricing, useSetCurrency, useVehicleQuickView, withApprox } from "./App.jsx";
 
 function ModelQuickLabel({ model }) {
   const labelRef = useRef(null);
@@ -574,13 +575,6 @@ function Toast({ text, onClose }) {
 // переключения на BMW оставалась «Автомобилями Audi» — и заголовком, и адресом,
 // и текстом внизу, — хотя показывала BMW.
 
-/**
- * Раздел, под которым уместно показывать выдачу с такими фильтрами. Разбор общий с
- * сервером: фильтры превращаются в тот же адрес каталога, который разбирает он.
- * `preferPath` — раздел, открытый сейчас: пока он остаётся правдой, никуда не уходим.
- */
-const landingForFilters = (filters, preferPath = null) => catalogLandingForFilters(savedSearchCatalogHref(filters).split("?")[1] || "", preferPath);
-
 // Запрос числа подходящих машин — те же имена параметров, что собирает каталог.
 const savedSearchApiParams = (filters) => {
   const query = new URLSearchParams();
@@ -605,11 +599,13 @@ const savedSearchApiParams = (filters) => {
   appendYearRange(query, filters.yearMin, filters.yearMax);
   appendMileageRange(query, filters.mileage);
   appendPriceRange(query, filters.priceMin, filters.priceMax);
+  if (filters.text) query.set("text", filters.text);
   if (filters.sort && filters.sort !== "default") query.set("sort", filters.sort);
   return query;
 };
 
 const matchesSavedFilters = (car, filters) =>
+  matchesSearchText(car, searchTextWords(filters.text)) &&
   matchesExclusions(car, filters) &&
   (filters.type === "Все" || car.type === filters.type) &&
   (filters.brand === "Все марки" || car.brand === filters.brand) &&
@@ -1306,7 +1302,7 @@ function ModelPageWays({ model, links, navigate, className = "model-page-ways pa
 
 // Выбрано ли в фильтрах хоть что-то и «чистый» набор фильтров. Ими пользуются и сама
 // панель, и строка «Сохранить поиск / Сбросить» над ней в каталоге.
-const catalogFiltersActive = (filters) => filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || (filters.country || ANY_COUNTRY) !== ANY_COUNTRY || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || hasExclusions(filters);
+const catalogFiltersActive = (filters) => filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || (filters.country || ANY_COUNTRY) !== ANY_COUNTRY || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || Boolean(filters.text) || hasExclusions(filters);
 
 const emptyCatalogFilters = () => ({
   type: "Все",
@@ -1335,7 +1331,7 @@ const emptyCatalogFilters = () => ({
   ...emptyExclusions(),
 });
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null }) {
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null, catalogHrefFor = savedSearchCatalogHref }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   // Модель не сбрасываем: её выбирал посетитель, см. такой же changeType выше.
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, ...POWERTRAIN_FILTER_RESET }));
@@ -1348,22 +1344,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   // в общий каталог. Нечего сбрасывать, кроме марки и модели, — кнопки нет.
   const resetFilters = () => setFilters((old) => ({ ...emptyCatalogFilters(), brand: old.brand, model: old.model }));
   const canReset = catalogFiltersActive({ ...filters, brand: "Все марки", model: [] });
-  // Куда приведёт выбор пункта — тем же правилом, по которому каталог переходит на
-  // раздел после смены фильтров (landingForFilters в эффекте Catalog). Ссылкой пункт
-  // становится, только если это другой уже существующий раздел: сочетания без своей
-  // страницы и выбор, оставляющий на месте, остаются кнопками — новых адресов для
-  // поисковика фильтр не порождает. Просчёт 25.09.2026: по всем 155 страницам ссылки
-  // ведут только на 154 существующих раздела, и до каждого из них можно дойти.
-  const hrefFor = (next) => {
-    // На странице модели каталог остаётся на ней, пока выбраны её марка и она сама
-    // (то же правило в эффекте Catalog): кузов или тип двигателя её не отменяют.
-    if (currentLanding?.kind === "model") {
-      const models = multiValues(next.model, ANY_MODEL);
-      if (next.brand === currentLanding.brand && models.length === 1 && models[0] === currentLanding.model) return null;
-    }
-    const path = currentPath ? landingForFilters(next, currentPath)?.path : null;
-    return path && path !== currentPath ? { href: path } : null;
-  };
+  const hrefFor = (next) => ({ href: catalogHrefFor(next) });
   const optionHrefs = currentPath ? {
     brand: (value) => hrefFor({ ...filters, brand: value, model: [] }),
     type: (label) => hrefFor({ ...filters, ...POWERTRAIN_FILTER_RESET, ...tabSelection(label) }),
@@ -1784,8 +1765,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   ];
   // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
   // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
-  const params = new URLSearchParams(window.location.search);
-  for (const [key, value] of landingFilterParams(landing)) if (!params.has(key)) params.set(key, value);
+  const params = catalogUrlParams(landing, window.location.search);
   const initialFilters = catalogFiltersFromParams(params);
   // Поисковая строка в адресе: `/catalog?q=byd han до 25000`. Нужна двум вещам —
   // разметке «поиск по сайту», по которой Google показывает строку поиска прямо
@@ -1808,7 +1788,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     return () => { cancelled = true; };
   }, [searchQuery]);
 
-  // Снимок прошлой выдачи: из записи истории (возврат «Назад») или из памяти вкладки.
+  // Снимок загруженных карточек и прокрутки: из истории или памяти вкладки.
   // Когда сервер уже встроил в страницу готовый список, память вкладки не берём:
   // иначе первый кадр разошёлся бы с готовой разметкой (ошибка оживления), а страница
   // по свежей ссылке показала бы чужую глубину прокрутки.
@@ -1817,10 +1797,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const listPath = landing?.path || "/catalog";
   const serverListHere = Boolean(window.__boot?.catalogValue && window.__boot.catalogPath === listPath);
   const restoredCatalog = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
-  const [filters, setFilters] = useState(() => ({
-    ...initialFilters,
-    ...(restoredCatalog?.filters || {}),
-  }));
+  const [filters, setFilters] = useState(() => initialFilters);
   // Первая страница выдачи, встроенная сервером в готовую страницу (каталог, разделы,
   // страницы моделей): берём её, если она про этот адрес и этот отбор, и ничего не
   // восстанавливаем из истории. Тогда первый кадр совпадает с серверным, а первый
@@ -1851,19 +1828,18 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
-  // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
-  // истории при возврате важнее — он описывает то, что было на экране.
+  // Filters and sort come from the URL; history restores only the loaded list and scroll.
   // Адрес со страницей списка («?page=7») приходит из поисковой выдачи, а сервер режет
   // список по возрастанию цены. Оставить здесь перемешанный порядок по умолчанию значит
   // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
   // На странице модели порядок по умолчанию — по цене: так же режет список сервер,
   // и готовая разметка совпадает с первым кадром.
-  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") || landing?.kind === "model" ? "price_asc" : "default";
-  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
+  const urlSort = catalogSort(params, landing?.kind === "model");
+  const [sort, setSort] = useState(urlSort);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
-  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || bootSeed || randomShuffleSeed());
+  const [shuffleSeed] = useState(() => (/^s\d{1,2}$/.test(params.get("seed") || "") ? params.get("seed") : null) || restoredCatalog?.shuffleSeed || bootSeed || catalogShuffleSeed());
   // Первый запрос — всегда одна страница. Больше сотни машин за раз каталог не отдаёт
   // (потолок в `catalogPaging`), поэтому при возврате из карточки с двумя-тремя
   // подгруженными страницами запрос на 300 машин молча превращался в сотню: список
@@ -1936,56 +1912,46 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     if (openQuickView(car)) return;
     navigate(carHref(car));
   };
-  // Адрес, заголовок и текст страницы обязаны совпадать с тем, что показано. Как только
-  // фильтр уводит с раздела — переходим на тот раздел, которому фильтры соответствуют,
-  // а если такого нет, в общий каталог. Фильтры, сортировка и порядок перемешивания
-  // переезжают снимком, поэтому выбранное не теряется.
+  // Every selection has one address; the path names its most specific existing section.
   const landingPath = landing?.path || "/catalog";
   // Заголовок раздела и обычного каталога режется на крупную часть и мелкую подпись
   // одним правилом (src/catalog-landings.js) — тем же, что и в серверной версии страницы.
   const heading = landingHeading(landing ? landing.h1 : CATALOG_INDEX_SEO.h1, landing);
-  // При создании каталог никуда не уводим: ссылка «Все фильтры» со страницы модели
-  // открывает каталог с этой же моделью, и без этой проверки он тут же вернул бы
-  // человека обратно на страницу модели.
-  const mountedForMove = useRef(false);
+  const selectionHref = (next = filters, nextSort = sort, page = 1) => {
+    const query = catalogFiltersParams({ ...next, sort: nextSort });
+    if (nextSort === "default" && params.has("seed")) query.set("seed", shuffleSeed);
+    return catalogHref(query, { page });
+  };
+  // Selection changes keep the mounted list. The URL carries every condition;
+  // history stores only the list/scroll restoration details.
+  const previousSelection = useRef({ filters, sort });
+  const replaceSelection = useRef(true);
   useEffect(() => {
-    // Раздел, который описывает выбранное точнее всего и при этом остаётся правдой:
-    // на странице BYD можно выбрать модель или год, а выбрать к седанам ещё и
-    // кроссоверы — уже нет, такую выдачу раздел седанов не описывает.
-    const firstRun = !mountedForMove.current;
-    mountedForMove.current = true;
-    // На странице модели остаёмся, пока выбраны её марка и она сама: остальные
-    // фильтры (год, пробег, цена) её не отменяют — как у марки кузов или год.
-    const chosenModels = multiValues(filters.model, ANY_MODEL);
-    if (landing?.kind === "model" && filters.brand === landing.brand && chosenModels.length === 1 && chosenModels[0] === landing.model) return undefined;
-    // Выбраны марка и модель, и больше ничего — это каталожная страница модели.
-    const modelTarget = modelLandingRedirect(landing?.kind === "model" ? null : landing, savedSearchCatalogHref(filters).split("?")[1] || "");
-    const target = (modelTarget && !firstRun ? modelTarget.split("?")[0] : null) || landingForFilters(filters, landingPath)?.path || "/catalog";
-    if (target === landingPath) return undefined;
+    const previous = previousSelection.current;
+    if (previous.filters === filters && previous.sort === sort) return undefined;
+    previousSelection.current = { filters, sort };
+    const target = selectionHref();
+    const replace = replaceSelection.current;
+    replaceSelection.current = true;
     const move = () => {
-      navigate(target, {
-        replace: true,
-        preserveScroll: true,
-        preserveCatalog: true,
+      const query = new URLSearchParams(target.split("?")[1]);
+      for (const [key, value] of new URLSearchParams(window.location.search)) if (isTrackingParam(key)) query.append(key, value);
+      const href = `${target.split("?")[0]}${query.size ? `?${query}` : ""}`;
+      if (href === `${currentAppPath()}${window.location.search}`) return;
+      navigate(href, {
+        replace, preserveScroll: true, preserveCatalog: true,
         catalogState: { catalog: { filters, sort, shuffleSeed, filtersExpanded, loadedCount: pageSize, order: [] }, scrollY: window.scrollY },
       });
     };
-    // Пока открыт список фильтра или шторка на телефоне, страницу не переключаем:
-    // кузова, цвета и модели выбирают галочками по нескольку штук, и переход посреди
-    // выбора закрывал бы список после первой же галочки, которая уводит с раздела.
     const listOpen = () => Boolean(document.querySelector(".select-menu.open, .mobile-filter-sheet"));
-    if (!listOpen()) {
-      move();
-      return undefined;
-    }
+    if (!listOpen()) { move(); return undefined; }
     const waiting = setInterval(() => {
-      if (listOpen()) return;
-      clearInterval(waiting);
-      move();
-    }, 250);
+      if (!listOpen()) { clearInterval(waiting); move(); }
+    }, 100);
     return () => clearInterval(waiting);
-  }, [filters]);
-  const updateFilters = (updater) => {
+  }, [filters, sort]);
+  const updateFilters = (updater, replace = true) => {
+    replaceSelection.current = replace;
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
     loadingMore.current = false;
@@ -1999,29 +1965,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     setView(value);
     window.localStorage.setItem(catalogViewKey, value);
   };
-  // Переход с одной модели на другую ссылкой (блок «Другие модели», похожие модели):
-  // каталог остаётся на месте и просто берёт отбор новой модели — прежний список
-  // стоит на экране, пока не придёт новый, без заглушек и пересоздания страницы.
-  const adoptedLandingPath = useRef(landing?.path || null);
-  useEffect(() => {
-    const path = landing?.path || null;
-    if (adoptedLandingPath.current === path) return;
-    adoptedLandingPath.current = path;
-    if (landing?.kind !== "model") return;
-    const chosen = multiValues(filters.model, ANY_MODEL);
-    // Отбор уже про эту модель — сюда увёл сам каталог (плашка модели).
-    if (filters.brand === landing.brand && chosen.length === 1 && chosen[0] === landing.model) return;
-    loadMoreRequest.current?.abort();
-    loadMoreRequest.current = null;
-    loadingMore.current = false;
-    setLoadedLimit(pageSize);
-    setStartOffset(0);
-    restorePages.current = 0;
-    restoredOrder.current = null;
-    setSort("price_asc");
-    setFilters(catalogFiltersFromParams(landingFilterParams(landing)));
-  }, [landing?.path]);
   const updateSort = (value) => {
+    replaceSelection.current = true;
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
     loadingMore.current = false;
@@ -2214,15 +2159,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // параметрами, что в адресной строке (порядок, фильтры), только с другим номером.
   const currentPage = Math.floor(startOffset / pageSize) + 1;
   const nextPage = Math.floor((startOffset + displayed.length) / pageSize) + 1;
-  const pageHref = (n) => {
-    // Без меток переходов: ссылка на следующую страницу не должна разносить utm по
-    // сайту, и сервер рисует её по адресу без меток — иначе разметка разошлась бы.
-    const query = withoutTrackingParams(window.location.search);
-    if (n > 1) query.set("page", String(n));
-    else query.delete("page");
-    const tail = query.toString();
-    return `${landingPath}${tail ? `?${tail}` : ""}`;
-  };
+  const pageHref = (n) => selectionHref(filters, sort, n);
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   const selectedModels = multiValues(filters.model, ANY_MODEL);
   const quickModels = [
@@ -2233,10 +2170,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   ];
   // Быстрый список работает как переключатель: в нём выбирают ровно одну модель.
   // Мультивыбор остаётся в полном списке фильтра, где он явно показан чекбоксами.
-  const selectQuickModel = (model) => updateFilters((current) => ({
+  const selectQuickModel = (model, replace = true) => updateFilters((current) => ({
     ...current,
     model: model === ANY_MODEL ? [] : [model],
-  }));
+  }), replace);
   // Кнопка «Сохранить поиск» знает, что этот набор уже сохранён, и вместо второй
   // копии ведёт в «Мои поиски». У гостя список пуст, поэтому кнопка всегда активна.
   const currentSearchKey = savedSearchKey({ ...filters, sort });
@@ -2286,7 +2223,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             <CaretRight size={13} />
             {landing.kind === "model" && landing.links?.brandPath && (
               <>
-                <CrumbLink href={landing.links.brandPath} onOpen={() => navigate(landing.links.brandPath)}>{landing.brand}</CrumbLink>
+                <CrumbLink href={selectionHref({ ...filters, model: [] })} onOpen={() => navigate(selectionHref({ ...filters, model: [] }))}>{landing.brand}</CrumbLink>
                 <CaretRight size={13} />
               </>
             )}
@@ -2301,7 +2238,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           <CatalogHeading title={heading.title} tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} />
         </div>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
+      <FilterPanel filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {quickModels.map((model) => {
@@ -2318,8 +2255,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             // см. эффект перехода выше), «Все модели» — на раздел марки. Так со страницы
             // марки к моделям ведут ссылки прямо из этого ряда, и отдельный список
             // «Модели … в каталоге» под выдачей больше не нужен.
-            const target = model === ANY_MODEL ? brandLandingPath(filters.brand) : modelLandingPath(filters.brand, model);
-            if (target && target !== landingPath) {
+            const target = selectionHref({ ...filters, model: model === ANY_MODEL ? [] : [model] });
+            if (target !== selectionHref()) {
               return (
                 <a
                   key={model}
@@ -2329,7 +2266,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
                   onClick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
-                    selectQuickModel(model);
+                    selectQuickModel(model, false);
                   }}
                 >
                   {content}
@@ -2447,7 +2384,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         {landing?.kind === "model" ? (
           <ModelLandingNotes landing={landing} page={currentPage} navigate={navigate} />
         ) : landing ? (
-          <CatalogLandingNotes landing={landing} navigate={navigate} total={knownResultCount} />
+          <CatalogLandingNotes landing={landing} navigate={navigate} total={knownResultCount} modelHrefFor={(model) => selectionHref({ ...filters, model: [model] })} />
         ) : (
           <CatalogSectionLinks navigate={navigate} />
         )}
@@ -2522,7 +2459,7 @@ function CatalogSectionLinks({ navigate }) {
 /* Текст страницы марки или типа стоит под выдачей, а не над ней: сверху человеку нужны
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
-function CatalogLandingNotes({ landing, navigate, total = null }) {
+function CatalogLandingNotes({ landing, navigate, total = null, modelHrefFor }) {
   // Сводку по марке сервер встраивает в готовую страницу раздела (window.__boot.
   // brandGuideValue): без неё первый кадр — «Загружаем сводку…», а у готовой
   // разметки — цифры, и они бы разошлись.
@@ -2550,7 +2487,7 @@ function CatalogLandingNotes({ landing, navigate, total = null }) {
   // считает частью шаблона и обесценивает, а вес размазывается ровным слоем.
   const others = relatedLandings(landing);
   if (isBrandGuideLanding(landing)) return (
-    <BrandCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} />
+    <BrandCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} modelHrefFor={modelHrefFor} />
   );
   return (
     <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
@@ -2574,7 +2511,7 @@ function CatalogLandingNotes({ landing, navigate, total = null }) {
   );
 }
 
-function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
+function BrandCatalogGuide({ landing, guide, modelPages, navigate, total, modelHrefFor }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const complete = isBrandGuide(landing, guide);
@@ -2598,7 +2535,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const activeBudget = ZEEKR_BUDGETS.find((band) => band.key === selectedBudget) || ZEEKR_BUDGETS[0];
   const activeBudgetData = guide?.budgets?.[activeBudget.key];
   // У каждой модели своя каталожная страница — на неё и ведём, обзор есть или нет.
-  const modelHref = (model) => modelLandingPath(landing.brand, model) || `${landing.path}?model=${encodeURIComponent(model)}`;
+  const modelHref = (model) => modelHrefFor ? modelHrefFor(model) : modelLandingPath(landing.brand, model) || `${landing.path}?model=${encodeURIComponent(model)}`;
   const alternatives = config.alternatives.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
   return (
     <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
@@ -3776,22 +3713,8 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   // Шаг назад по истории возвращает и фильтры, и позицию карточки, поэтому
   // кнопка идёт именно им. Прямой заход историей не подкреплён — тогда в каталог.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : backToCatalog(car.id));
-  const openFilteredCatalog = (withModel) => {
-    const stored = readCatalogReturn();
-    const model = withModel ? [car.model] : [];
-    const target = withModel ? modelCrumbHref : brandCrumbHref;
-    if (!stored || stored.openedCarId !== car.id) {
-      navigate(target);
-      return;
-    }
-    // Марка и модель сужают выдачу: фильтры переносим, но порядок и якорь
-    // прошлого списка к новому набору уже не относятся.
-    navigate(target, {
-      catalogState: { ...stored, catalog: { ...stored.catalog, filters: { ...stored.catalog.filters, brand: car.brand, model }, order: [] }, scrollY: 0, scrollAnchor: null },
-    });
-  };
-  const openBrand = () => openFilteredCatalog(false);
-  const openModel = () => openFilteredCatalog(true);
+  const openBrand = () => navigate(brandCrumbHref);
+  const openModel = () => navigate(modelCrumbHref);
   // Адреса крошек — страницы марки и модели; адрес с фильтром остаётся только
   // у марки без своего раздела (туда же ведёт и нажатие).
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
@@ -3803,15 +3726,19 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   // того, как загрузчик карточки успел включиться. Всё, что читает car, — ниже
   // этой проверки, иначе падение роняет всю страницу в чёрный экран.
   if (!car) return <NotFound navigate={navigate} />;
-  const brandCrumbHref = brandLandingPath(car.brand) || `/catalog?brand=${encodeURIComponent(car.brand)}`;
-  const modelCrumbHref = modelLandingPath(car.brand, car.model) || `/catalog?brand=${encodeURIComponent(car.brand)}&model=${encodeURIComponent(car.model)}`;
+  const previousCatalog = readCatalogReturn();
+  const catalogReturn = previousCatalog?.openedCarId === car.id ? previousCatalog : null;
+  const crumbFilters = { ...normalizeSavedFilters(catalogReturn?.catalog?.filters), text: catalogReturn?.catalog?.filters?.text, brand: car.brand, sort: catalogReturn?.catalog?.sort };
+  const brandCrumbHref = savedSearchCatalogHref({ ...crumbFilters, model: [] });
+  const modelCrumbHref = savedSearchCatalogHref({ ...crumbFilters, model: [car.model] });
+  const catalogCrumbHref = catalogReturn ? `${catalogReturn.path || "/catalog"}${catalogReturn.search || ""}` : "/catalog";
   return (
     <main className="detail page-width">
       <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} breadcrumbs={
         <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто {siteFromPhrase()}</CrumbLink>
+        <CrumbLink href={catalogCrumbHref} onOpen={() => backToCatalog(car.id)}>Каталог авто {siteFromPhrase()}</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href={brandCrumbHref} onOpen={openBrand}>{car.brand}</CrumbLink>
         <CaretRight size={13} />

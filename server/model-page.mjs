@@ -17,6 +17,7 @@ import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { MODEL_PAGES, modelPageRedirect } from "../src/model-pages.js";
 import { modelPageWithText } from "../src/model-texts.js";
+import { CATALOG_SORTS, catalogRedirect, catalogShuffleSeed, catalogSort } from "../src/catalog-url.js";
 import { brandForSlug, brandLandingPath, landingsForCar, modelFromSlug, modelLandingPath, priceBandsForCar } from "../src/catalog-landings.js";
 import { modelSlug } from "../src/model-slug.js";
 import { isTrackingParam, withoutTrackingParams } from "../src/tracking-params.js";
@@ -32,7 +33,7 @@ const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 
 // Порядки, которые понимает страница; остальное считаем «по цене».
-export const MODEL_SORTS = new Set(["price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);
+export const MODEL_SORTS = CATALOG_SORTS;
 // Ссылки на другие модели той же марки и похожие модели других марок внизу.
 const siblingsOnPage = 12;
 // Похожие модели других марок: тот же тип двигателя и кузов, по убыванию наличия.
@@ -82,15 +83,14 @@ const requestedPage = (params) => {
 
 /** Параметры списка из адреса — те, что понимает страница. */
 export function modelListQuery(params) {
-  const sort = MODEL_SORTS.has(params.get("sort")) ? params.get("sort") : "price_asc";
-  return { sort };
+  return { sort: catalogSort(params, true) };
 }
 
 // Готовую первую страницу выдачи встраиваем только для адреса без своих фильтров
 // (кроме страницы и порядка): фильтры каталог разбирает сам, и совпасть байт в байт
 // список с ними не обязан — тогда обе стороны рисуют заглушку, а список приходит запросом.
 // Метки переходов (utm, yclid, nocount…) фильтрами не считаются: выдачу они не меняют.
-const PLAIN_KEYS = new Set(["page", "sort"]);
+const PLAIN_KEYS = new Set(["page", "sort", "seed"]);
 export const plainModelSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key) || isTrackingParam(key));
 
 /**
@@ -109,8 +109,10 @@ export async function modelCatalogData({ brandSlug, modelSlug: slug, params = ne
   const page = requestedPage(params);
   if (page === null) return { invalid: true };
   const { sort } = modelListQuery(params);
+  const seed = sort === "default" ? (/^s\d{1,2}$/.test(params.get("seed") || "") ? params.get("seed") : catalogShuffleSeed()) : null;
   // Тот же запрос, что шлёт каталог в /api/cars для этого раздела.
   const listParams = new URLSearchParams({ brand, model: modelName, sort, limit: String(CATALOG_PAGE_SIZE), offset: String((page - 1) * CATALOG_PAGE_SIZE) });
+  if (seed) listParams.set("seed", seed);
   const [list, facts, edges] = await Promise.all([
     light ? { items: [], total: null, hasMore: false, changedAt: null } : listCars(listParams),
     modelCatalogFacts(brand, modelName),
@@ -135,7 +137,7 @@ export async function modelCatalogData({ brandSlug, modelSlug: slug, params = ne
     review: review
       ? { slug: review.slug, path: review.path, legacyPath: review.legacyPath, name: review.name, h1: review.h1, lead: review.lead, teaser: review.teaser, tagline: review.tagline }
       : null,
-    query: { sort },
+    query: { sort, seed },
     page,
     pages,
     // Лента карточки списка показывает пять кадров — остальные адреса (у машины их
@@ -183,8 +185,8 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   const data = await modelCatalogData({ brandSlug, modelSlug: slug, params });
   if (!data || data.invalid) return { status: 404, html: renderer.landingMissingPage() };
   const path = data.model.path;
-  // «?page=1» — та же первая страница: два адреса с одной выдачей поисковику не нужны.
-  if (params.get("page") !== null && data.page === 1) return { status: 301, location: path };
+  const location = catalogRedirect({ path, brand: data.model.brand, model: data.model.model }, params);
+  if (location) return { status: 301, location };
   if (data.page > data.pages && data.total) return { status: 404, html: renderer.landingMissingPage() };
   const review = data.review ? modelPageWithText(MODEL_PAGES.find((item) => item.slug === data.review.slug)) : null;
   const seo = modelCatalogSeo({ name: data.model.name, brand: data.model.brand, facts: data.facts, review, page: data.page });
@@ -196,7 +198,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   // и фильтры не нужны. Со своими фильтрами в адресе готовый список не встраиваем
   // (см. plainModelSearch): каталог запросит его сам, а обе стороны рисуют заглушку.
   const kept = new URLSearchParams();
-  for (const key of ["page", "sort"]) if (params.get(key)) kept.set(key, params.get(key));
+  for (const [key, value] of params) if (PLAIN_KEYS.has(key)) kept.append(key, value);
   const search = kept.toString();
   const plain = plainModelSearch(params);
   const meta = await getCatalogMeta(null, data.model.brand, null);
@@ -206,6 +208,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     catalogValue: plain ? { items: data.cars, total: data.total, hasMore: data.hasMore, changedAt: data.changedAt } : null,
     catalogPath: path,
     catalogSearch: search,
+    catalogSeed: data.query.seed,
     ...catalogMetaBoot(new URLSearchParams({ brand: data.model.brand }), meta),
   };
   // Текст обзора в том же виде, в каком его подгружает браузер (см. model-text-load.js).

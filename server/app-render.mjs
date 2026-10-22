@@ -11,6 +11,7 @@
 // вызывающий отдаёт простую версию страницы: хуже, но живую.
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { CATALOG_SORTS, catalogShuffleSeed, catalogSort } from "../src/catalog-url.js";
 import { isTrackingParam } from "../src/tracking-params.js";
 
 const entryServerPath = fileURLToPath(new URL("../dist/ssr/entry-server.js", import.meta.url));
@@ -44,33 +45,30 @@ export async function renderCatalogAppMarkup(path, search, boot, options = {}) {
 // Порядок «по умолчанию» перемешан по ключу (s0…s11, как в приложении). Для готовой
 // страницы ключ выбирает сервер — один на минские сутки: робот при каждом заходе в
 // течение дня видит ту же выдачу, а она всё равно обновляется каждый день.
-const SHUFFLE_SEEDS = 12;
-export const dailyShuffleSeed = (now = Date.now()) => `s${Math.floor((now + 3 * 3600 * 1000) / 86400000) % SHUFFLE_SEEDS}`;
+export const dailyShuffleSeed = catalogShuffleSeed;
 
 // Готовую первую страницу выдачи встраиваем только для адреса без своих фильтров
 // (кроме страницы и порядка): фильтры каталог разбирает сам, и совпасть байт в байт
 // список с ними не обязан — тогда обе стороны рисуют заглушку, а список приходит запросом.
 // Метки переходов (utm, yclid, nocount…) фильтрами не считаются: выдачу они не меняют.
-const PLAIN_KEYS = new Set(["page", "sort"]);
+const PLAIN_KEYS = new Set(["page", "sort", "seed"]);
 export const plainCatalogSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key) || isTrackingParam(key));
 
 // Порядки из выпадающего списка каталога (sortOptions в src/App.jsx).
-export const CATALOG_SORTS = new Set(["default", "price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);
+export { CATALOG_SORTS };
 
 /**
  * Порядок первой выдачи — так же, как решает каталог в браузере: порядок из адреса,
  * иначе у страницы списка («?page=7») и у страницы модели — по цене, иначе перемешано.
  */
 export function catalogSortFor(params, { model = false } = {}) {
-  const sort = params.get("sort");
-  if (CATALOG_SORTS.has(sort)) return sort;
-  return params.get("page") || model ? "price_asc" : "default";
+  return catalogSort(params, model);
 }
 
 /** Строка запроса для оживления: только номер страницы и порядок. */
 export function catalogBootSearch(params) {
   const kept = new URLSearchParams();
-  for (const key of ["page", "sort"]) if (params.get(key)) kept.set(key, params.get(key));
+  for (const [key, value] of params) if (PLAIN_KEYS.has(key)) kept.append(key, value);
   return kept.toString();
 }
 

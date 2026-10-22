@@ -77,3 +77,12 @@ test("исключения сохраняются вместе с остальн
   assert.deepEqual(legacy.excludeBrand, []);
   assert.deepEqual(legacy.excludeModel, []);
 });
+
+test("страна и текст сохраняются, старые поиски без них остаются допустимыми", () => {
+  const selection = { ...validFilters, country: "Китай", text: "long range" };
+  assert.deepEqual(normalizeSearchFilters(selection), selection);
+  assert.deepEqual(normalizeSearchFilters(validFilters), validFilters);
+  assert.equal(normalizeSearchFilters({ ...selection, country: 42 }), null);
+  assert.equal(normalizeSearchFilters({ ...selection, text: "x".repeat(201) }), null);
+  assert.equal(normalizeSearchFilters({ ...selection, text: "" }).country, "Китай");
+});

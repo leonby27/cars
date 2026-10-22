@@ -3,12 +3,15 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import { chromium, webkit } from 'playwright';
 import { catalogMetaBoot } from '../server/app-render.mjs';
 import { findCatalogLanding, landingFilterParams } from '../src/catalog-landings.js';
-import { renderCatalogApp } from '../dist/ssr/entry-server.js';
+const build=pathToFileURL(resolve(process.env.TEST_BUILD_DIR || 'dist')+'/');
+const {renderCatalogApp}=await import(new URL('ssr/entry-server.js',build));
 
-const client = new URL('../dist/client/', import.meta.url);
+const client = new URL('client/', build);
 const shell = await readFile(new URL('index.html', client), 'utf8');
 const entry = shell.match(/<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/)[0] + '</script>';
 const styles = [...shell.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)].map(m => m[0]).join('');
@@ -92,13 +95,13 @@ try {
       await page.getByRole('button', { name:/Марка:/ }).click();
       await page.getByRole('option', { name:/Zeekr/ }).click();
     }
-    await page.waitForURL('**/catalog/zeekr');
+    await page.waitForURL(url => url.pathname === '/catalog/zeekr');
     assert.equal(await page.evaluate(() => document.querySelector('main.catalog') === window.__catalogBefore), true, 'brand selection preserves the catalog');
     if (mobile) {
       await page.locator('.brand-model-open').click();
       await page.locator('[role=dialog]').getByText('7X', { exact:true }).click();
     } else await page.locator('.model-quick-chips a').filter({ hasText:'7X' }).click();
-    await page.waitForURL('**/catalog/zeekr/7x');
+    await page.waitForURL(url => url.pathname === '/catalog/zeekr/7x');
     await page.waitForFunction(() => document.querySelector('h1')?.textContent.includes('7X'));
     await page.waitForFunction(() => document.querySelectorAll('.car-row').length === 1);
     assert.equal(await page.evaluate(() => document.querySelector('main.catalog') === window.__catalogBefore), true, 'model selection preserves the catalog');
@@ -131,7 +134,7 @@ try {
       await page.getByRole('button', { name:/Марка:/ }).click();
       await page.getByRole('option', { name:/Zeekr/ }).click();
     }
-    await page.waitForURL('**/catalog/zeekr');
+    await page.waitForURL(url => url.pathname === '/catalog/zeekr');
     await page.getByText('Не удалось обновить выдачу. Попробуйте ещё раз.', { exact:true }).waitFor();
     assert.equal(await page.locator('.maintenance-page').count(), 0);
     assert.equal(await page.locator('.car-row').count(), 3, 'API failure retains the previous list');

@@ -1948,34 +1948,6 @@ export const parseModelLandingPath = (path) => {
 export const modelFromSlug = (models, slug) => (models || []).find((model) => modelSlug(model) === slug) || null;
 
 /**
- * Адрес страницы модели, на который нужно перебросить адрес с фильтрами «марка +
- * модель» (и ничем больше): `/catalog?brand=BYD&model=Seal` и `/catalog/byd?model=Seal`
- * — это она и есть. Остальные параметры (метки переходов, порядок, страница списка)
- * переносятся. `landing` — раздел, на котором стоит адрес (его марка считается
- * выбранной), или null для общего каталога.
- */
-export const modelLandingRedirect = (landing, search) => {
-  const params = asSearchParams(search);
-  const chosen = chosenFilters(params);
-  if (landing?.brand && !chosen.has("brand")) chosen.set("brand", [landing.brand]);
-  if (landing && !landing.brand) return null;
-  if (chosen.size !== 2 || !chosen.has("brand") || !chosen.has("model")) return null;
-  if ([...chosen.values()].some((values) => values.length > 1)) return null;
-  const brand = chosen.get("brand")[0];
-  const model = chosen.get("model")[0];
-  if (landing?.brand && landing.brand.toLowerCase() !== brand.toLowerCase()) return null;
-  const path = modelLandingPath(brand, model);
-  if (!path) return null;
-  const kept = new URLSearchParams();
-  for (const [key, value] of params) {
-    if (CATALOG_FILTER_KEYS.includes(key) || !String(value).trim()) continue;
-    kept.append(key, value);
-  }
-  const query = kept.toString();
-  return `${path}${query ? `?${query}` : ""}`;
-};
-
-/**
  * Разделы, на которые стоит ссылаться со страницы этого раздела.
  *
  * Раньше здесь стояли все 54 остальных, одним и тем же блоком на каждой странице: из
@@ -2132,7 +2104,7 @@ export const landingApiParams = (landing) => {
 const CATALOG_FILTER_KEYS = Object.freeze([
   "type", "brand", "model", "body", "country", "color", "yearFrom", "yearTo", "year", "mileage",
   "priceFrom", "priceTo", "price", "drive", "owners", "battery", "condition",
-  "accel", "tire", "torque", "range", "engine", "power", "gearbox", "fuel", "q",
+  "accel", "tire", "torque", "range", "engine", "power", "gearbox", "fuel", "q", "text",
   "brandNot", "modelNot", "bodyTypeNot", "typeNot", "driveNot", "colorNot",
 ]);
 
@@ -2187,25 +2159,6 @@ export const catalogLandingForParams = (search) => {
 };
 
 /**
- * Адрес раздела, на который нужно перебросить адрес каталога с фильтрами, или null,
- * если такого раздела нет. Всё, что не фильтр — метки рекламных кампаний, порядок
- * сортировки, — переносится в новый адрес: иначе переброс терял бы источник перехода
- * в статистике.
- */
-export const catalogLandingRedirect = (search) => {
-  const params = asSearchParams(search);
-  const landing = catalogLandingForParams(params);
-  if (!landing) return null;
-  const kept = new URLSearchParams();
-  for (const [key, value] of params) {
-    if (CATALOG_FILTER_KEYS.includes(key) || !String(value).trim()) continue;
-    kept.append(key, value);
-  }
-  const query = kept.toString();
-  return `${landing.path}${query ? `?${query}` : ""}`;
-};
-
-/**
  * Тот же адрес без подписей «не выбрано» — или null, если чистить нечего.
  *
  * Поиск на главной когда-то уносил в адрес весь набор списков сразу, поэтому по сайту
@@ -2239,10 +2192,9 @@ export const catalogPlaceholderRedirect = (path, search) => {
  * А вот выбрать на странице седанов ещё и кроссоверы — значит выйти за её пределы:
  * такие фильтры раздел уже не описывает, и заголовок начинает врать.
  *
- * `preferPath` — раздел, на котором посетитель уже стоит: если он не хуже найденного,
- * остаёмся на нём, чтобы страница не менялась без нужды.
+ * При равной точности порядок справочника задаёт один результат для любого входа.
  */
-export const catalogLandingForFilters = (search, preferPath = null) => {
+export const catalogLandingForFilters = (search) => {
   const chosen = chosenFilters(asSearchParams(search));
   const single = (key) => (chosen.get(key)?.length === 1 ? chosen.get(key)[0] : null);
   const same = (left, right) => String(left || "").toLowerCase() === String(right).toLowerCase();
@@ -2255,5 +2207,5 @@ export const catalogLandingForFilters = (search, preferPath = null) => {
   if (!fitting.length) return null;
   const best = Math.max(...fitting.map(rank));
   const top = fitting.filter((landing) => rank(landing) === best);
-  return top.find((landing) => landing.path === preferPath) || top[0];
+  return top[0];
 };

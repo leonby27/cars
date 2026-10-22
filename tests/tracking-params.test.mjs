@@ -38,5 +38,4 @@ test("браузер сверяет встроенный список с адр�
   assert.equal(withoutTrackingParams(address).toString(), catalogBootSearch(new URLSearchParams(address.slice(1))));
   const app = readAppSource();
   assert.match(app, /boot\.catalogSearch \|\| ""\) === withoutTrackingParams\(window\.location\.search\)\.toString\(\)/);
-  assert.match(app, /const pageHref = \(n\) => \{[\s\S]{0,300}withoutTrackingParams\(window\.location\.search\)/);
 });

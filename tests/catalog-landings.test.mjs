@@ -1,3 +1,5 @@
+import { catalogRedirect } from "../src/catalog-url.js";
+const catalogLandingRedirect = search => catalogRedirect(null, search);
 import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -6,7 +8,7 @@ import { EXCLUDED_BRANDS, IMPORT_BRANDS, KOREA_IMPORT_BRANDS, MAINSTREAM_IMPORT_
 import { visibleLandings } from "../server/catalog-page.mjs";
 import { isCatalogGroup, landingSeoDescription, landingSeoTitle, landingSubtitle } from "../src/catalog-landings.js";
 import { catalogSeoOrigin } from "../src/catalog-seo-origin.js";
-import { CATALOG_LANDINGS, parseModelLandingPath, modelLandingPath, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, parseModelLandingPath, modelLandingPath, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 import { isEvQuotaExhausted } from "../src/ev-quota.js";
 
@@ -333,14 +335,14 @@ test("лишний фильтр раздел не отменяет, а вот в
   assert.equal(at("brand=BYD&brand=Tesla", "/catalog/byd"), null);
 });
 
-test("из раздела уходим только туда, где заголовок остаётся правдой", () => {
+test("раздел определяется фильтрами независимо от предыдущей страницы", () => {
   const at = (search, prefer) => catalogLandingForFilters(search, prefer)?.path ?? null;
   // Точное совпадение важнее общего: на странице кроссоверов выбрали BYD — впереди
   // есть готовая страница «Кроссоверы BYD».
   assert.equal(at("brand=BYD&body=SUV / кроссовер", "/catalog/suv"), "/catalog/byd-suv");
-  // Ничья между двумя одинаково подходящими разделами решается в пользу открытого.
+  // При одинаковой точности порядок справочника даёт один раздел для обоих входов.
   assert.equal(at("brand=Mazda&type=Гибриды", "/catalog/mazda"), "/catalog/mazda");
-  assert.equal(at("brand=Mazda&type=Гибриды", "/catalog/hybrid"), "/catalog/hybrid");
+  assert.equal(at("brand=Mazda&type=Гибриды", "/catalog/hybrid"), "/catalog/mazda");
   // Пустые фильтры — это общий каталог, а не раздел.
   assert.equal(at("", "/catalog/byd"), null);
   assert.equal(at("sort=price_asc", "/catalog/byd"), null);

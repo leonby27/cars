@@ -44,6 +44,7 @@ import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
 
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
+import { catalogHref, catalogLocationKey, catalogRedirect } from "./catalog-url.js";
 import { clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { getListingAddedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, formatChangePercent, getPriceChange, minskClock } from "./price-change.js";
@@ -675,7 +676,7 @@ function useRoute(user) {
   const navigate = useCallback((next, options = {}) => {
     const turn = ++navigationTurn.current;
     const query = typeof next === "string" ? catalogMetaQueryForPath(next) : null;
-    if (query === null || resolvedCatalogMeta(query)) {
+    if (options.preserveCatalog || query === null || resolvedCatalogMeta(query)) {
       navigateNow(next, options);
       return;
     }
@@ -689,7 +690,12 @@ function useRoute(user) {
       window.history.back();
       return;
     }
-    const target = new URL(next, window.location.origin);
+    let target = new URL(next, window.location.origin);
+    const catalogLanding = findCatalogLanding(target.pathname);
+    if (target.pathname === "/catalog" || catalogLanding) {
+      const normalized = catalogRedirect(catalogLanding, target.search, target.pathname);
+      if (normalized) target = new URL(`${normalized}${target.hash}`, target.origin);
+    }
     // Обзор мог переехать на новый адрес вместе с переименованием модели. Внутри сайта
     // все ссылки уже новые, но старая могла остаться в закладках или чужом письме —
     // тогда сервер отдаёт переброс сам, а здесь подстраховка для перехода внутри сайта.
@@ -737,7 +743,7 @@ function useRoute(user) {
     }
     // Mark only the committed navigation, after the metadata wait. Background
     // renders while waiting must not consume a filter transition.
-    catalogFilterMoveTarget = preserveCatalog ? targetPath : null;
+    catalogFilterMoveTarget = preserveCatalog ? catalogLocationKey(targetPath, target.search) : null;
     setRoute((current) => ({
       path: targetPath,
       restoreY: catalogState ? Number(catalogState.scrollY) || 0 : null,
@@ -758,7 +764,7 @@ function useRoute(user) {
     }
     const stored = readCatalogReturn();
     if (stored && carId && stored.openedCarId === carId) {
-      navigate(`/catalog${stored.search || ""}`, { catalogState: stored });
+      navigate(`${stored.path || "/catalog"}${stored.search || ""}`, { catalogState: stored });
       return;
     }
     navigate("/catalog");
@@ -2801,7 +2807,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       // строка на две сотни символов вместо «/catalog». Выдачу это не меняло: подписи
       // и сервер, и каталог пропускают, — но такую ссылку нельзя ни отправить, ни
       // выложить. Сборка общая с сохранённым поиском, поэтому имена параметров совпадают.
-      onSubmit={() => navigate(savedSearchCatalogHref({ type: normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel }))}
+      onSubmit={() => navigate(savedSearchCatalogHref({ type: normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, country, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel }))}
     />
   );
 }
@@ -2966,8 +2972,7 @@ const heroCatalogHref = (parsed) => {
   if (parsed.gearbox) params.set("gearbox", parsed.gearbox);
   if (parsed.fuel) params.set("fuel", parsed.fuel);
   appendExclusions(params, parsed);
-  const search = params.toString();
-  return `/catalog${search ? `?${search}` : ""}`;
+  return catalogHref(params);
 };
 // Сохранённый поиск хранит фильтры каталога в одной и той же форме независимо от
 // того, чем их заполнили: фиксированный порядок ключей делает сериализацию пригодной
@@ -2984,6 +2989,7 @@ const savedFilterDefaults = {
   priceMin: ANY_PRICE_MIN,
   priceMax: ANY_PRICE_MAX,
   country: ANY_COUNTRY,
+  text: "",
   drive: ANY_DRIVE,
   owners: ANY_OWNERS,
   battery: ANY_BATTERY,
@@ -3025,6 +3031,7 @@ const savedSearchKey = (filters) => JSON.stringify(normalizeSavedFilters(filters
 // поиска, и строка-подпись на его карточке. Цены — в долларах, как они и хранятся.
 const savedSearchChips = (filters) => {
   const chips = [];
+  if (filters.text) chips.push(`«${filters.text}»`);
   if (filters.type !== "Все") chips.push(tabLabel(filters.type, filters.fuel));
   const models = multiValues(filters.model, ANY_MODEL);
   if (filters.brand !== "Все марки") chips.push(models.length ? `${filters.brand} ${models.join(", ")}` : filters.brand);
@@ -3064,7 +3071,7 @@ const savedSearchTitle = (filters) => {
 };
 // Ссылка ведёт в каталог в том же формате, каким пользуется быстрый поиск главной:
 // каталог разберёт её при монтировании и восстановит фильтры один в один.
-const savedSearchCatalogHref = (filters) => {
+const catalogFiltersParams = (filters) => {
   const params = new URLSearchParams();
   if (filters.type !== "Все") params.set("type", typeLabel(filters.type));
   if (filters.brand !== "Все марки") params.set("brand", filters.brand);
@@ -3089,10 +3096,11 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.gearbox && filters.gearbox !== ANY_GEARBOX) params.set("gearbox", filters.gearbox);
   if (filters.fuel && filters.fuel !== ANY_FUEL) params.set("fuel", filters.fuel);
   appendExclusions(params, filters);
-  if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
-  const search = params.toString();
-  return `/catalog${search ? `?${search}` : ""}`;
+  if (filters.text) params.set("text", filters.text);
+  if (filters.sort) params.set("sort", filters.sort);
+  return params;
 };
+const savedSearchCatalogHref = (filters) => catalogHref(catalogFiltersParams(filters));
 
 const heroApiParams = (parsed) => {
   const params = new URLSearchParams();
@@ -4964,8 +4972,7 @@ function catalogFiltersFromParams(params) {
     gearbox: GEARBOX_TYPES.includes(rawGearbox) ? rawGearbox : ANY_GEARBOX,
     fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : rawType === DIESEL_TAB ? "Дизель" : typeValue(rawType) === "ДВС" ? "Бензин" : ANY_FUEL,
     // Свободный текст из поиска на главной: комплектация и характеристики, которых
-    // нет в выпадающих списках. В сохранённые поиски он не попадает — там набор
-    // полей фиксирован, и лишний ключ сломал бы сравнение «такой поиск уже есть».
+    // нет в выпадающих списках; это тоже часть сохраняемого отбора.
     text: (params.get("text") || "").trim(),
     ...exclusionsFromParams(params),
   };
@@ -7358,28 +7365,14 @@ export function App() {
   // заглушками. Метку ставит каталог, а гасит её отрисовка ниже.
   // Раздел модели по адресу — из встроенных данных или запросом (см. useModelLanding).
   const modelLanding = useModelLanding(contentPath);
-  // Номер страницы списка — тоже часть ключа: переход по ссылке «?page=2» должен
-  // пересоздать каталог с новым отступом, а не оставить прежний список.
-  const listPageParam = String(new URLSearchParams(window.location.search).get("page") || "");
-  const catalogPathKey = `${contentPath}${/^[1-9]\d{0,4}$/.test(listPageParam) && listPageParam !== "1" ? `?page=${listPageParam}` : ""}`;
-  // Ключ каталога живёт, пока адрес тот, для которого он выдан. Переход, который
-  // сделал сам каталог (смена фильтра увела на раздел или на страницу модели),
-  // ключ не меняет — и не меняет его ни один следующий рендер на том же адресе:
-  // раньше ключ обновлялся уже следующим рендером, и каталог пересоздавался,
-  // как только приходили сведения о новой модели.
-  const catalogKeyState = useRef({ path: contentPath, pathKey: catalogPathKey, key: catalogPathKey });
+  // Every selection query is part of the key; external links must adopt their own filters.
+  const catalogPathKey = catalogLocationKey(contentPath, window.location.search);
+  const catalogKeyState = useRef({ pathKey: catalogPathKey, key: catalogPathKey });
   if (isCatalogPath(contentPath)) {
     const state = catalogKeyState.current;
-    if (catalogFilterMoveTarget === contentPath) {
-      state.path = contentPath;
+    if (catalogFilterMoveTarget === catalogPathKey) {
       state.pathKey = catalogPathKey;
-    } else if (parseModelLandingPath(state.path) && parseModelLandingPath(contentPath) && state.path !== contentPath && catalogPathKey === contentPath) {
-      // С одной модели на другую (первая страница списка): тот же экземпляр каталога,
-      // он сам сменит отбор (см. adoptedLandingPath в Catalog) — без мигания.
-      state.path = contentPath;
-      state.pathKey = catalogPathKey;
-    } else if (state.path !== contentPath || state.pathKey !== catalogPathKey) {
-      state.path = contentPath;
+    } else if (state.pathKey !== catalogPathKey) {
       state.pathKey = catalogPathKey;
       state.key = catalogPathKey;
     }
@@ -7544,4 +7537,4 @@ export function App() {
 }
 
 // Shared controls keep the same state and contexts on every route.
-export { ANY_ACCEL, ANY_BATTERY, ANY_BODY_TYPE, ANY_COLOR, ANY_CONDITION, ANY_COUNTRY, ANY_ENGINE, ANY_FUEL, ANY_GEARBOX, ANY_MILEAGE, ANY_MODEL, ANY_OWNERS, ANY_POWER, ANY_PRICE_MAX, ANY_PRICE_MIN, ANY_RANGE, ANY_TIRE, ANY_YEAR_MAX, ANY_YEAR_MIN, ActionTooltip, AppLink, ApproxSign, AuthContext, AvailabilityContext, BlogCollectionCard, BlogCoverImage, BlogShareMenu, BrandMark, CarRow, CardSkeleton, CatalogFactsContext, ConsentField, CurrencySwitch, DecreePricingButton, EMPTY_AVAILABILITY, EMPTY_CATALOG_FACTS, EMPTY_CATALOG_META, EMPTY_ORDERED_LISTINGS, EXTERNAL_LINK_REL, EvQuotaButton, ExternalLink, FeaturedCard, FilterSheet, HomeFaqList, HoverImagePreview, IMAGE_ORIGINAL, IMAGE_WIDTH_CARD, NARROW_VIEWPORT, NotFound, OrderedListingsContext, POWERTRAIN_TABS, PasswordField, ScrollToTopButton, SegmentedControl, SelectField, SetOrderedListingsContext, SiteLogo, SoldVehiclePhoto, TotalPrice, VehicleSearch, ViewToggle, appendEngineRange, appendExclusions, appendMileageRange, appendMulti, appendPowerRange, appendPriceRange, appendYearRange, authMessages, batteryFloor, bootCatalogMeta, brandModelsCache, bynify, carHref, carOrigin, catalogFiltersFromParams, catalogMetaQuery, catalogUpdatedDate, catalogViewKey, clampPriceMax, clampYearMax, conditionGrades, countryKey, countryOptionsFor, createLocalOrder, currentAppPath, displayValue, emptyExclusions, exclusionValues, fetchCarsJson, filterNumber, formatDayAgo, hasExclusions, hasPriceRange, hasYearRange, heroCatalogHref, imageSource, itemsMatchingQuery, loadStaticCar, localAvailability, matchesAdvancedFilters, matchesExclusions, matchesMileageRange, matchesMulti, matchesPriceRange, matchesYears, matchingCatalogReturn, money, multiValues, normalizeImportedCar, normalizeLocalPhone, normalizeSavedFilters, number, parseHeroSearchOnce, patchHistoryState, pendingOrderKey, pluralRu, powertrainName, randomShuffleSeed, readCatalogView, readLocalOrders, renderInlineText, replaceHistoryEntry, requestCatalogMeta, retryWithFullImage, sameListing, sanitizePhoneInput, savedSearchCatalogHref, savedSearchKey, skeletonCards, startOfDayMs, storeLocalOrders, tabLabel, tabSelection, trackAvailabilityRequest, translateCity, typeValue, uniqueSorted, updateLocalOrder, useArticlePhotos, useCollectionCover, useCurrency, useDuelSides, useMediaQuery, useNarrowViewport, useQuotaPricing, useSetCurrency, useVehicleQuickView, withApprox };
+export { ANY_ACCEL, ANY_BATTERY, ANY_BODY_TYPE, ANY_COLOR, ANY_CONDITION, ANY_COUNTRY, ANY_ENGINE, ANY_FUEL, ANY_GEARBOX, ANY_MILEAGE, ANY_MODEL, ANY_OWNERS, ANY_POWER, ANY_PRICE_MAX, ANY_PRICE_MIN, ANY_RANGE, ANY_TIRE, ANY_YEAR_MAX, ANY_YEAR_MIN, ActionTooltip, AppLink, ApproxSign, AuthContext, AvailabilityContext, BlogCollectionCard, BlogCoverImage, BlogShareMenu, BrandMark, CarRow, CardSkeleton, CatalogFactsContext, ConsentField, CurrencySwitch, DecreePricingButton, EMPTY_AVAILABILITY, EMPTY_CATALOG_FACTS, EMPTY_CATALOG_META, EMPTY_ORDERED_LISTINGS, EXTERNAL_LINK_REL, EvQuotaButton, ExternalLink, FeaturedCard, FilterSheet, HomeFaqList, HoverImagePreview, IMAGE_ORIGINAL, IMAGE_WIDTH_CARD, NARROW_VIEWPORT, NotFound, OrderedListingsContext, POWERTRAIN_TABS, PasswordField, ScrollToTopButton, SegmentedControl, SelectField, SetOrderedListingsContext, SiteLogo, SoldVehiclePhoto, TotalPrice, VehicleSearch, ViewToggle, appendEngineRange, appendExclusions, appendMileageRange, appendMulti, appendPowerRange, appendPriceRange, appendYearRange, authMessages, batteryFloor, bootCatalogMeta, brandModelsCache, bynify, carHref, carOrigin, catalogFiltersFromParams, catalogFiltersParams, catalogMetaQuery, catalogUpdatedDate, catalogViewKey, clampPriceMax, clampYearMax, conditionGrades, countryKey, countryOptionsFor, createLocalOrder, currentAppPath, displayValue, emptyExclusions, exclusionValues, fetchCarsJson, filterNumber, formatDayAgo, hasExclusions, hasPriceRange, hasYearRange, heroCatalogHref, imageSource, itemsMatchingQuery, loadStaticCar, localAvailability, matchesAdvancedFilters, matchesExclusions, matchesMileageRange, matchesMulti, matchesPriceRange, matchesYears, matchingCatalogReturn, money, multiValues, normalizeImportedCar, normalizeLocalPhone, normalizeSavedFilters, number, parseHeroSearchOnce, patchHistoryState, pendingOrderKey, pluralRu, powertrainName, randomShuffleSeed, readCatalogView, readLocalOrders, renderInlineText, replaceHistoryEntry, requestCatalogMeta, retryWithFullImage, sameListing, sanitizePhoneInput, savedSearchCatalogHref, savedSearchKey, skeletonCards, startOfDayMs, storeLocalOrders, tabLabel, tabSelection, trackAvailabilityRequest, translateCity, typeValue, uniqueSorted, updateLocalOrder, useArticlePhotos, useCollectionCover, useCurrency, useDuelSides, useMediaQuery, useNarrowViewport, useQuotaPricing, useSetCurrency, useVehicleQuickView, withApprox };
