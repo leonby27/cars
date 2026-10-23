@@ -1,5 +1,5 @@
 [Unit]
-Description=Удаление фото через семь дней после снятия объявления
+Description=Удаление фотокопий объявлений со статусом Продано без отсрочки
 After=postgresql.service
 
 [Service]
@@ -14,4 +14,4 @@ IOWeight=20
 # урезал себе память под этот предел и 27.09.2026 падал, ничего не удалив.
 Environment=NODE_OPTIONS=--max-old-space-size=1536
 MemoryHigh=2G
-TimeoutStartSec=30min
+TimeoutStartSec=90min

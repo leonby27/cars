@@ -37,4 +37,4 @@ systemctl stop abcars-warm.service abcars-warm-recent.service
 systemctl enable --now abcars-photo-store.service
 systemctl enable --now abcars-gallery-store.service
 
-systemctl enable --now abcars-photo-cleanup.timer
+bash "$repo_dir/deploy/install-photo-cleanup.sh"
