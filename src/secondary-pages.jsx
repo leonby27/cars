@@ -1745,7 +1745,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
 }
 
 function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, deleteSavedSearch, savedSearches, landing = null }) {
-  // Сотня машин на страницу — то же число, по которому сервер режет список для
+  // Одна порция машин — то же число, по которому сервер режет список для
   // поисковика. Если развести эти числа, адрес «?page=2» из выдачи покажет человеку
   // не те машины, которые по нему проиндексированы.
   const pageSize = CATALOG_PAGE_SIZE;
@@ -1837,7 +1837,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
   const [shuffleSeed] = useState(() => (/^s\d{1,2}$/.test(params.get("seed") || "") ? params.get("seed") : null) || restoredCatalog?.shuffleSeed || bootSeed || catalogShuffleSeed());
-  // Первый запрос — всегда одна страница. Больше сотни машин за раз каталог не отдаёт
+  // Первый запрос — всегда одна порция. Больше сотни машин за раз каталог не отдаёт
   // (потолок в `catalogPaging`), поэтому при возврате из карточки с двумя-тремя
   // подгруженными страницами запрос на 300 машин молча превращался в сотню: список
   // схлопывался, а прокрутка возвращалась не к той машине.

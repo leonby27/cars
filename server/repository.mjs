@@ -286,7 +286,7 @@ export function withoutDetailPayload(car) {
 }
 
 // Глубже этой позиции каталог не листается. Посетитель берёт по 48 карточек, то есть
-// потолок наступает после сотни нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
+// потолок наступает примерно после сотни нажатий «Подгрузить ещё»; выкачка всех
 // объявлений постраничным перебором на этом заканчивается. Ответ всегда несёт
 // `hasMore`, поэтому приложение узнаёт про упор в потолок и прекращает подгрузку,
 // вместо того чтобы сравнивать загруженное с общим числом и биться в пустые страницы.
@@ -314,19 +314,19 @@ export const catalogHasMore = (offset, count, total) => offset + count < Math.mi
  * называется «Surpass» в объявлении и «Surpassing» в чужом каталоге, откуда
  * запрос копируют, поэтому вторым заходом слова ищутся по основе.
  */
-export async function listCars(searchParams) {
+export async function listCars(searchParams, { summary = null, includeYears = false } = {}) {
   const words = searchTextWords(searchParams.get("text"));
-  const answer = await listCarsPage(searchParams);
+  const answer = await listCarsPage(searchParams, { summary, includeYears });
   if (answer.total || !words.length) return answer;
   const stems = words.map(searchWordStem);
   if (!stems.some((stem, at) => stem !== words[at])) return answer;
   const relaxed = new URLSearchParams(searchParams);
   relaxed.set("text", stems.join(" "));
-  const retry = await listCarsPage(relaxed);
+  const retry = await listCarsPage(relaxed, { includeYears });
   return retry.total ? retry : answer;
 }
 
-async function listCarsPage(searchParams) {
+async function listCarsPage(searchParams, { summary = null, includeYears = false } = {}) {
   const { where, values } = buildCarFilters(searchParams);
   const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);
@@ -340,24 +340,40 @@ async function listCarsPage(searchParams) {
     const candidates = itemsResult.rows.map(row => ({ ...withoutDetailPayload(rowToCar(row)), homeMarketSavingPercent:Number(row.home_market_saving_percent) || 0 }));
     return { items:selectHomeFeed(candidates, limit), total:countResult.rows[0].total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset:0, hasMore:false };
   }
-  const [itemsResult, countResult] = await Promise.all([
+  const [items, counts] = await Promise.all([
     beyondCap
-      ? Promise.resolve({ rows:[] })
+      ? Promise.resolve([])
       // Сортируем только номера, строки целиком берём для выбранной страницы. Иначе база
       // перекладывает каждую машину вместе с source_payload: на 80 тыс. машин сортировка
       // «по умолчанию» не влезала в память и писала на диск ~48 МБ на каждый запрос.
       // Порядок у всех сортировок завершается l.id, поэтому внешний ORDER BY его повторяет.
-      : pool.query(`WITH picked AS (
+      : cachedCatalogValue(pool, ["list-items", where, values, order, limit, offset], async () => {
+        const result = await pool.query(`WITH picked AS (
           SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
           ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}
         )
-        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,limit,offset]),
+        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,limit,offset]);
+        return result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
+      }),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
-    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    // Count is independent of page, sort and shuffle seed. A brand page can provide
+    // the same facts from its guide; subsequent API batches reuse that result too.
+    cachedCatalogValue(pool, ["list-summary", where, values], async () => {
+      if (summary) {
+        const facts = await summary;
+        return { total:facts?.total || 0, refreshedAt:facts?.refreshedAt || null, changedAt:facts?.changedAt || null,
+          yearMin:facts?.yearMin ?? null, yearMax:facts?.yearMax ?? null,
+          validUntil:facts ? Date.parse(facts.calculatedAt) + 60_000 : Date.now() + 5_000 };
+      }
+      const result = await pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at,
+        min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max
+        FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+      const row = result.rows[0];
+      return { total:row.total, refreshedAt:row.refreshed_at, changedAt:row.changed_at || null, yearMin:row.year_min ?? null, yearMax:row.year_max ?? null };
+    }, { expiresAt:(facts) => facts.validUntil }),
   ]);
-  const total = countResult.rows[0].total;
-  const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
-  return { items, total, refreshedAt:countResult.rows[0].refreshed_at, changedAt:countResult.rows[0].changed_at || null, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
+  return { items, total:counts.total, refreshedAt:counts.refreshedAt, changedAt:counts.changedAt, limit, offset, hasMore:catalogHasMore(offset, items.length, counts.total),
+    ...(includeYears ? { yearMin:counts.yearMin, yearMax:counts.yearMax } : {}) };
 }
 
 // Related cards need a small list, never total counts or refresh timestamps.
@@ -411,20 +427,6 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
     items: itemsResult.rows.map((row) => ({ id:row.id, title:row.title, brand:row.brand, model:row.model, year:row.model_year, mileage:row.mileage_km, image:row.image || null })),
     total: countResult.rows[0].total,
     changedAt: countResult.rows[0].changed_at || null,
-  };
-}
-
-// Section metadata needs only the year range. Keep the full model summary
-// (including source payloads) for consumers that actually display those specs.
-export async function catalogYearRange(searchParams) {
-  const { where, values } = buildCarFilters(searchParams);
-  const result = await cachedCatalogRead(pool, `SELECT min(v.model_year)::int AS year_min,
-      max(v.model_year)::int AS year_max
-    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
-  const row = result.rows[0] || {};
-  return {
-    yearMin: row.year_min == null ? null : Number(row.year_min),
-    yearMax: row.year_max == null ? null : Number(row.year_max),
   };
 }
 
@@ -492,6 +494,10 @@ export async function modelSummary(searchParams) {
 export async function brandCatalogGuide(brand) {
   const name = String(brand || "").trim();
   if (!name) return null;
+  return cachedCatalogValue(pool, ["brand-guide", name], () => readBrandCatalogGuide(name));
+}
+
+async function readBrandCatalogGuide(name) {
   const [summary, models, budgets] = await Promise.all([
     pool.query(`SELECT count(*)::int AS total, count(DISTINCT v.model)::int AS model_count,
         count(*) FILTER (WHERE l.estimated_total_usd > 0)::int AS priced_count,
@@ -502,7 +508,7 @@ export async function brandCatalogGuide(brand) {
         CAST(percentile_cont(0.75) WITHIN GROUP (ORDER BY l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS numeric) AS price_p75,
         min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0))::numeric AS mileage_median,
-        ${SECTION_CHANGED_AT} AS changed_at
+        ${SECTION_CHANGED_AT} AS changed_at, max(l.last_seen_at) AS refreshed_at
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       WHERE l.status='active' AND v.brand=$1`, [name]),
     pool.query(`SELECT v.model, count(*)::int AS count,
@@ -535,6 +541,7 @@ export async function brandCatalogGuide(brand) {
     brand:name,
     calculatedAt:new Date().toISOString(),
     changedAt:row.changed_at || null,
+    refreshedAt:row.refreshed_at || null,
     total:row.total,
     modelCount:row.model_count,
     pricedCount:row.priced_count,
@@ -601,7 +608,7 @@ export async function sectionStats(searchParams) {
 export async function priceEdges(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const half = (direction) => `(${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ${direction} NULLS LAST, l.id LIMIT 1)`;
-  const result = await pool.query(`${half("ASC")} UNION ALL ${half("DESC")}`, values);
+  const result = await cachedCatalogRead(pool, `${half("ASC")} UNION ALL ${half("DESC")}`, values);
   const cars = result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
   return { cheapest: cars[0] || null, dearest: cars[1] || cars[0] || null };
 }
@@ -636,17 +643,14 @@ export async function getCar(id) {
 // это тонкая страница без содержания, — поэтому такие разделы не показываются нигде
 // и отвечают 404, пока в них не появятся машины.
 //
-// Ответ держим в памяти пять минут: страницы разделов запрашивает робот тысячами,
-// а состав марок меняется раз в сутки, после ночного импорта.
-const BRAND_STOCK_TTL_MS = 5 * 60 * 1000;
-let brandStockCache = { at: 0, value: null };
+// Общий минутный кэш объединяет также одновременные запросы страниц разделов.
 
 /**
  * Модели марки с числом живых машин — для каталожных страниц моделей: по этому
  * списку адрес `/catalog/byd/seal-06-dm-i` превращается в имя модели из базы.
  */
 export async function brandModels(brand) {
-  const result = await pool.query(
+  const result = await cachedCatalogRead(pool,
     `SELECT v.model, count(*)::int AS count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
      WHERE l.status='active' AND v.brand=$1 GROUP BY v.model ORDER BY count DESC, v.model`,
     [brand],
@@ -699,12 +703,8 @@ export async function modelCatalogFacts(brand, model) {
 }
 
 export async function brandStock() {
-  const now = Date.now();
-  if (brandStockCache.value && now - brandStockCache.at < BRAND_STOCK_TTL_MS) return brandStockCache.value;
-  const { rows } = await pool.query("SELECT v.brand, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand");
-  const value = new Map(rows.map((row) => [row.brand, row.count]));
-  brandStockCache = { at: now, value };
-  return value;
+  const { rows } = await cachedCatalogRead(pool, "SELECT v.brand, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand");
+  return new Map(rows.map((row) => [row.brand, row.count]));
 }
 
 /**
@@ -988,7 +988,6 @@ export async function createOrderDraft({ listingId, name = null, contact, calcul
 
 export function clearCatalogCaches() {
   clearCatalogReadCache();
-  brandStockCache={at:0,value:null};
   marketStats.invalidate();
   modelClassCache={at:0,value:null};
 }

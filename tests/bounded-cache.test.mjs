@@ -40,3 +40,13 @@ test('a changed price generation clears data and old in-flight reads cannot over
  finish(1);assert.equal(await old,1);
  assert.equal(await cache('a',()=>3,{version:'new'}),2);
 });
+
+test('derived values cannot extend the lifetime of their source snapshot',async()=>{
+ let clock=50,loads=0;
+ const cache=createBoundedCache({now:()=>clock,ttl:100});
+ const load=()=>({value:++loads,validUntil:100});
+ const options={expiresAt:value=>value.validUntil};
+ await cache('derived',load,options);
+ clock=99;assert.equal((await cache('derived',load,options)).value,1);
+ clock=100;assert.equal((await cache('derived',load,options)).value,2);
+});

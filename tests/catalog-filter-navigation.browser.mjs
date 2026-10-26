@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { catalogMetaBoot } from '../server/app-render.mjs';
-import { findCatalogLanding, landingApiParams, parseModelLandingPath } from '../src/catalog-landings.js';
+import { CATALOG_PAGE_SIZE, findCatalogLanding, landingApiParams, parseModelLandingPath } from '../src/catalog-landings.js';
 import { modelLandingObject } from '../src/model-landing.js';
 import { modelSlug } from '../src/model-slug.js';
 import { catalogShuffleSeed } from '../src/catalog-url.js';
@@ -40,7 +40,7 @@ const matching = p => cars.filter(c =>
   (!p.get('yearMin') || c.year >= Number(p.get('yearMin'))));
 const listing = p => {
   const all = sortCars(matching(p), p.get('sort') || 'default', p.get('seed') || catalogShuffleSeed());
-  const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || 48);
+  const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || CATALOG_PAGE_SIZE);
   return { items: all.slice(offset, offset + limit), total: all.length, hasMore: offset + limit < all.length };
 };
 const counts = (items, field, name) => [...new Set(items.map(c => c[field]))]
@@ -134,6 +134,20 @@ try {
       await fresh.waitForFunction(() => Boolean(history.state?.catalog));
       const result = await state(fresh); await fresh.close(); return result;
     };
+    await ready();
+    const batchIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
+    const initialBatch = await batchIds();
+    assert.equal(initialBatch.length, CATALOG_PAGE_SIZE);
+    const nextBatchResponse = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/cars' && url.searchParams.get('offset') === String(CATALOG_PAGE_SIZE);
+    });
+    await page.locator('a.load-more').click();
+    await nextBatchResponse;
+    await page.waitForFunction(count => document.querySelectorAll('main.catalog [data-car-id]').length === count, CATALOG_PAGE_SIZE * 2);
+    const expandedBatch = await batchIds();
+    assert.deepEqual(expandedBatch.slice(0, CATALOG_PAGE_SIZE), initialBatch);
+    assert.equal(new Set(expandedBatch).size, CATALOG_PAGE_SIZE * 2, 'load more appends one batch without duplicates');
     await ready(); await chooseCountry(); await chooseType(); await settle();
     const forward = new URL(page.url()); forward.searchParams.delete('nocount');
     assert.equal(forward.pathname + forward.search, '/catalog/electric?country=china');
@@ -142,7 +156,7 @@ try {
     assert.deepEqual(await freshState(page.url()), first, 'copied URL restores the complete selection');
     const nextHref = await page.locator('a.load-more').getAttribute('href');
     assert.deepEqual(await freshState(nextHref), first, 'next-page URL preserves filters and sort');
-    assert.ok(requests.some(url => url.searchParams.get('limit') === '48' && url.searchParams.get('type') === 'Электромобиль' && url.searchParams.get('country') === 'china'));
+    assert.ok(requests.some(url => url.searchParams.get('limit') === String(CATALOG_PAGE_SIZE) && url.searchParams.get('type') === 'Электромобиль' && url.searchParams.get('country') === 'china'));
     await ready(); await chooseType(); await chooseCountry(); await settle();
     const reverse = new URL(page.url()); reverse.searchParams.delete('nocount');
     assert.equal(reverse.pathname + reverse.search, forward.pathname + forward.search);
