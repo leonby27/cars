@@ -22,27 +22,27 @@ const styles = [...shell.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)].map(m=>m
 const scratch = await mkdtemp(join(tmpdir(),'catalog-guard-browser-'));
 execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(scratch,'key.pem'),'-out',join(scratch,'cert.pem'),'-days','1','-subj','/CN=localhost'],{stdio:'ignore'});
 const fixtureIp = '198.51.100.77';
-const fixture = `import http.server,importlib.util,json,sys,time,ipaddress,secrets
+const fixture = `import http.server,importlib.util,json,sys,time,ipaddress,secrets,types
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('guard',sys.argv[1]);g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
 secrets.choice=lambda seq:seq[0]
-store=g.Store(Path(sys.argv[2])/'guard.sqlite3',b'browser-fixture-secret',behavior={})
+store=g.Store(Path(sys.argv[2])/'guard.sqlite3',b'browser-fixture-secret',mass_export={})
 class Fixture(g.Handler):
  def do_POST(self):
   if self.path!='/fixture':return super().do_POST()
   mode=json.loads(self.rfile.read(int(self.headers['Content-Length'])))['mode']
   with store.lock,store.db:
    if mode=='reset':
-    for table in ['seen','budgets','passes','puzzles','attempts','network_windows','network_seen','network_addresses','network_risk','clearance_totals']:store.db.execute('DELETE FROM '+table)
-    store.early_networks=()
+    for table in ['seen','budgets','passes','verification_nonces','attempts','clearance_totals']:store.db.execute('DELETE FROM '+table)
+    store.geo=None
    elif mode=='threshold':
     store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),))
    elif mode=='early':
-    store.early_networks=(ipaddress.ip_network('${fixtureIp}/32'),);store.early_until=time.time()+86400
+    store.geo=types.SimpleNamespace(country_gate=lambda address,ua:{'reason':'geo_country_verification'},session_verified=lambda sid:False,verified=lambda sid:None,clean=lambda:None)
    elif mode=='exhaust':
-    network=store.key('network:${fixtureIp}/32');store.db.execute('INSERT OR REPLACE INTO clearance_totals VALUES (?,?,10000,0)',('network:'+network,time.time()))
+    store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),));store.db.execute('INSERT OR REPLACE INTO clearance_totals VALUES (?,?,8000,600)',('ip:'+store.key('${fixtureIp}'),time.time()))
   self.send(204)
-server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);server.store=store;server.mode='enforce';server.client_script=Path(sys.argv[1]).with_name('catalog-guard-client.js').read_bytes()
+server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);server.store=store;server.mode='enforce';server.verification=types.SimpleNamespace(hosts=['localhost'],site_key='fixture-key',verify=lambda token,ip,host:token=='fixture-token');server.client_script=Path(sys.argv[1]).with_name('catalog-guard-client.js').read_bytes()
 print(json.dumps({'port':server.server_port}),flush=True);server.serve_forever()
 `;
 await writeFile(join(scratch,'fixture.py'),fixture);
@@ -60,10 +60,10 @@ const server=createServer({key:await readFile(join(scratch,'key.pem')),cert:awai
  try {
   const url=new URL(req.url,'https://localhost');
   const guardHeaders={'X-Guard-IP':fixtureIp,'Cookie':req.headers.cookie||''};
-  const send=async response=>{res.statusCode=response.status;for(const [key,value]of response.headers)if(!['connection','transfer-encoding','content-length'].includes(key))res.setHeader(key,value);res.end(Buffer.from(await response.arrayBuffer()));};
+  const send=async response=>{res.statusCode=response.status;for(const [key,value]of response.headers)if(!['connection','transfer-encoding','content-length'].includes(key))res.setHeader(key,value);let body=Buffer.from(await response.arrayBuffer());if(req.url.startsWith('/_catalog-check')&&response.headers.get('content-type')?.includes('text/html'))body=Buffer.from(body.toString().replace(/<div class="g-recaptcha"[^>]*><\/div>/,'<input name="g-recaptcha-response"><button type="button" onclick="catalogGuardVerified(this.previousElementSibling.value)">Проверить тестовый виджет</button>').replace(/<script src="https:\/\/www.google.com\/recaptcha[^>]*><\/script>/,''));res.end(body);};
   if(url.pathname.startsWith('/_catalog-check')) {
    const body=req.method==='POST'?await new Promise(resolve=>{const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>resolve(Buffer.concat(chunks)));}):undefined;
-   const response=await fetch(guardBase+req.url,{method:req.method,headers:{...guardHeaders,'X-Guard-Host':req.headers.host,'Origin':req.headers.origin||'','Content-Type':req.headers['content-type']||''},body,redirect:'manual'});
+   const response=await fetch(guardBase+req.url,{method:req.method,headers:{...guardHeaders,'X-Guard-Host':'localhost','Origin':req.headers.origin===base?'https://localhost':req.headers.origin||'','Content-Type':req.headers['content-type']||''},body,redirect:'manual'});
    res.setHeader('X-Frame-Options','SAMEORIGIN');await send(response);return;
   }
   const checked=await fetch(guardBase+'/check',{headers:{...guardHeaders,'X-Guard-URI':req.url,'X-Guard-Method':req.method}});
@@ -114,7 +114,7 @@ try {
   const chooseZeekr=async()=>{if(mobile){await page.locator('.brand-model-open').click();await page.locator('[role=dialog]').getByText('Zeekr',{exact:true}).click();await page.locator('[role=dialog]').getByRole('button',{name:/Показать .* авто/}).click();}else{await page.getByRole('button',{name:/Марка:/}).click();await page.getByRole('option',{name:/Zeekr/}).click();}};
   const modal=()=>page.locator('dialog[aria-labelledby="catalog-guard-title"]');
   await page.goto(base+'/catalog?nocount=1');await hydrated();
-  await chooseZeekr();await page.waitForURL('**/catalog/zeekr');await page.waitForFunction(()=>document.querySelectorAll('.car-row').length===2);
+  await chooseZeekr();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');await page.waitForFunction(()=>document.querySelectorAll('.car-row').length===2);
   if(!mobile)await page.locator('.quick-view-toggle').filter({hasText:'Быстрый просмотр'}).locator('input').uncheck();
   await page.locator('.car-row[data-car-id="che168-99900002"]').click({position:{x:100,y:90}});await page.waitForURL('**/cars/99900002');
   await page.goBack();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');await page.waitForFunction(()=>document.querySelectorAll('.car-row').length===2);
@@ -124,10 +124,10 @@ try {
   if(mobile) {await page.getByRole('button',{name:'Открыть меню',exact:true}).click();await page.locator('#header-menu a[href="/login"]').click();}
   else await page.locator('.account-link').click();
   await page.waitForURL('**/login');
-  const draft=page.locator('.auth-modal input[type="tel"]');await draft.fill('+375290000000');
+  const draft=page.locator('.auth-modal input[type="tel"]');await draft.fill('+375290000000');const draftValue=await draft.inputValue();
   await control('threshold');
   const denied=page.evaluate(()=>{window.__testRead=fetch('/api/cars?offset=900').then(r=>r.status);});await denied;await modal().waitFor();
-  await modal().getByRole('button',{name:'Закрыть'}).click();assert.equal(await page.evaluate(()=>window.__testRead),403);assert.equal(await draft.inputValue(),'+375290000000');
+  await modal().getByRole('button',{name:'Закрыть'}).click();assert.equal(await page.evaluate(()=>window.__testRead),403);assert.equal(await draft.inputValue(),draftValue);
   await page.locator('.auth-modal').getByRole('button',{name:'Закрыть',exact:true}).click();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');
   await page.evaluate(()=>{window.__testAbort=new AbortController();window.__testRead=fetch('/api/cars?offset=901',{signal:window.__testAbort.signal}).then(r=>r.status,e=>e.name);});await modal().waitFor();
   await page.evaluate(()=>window.__testAbort.abort());await modal().waitFor({state:'detached'});assert.equal(await page.evaluate(()=>window.__testRead),'AbortError');
@@ -137,10 +137,10 @@ try {
   await page.waitForURL('**/cars/99900001');await modal().waitFor();
   await page.goBack();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');await modal().waitFor({state:'detached'});
   await page.evaluate(()=>{window.__testRead=fetch('/api/cars?offset=902').then(r=>r.status);});await modal().waitFor();
-  const frame=page.frameLocator('iframe[title="Подтвердить продолжение просмотра"]');await frame.locator('#answer').fill('2222');await frame.getByRole('button',{name:'Продолжить',exact:true}).click();await modal().waitFor({state:'detached'});assert.equal(await page.evaluate(()=>window.__testRead),200);
+  const frame=page.frameLocator('iframe[title="Подтвердить продолжение просмотра"]');await frame.locator('[name=\"g-recaptcha-response\"]').fill('fixture-token');await frame.getByRole('button',{name:'Проверить тестовый виджет',exact:true}).click();await modal().waitFor({state:'detached'});assert.equal(await page.evaluate(()=>window.__testRead),200);
   await control('reset');await control('early');
   await page.goto(base+'/cars/99900002');await page.waitForURL('**/_catalog-check?return=*');
-  await page.locator('#answer').fill('2222');await page.getByRole('button',{name:'Продолжить',exact:true}).click();await page.waitForURL('**/cars/99900002');await hydrated();
+  await page.locator('[name=\"g-recaptcha-response\"]').fill('fixture-token');await page.getByRole('button',{name:'Проверить тестовый виджет',exact:true}).click();await page.waitForURL('**/cars/99900002');await hydrated();
   await control('exhaust');assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/cars?offset=903');return r.status;}),429);assert.equal(await modal().count(),0);
   assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/auth/me');return r.status;}),200);
   assert.equal(await page.locator('.maintenance-page').count(),0);assert.deepEqual(errors,[]);

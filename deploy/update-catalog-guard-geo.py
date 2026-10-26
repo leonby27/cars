@@ -68,7 +68,7 @@ def main():
     parser.add_argument('--source-file')
     parser.add_argument('--month')
     args = parser.parse_args()
-    policy = json.loads(Path(args.policy).read_text())['geo_campaign']
+    policy = json.loads(Path(args.policy).read_text())['geography']
     month = args.month or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
     data = Path(args.source_file).read_bytes() if args.source_file else fetch('https://download.db-ip.com/free/dbip-country-lite-'+month+'.csv.gz')
     ahrefs = json.loads(fetch('https://api.ahrefs.com/v3/public/crawler-ip-ranges?output=json'))

@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Shared, fail-open public catalog budget. No access to the application database."""
-import base64
-import datetime
+"""Geographic reCAPTCHA and personal catalog budgets; no application DB access."""
 import hashlib
 import hmac
 import html
 import importlib.util
 import http.cookies
 import http.server
-import io
 import ipaddress
 import json
 import math
@@ -17,58 +14,34 @@ from pathlib import Path
 import secrets
 import re
 import sqlite3
-import struct
 import threading
 import time
 import urllib.parse
-import zlib
-import wave
 
-_geo_spec = importlib.util.spec_from_file_location('catalog_guard_geo', Path(__file__).with_name('catalog-guard-geo.py'))
-geo_module = importlib.util.module_from_spec(_geo_spec)
-_geo_spec.loader.exec_module(geo_module)
+_geo_spec=importlib.util.spec_from_file_location('catalog_guard_geo',Path(__file__).with_name('catalog-guard-geo.py'))
+geo_module=importlib.util.module_from_spec(_geo_spec);_geo_spec.loader.exec_module(geo_module)
+_captcha_spec=importlib.util.spec_from_file_location('catalog_guard_recaptcha',Path(__file__).with_name('catalog-guard-recaptcha.py'))
+captcha_module=importlib.util.module_from_spec(_captcha_spec);_captcha_spec.loader.exec_module(captcha_module)
+DAY=86400
+COOKIE='__Host-catalog_continue'
+SESSION_COOKIE='__Host-catalog_session'
+MASS_EXPORT_DEFAULTS={'clearance_units':8000,'clearance_details':600}
+TRACKING={'gclid','yclid','fbclid','nocount','cache','cb','_','utm_source','utm_medium','utm_campaign','utm_content','utm_term'}
 
-DAY = 86400
-COOKIE = '__Host-catalog_continue'
-SESSION_COOKIE = '__Host-catalog_session'
-BEHAVIOR_DEFAULTS = {
-    'min_ips_hour':32, 'details_hour':250,
-    'min_ips_day':128, 'details_day':1000,
-    'network_clearance_units':10000, 'network_clearance_details':1000,
-    'ordinary_clearance_units':8000, 'ordinary_clearance_details':600,
-    'risk_clearance_units':2000, 'risk_clearance_details':100,
-}
-TRACKING = {'gclid', 'yclid', 'fbclid', 'nocount', 'cache', 'cb', '_', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'}
-
-def load_policy(path):
-    path = Path(path)
-    if not path.exists():
-        return (), 0
-    policy = json.loads(path.read_text())
-    networks = tuple(ipaddress.ip_network(value, strict=True) for value in policy['early_check_networks'])
-    if any(network.prefixlen == 0 for network in networks):
-        raise ValueError('A global early-check network is not allowed')
-    until = datetime.datetime.fromisoformat(policy['early_check_until_utc'].replace('Z', '+00:00'))
-    if until.utcoffset() != datetime.timedelta(0):
-        raise ValueError('Early-check expiry must specify UTC')
-    return networks, until.timestamp()
-
-def load_behavior_policy(path):
-    path = Path(path)
-    if not path.exists():return None
-    policy = json.loads(path.read_text()).get('behavior', {})
-    if not isinstance(policy,dict):raise ValueError('Behavior policy must be an object')
-    if not isinstance(policy.get('enabled',False),bool):raise ValueError('Behavior enabled must be boolean')
-    if not policy.get('enabled',False):return None
-    if set(policy)-{'enabled',*BEHAVIOR_DEFAULTS}:raise ValueError('Unknown behavior setting')
-    values = {**BEHAVIOR_DEFAULTS, **{k:v for k,v in policy.items() if k!='enabled'}}
-    if any(type(v) is not int or v<=0 for v in values.values()):raise ValueError('Behavior limits must be positive integers')
+def load_mass_export_policy(path):
+    config=json.loads(Path(path).read_text()).get('mass_export',{})
+    if not isinstance(config,dict) or type(config.get('enabled',True)) is not bool:raise ValueError('Invalid mass export policy')
+    if set(config)-{'enabled',*MASS_EXPORT_DEFAULTS}:raise ValueError('Unknown mass export setting')
+    if not config.get('enabled',True):return None
+    values={**MASS_EXPORT_DEFAULTS,**{k:v for k,v in config.items() if k!='enabled'}}
+    if any(type(v) is not int or v<=0 for v in values.values()):raise ValueError('Mass export limits must be positive integers')
     return values
 
 def query_number(value):
     # Match the application's Number() handling of decimal and base prefixes.
     raw=value.strip()
     return int(raw,0) if raw.lower().startswith(('0x','0o','0b')) else float(raw or '0')
+
 
 def reading(method, uri):
     # HEAD does not deliver listing bodies. Forms, auth, analytics, photos and
@@ -123,35 +96,30 @@ def reading(method, uri):
     canonical = path + '?' + urllib.parse.urlencode(sorted((k, v) for k, v in pairs if k not in TRACKING and not k.startswith('utm_')))
     return {'signature': hashlib.sha256(canonical.encode()).hexdigest(), 'units': units, 'paged': int(paged), 'kind': kind}
 
+
 def suspicious(units, collections, paged, details):
     # Requires a long enumeration, not an initial page/filter burst. Repeated
     # identical reads do not count. Units are requested capacity, not saved cars.
     return (units >= 8000 and paged >= 100) or (units >= 16000 and collections >= 300) or details >= 600
 
+
 class Store:
-    def __init__(self, path, secret, now=time.time, early_networks=(), early_until=0, behavior=None, geo_policy=None, country_path=None):
-        self.secret, self.now, self.lock = secret, now, threading.RLock()
-        self.early_networks = tuple(ipaddress.ip_network(value) for value in early_networks)
-        self.early_until = early_until
-        self.behavior = {**BEHAVIOR_DEFAULTS, **behavior} if behavior is not None else None
-        self.db = sqlite3.connect(path, check_same_thread=False, timeout=.3)
+    def __init__(self,path,secret,now=time.time,mass_export=None,geo_policy=None,country_path=None):
+        self.secret,self.now,self.lock=secret,now,threading.RLock()
+        self.mass_export={**MASS_EXPORT_DEFAULTS,**mass_export} if mass_export is not None else None
+        self.db=sqlite3.connect(path,check_same_thread=False,timeout=.3)
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=NORMAL')
         self.db.executescript('''
-          CREATE TABLE IF NOT EXISTS budgets (ip TEXT PRIMARY KEY, started REAL, units INTEGER, collections INTEGER, paged INTEGER, details INTEGER);
-          CREATE TABLE IF NOT EXISTS seen (ip TEXT, sig TEXT, PRIMARY KEY(ip,sig));
-          CREATE TABLE IF NOT EXISTS passes (id TEXT PRIMARY KEY, ip TEXT, expires REAL, units INTEGER, details INTEGER);
-          CREATE TABLE IF NOT EXISTS puzzles (id TEXT PRIMARY KEY, ip TEXT, answer TEXT, expires REAL, attempts INTEGER);
-          CREATE TABLE IF NOT EXISTS attempts (ip TEXT PRIMARY KEY, started REAL, issued INTEGER, submitted INTEGER);
-          CREATE TABLE IF NOT EXISTS network_windows (scope TEXT PRIMARY KEY, started REAL, units INTEGER, collections INTEGER, paged INTEGER, details INTEGER, addresses INTEGER);
-          CREATE TABLE IF NOT EXISTS network_seen (scope TEXT, sig TEXT, PRIMARY KEY(scope,sig));
-          CREATE TABLE IF NOT EXISTS network_addresses (scope TEXT, ip TEXT, PRIMARY KEY(scope,ip));
-          CREATE TABLE IF NOT EXISTS network_risk (scope TEXT PRIMARY KEY, expires REAL);
-          CREATE TABLE IF NOT EXISTS clearance_totals (scope TEXT PRIMARY KEY, started REAL, units INTEGER, details INTEGER);
+          CREATE TABLE IF NOT EXISTS budgets (ip TEXT PRIMARY KEY,started REAL,units INTEGER,collections INTEGER,paged INTEGER,details INTEGER);
+          CREATE TABLE IF NOT EXISTS seen (ip TEXT,sig TEXT,PRIMARY KEY(ip,sig));
+          CREATE TABLE IF NOT EXISTS passes (id TEXT PRIMARY KEY,ip TEXT,expires REAL,units INTEGER,details INTEGER);
+          CREATE TABLE IF NOT EXISTS verification_nonces (id TEXT PRIMARY KEY,ip TEXT,binding TEXT,expires REAL);
+          CREATE TABLE IF NOT EXISTS attempts (ip TEXT PRIMARY KEY,started REAL,issued INTEGER,submitted INTEGER);
+          CREATE TABLE IF NOT EXISTS clearance_totals (scope TEXT PRIMARY KEY,started REAL,units INTEGER,details INTEGER);
         ''')
-        self.last_cleanup = 0
-        self.geo = geo_module.Campaign(self.db, self.key, self.now, geo_policy,
-                    geo_module.Countries(country_path, geo_policy, self.now)) if geo_policy and country_path else None
+        self.last_cleanup=0
+        self.geo=geo_module.Geography(self.db,self.now,geo_policy,geo_module.Countries(country_path,geo_policy,self.now)) if geo_policy and country_path else None
 
     def key(self, ip):
         return hmac.new(self.secret, str(ip).encode(), hashlib.sha256).hexdigest()[:32]
@@ -171,36 +139,10 @@ class Store:
 
     def ensure_session(self,cookie):
         identity=self.session(cookie)
-        if identity or self.behavior is None:return identity,''
+        if identity:return identity,''
         raw=secrets.token_hex(16);value=raw+'.'+str(int(self.now()+DAY))
         token=value+'.'+self.sign(value)
         return self.key('session:'+raw),SESSION_COOKIE+'='+token+'; Path=/; Max-Age=86400; Secure; HttpOnly; SameSite=Lax'
-
-    def network_scopes(self,address):
-        return [self.key('network:'+str(ipaddress.ip_network(str(address)+'/'+str(prefix),strict=False))) for prefix in ((24,16) if address.version==4 else (64,48))]
-
-    def observe_networks(self,address,read):
-        if self.behavior is None:return []
-        now=self.now();ip=self.key(str(address));active=[]
-        for network in self.network_scopes(address):
-            for seconds,label in [(3600,'hour'),(DAY,'day')]:
-                scope=network+':'+label
-                row=self.db.execute('SELECT started,units,collections,paged,details,addresses FROM network_windows WHERE scope=?',(scope,)).fetchone()
-                if row is None or now-row[0]>=seconds:
-                    self.db.execute('DELETE FROM network_seen WHERE scope=?',(scope,))
-                    self.db.execute('DELETE FROM network_addresses WHERE scope=?',(scope,))
-                    self.db.execute('INSERT OR REPLACE INTO network_windows VALUES (?,?,0,0,0,0,0)',(scope,now))
-                new_address=self.db.execute('INSERT OR IGNORE INTO network_addresses VALUES (?,?)',(scope,ip)).rowcount
-                new_read=self.db.execute('INSERT OR IGNORE INTO network_seen VALUES (?,?)',(scope,read['signature'])).rowcount
-                self.db.execute('UPDATE network_windows SET units=units+?,collections=collections+?,paged=paged+?,details=details+?,addresses=addresses+? WHERE scope=?',
-                    (new_read*read['units'],new_read*(read['kind']=='collection'),new_read*read['paged'],new_read*(read['kind']=='detail'),new_address,scope))
-                _,units,collections,paged,details,addresses=self.db.execute('SELECT * FROM network_windows WHERE scope=?',(scope,)).fetchone()[1:]
-                min_ips=self.behavior['min_ips_'+label];min_details=self.behavior['details_'+label]
-                volume=(units>=8000 and paged>=100) or (units>=16000 and collections>=300)
-                if addresses>=min_ips and (details>=min_details or volume):
-                    self.db.execute('INSERT INTO network_risk VALUES (?,?) ON CONFLICT(scope) DO UPDATE SET expires=max(expires,excluded.expires)',(network,now+DAY))
-            if self.db.execute('SELECT 1 FROM network_risk WHERE scope=? AND expires>?',(network,now)).fetchone():active.append(network)
-        return active
 
     def budget(self,key):
         row=self.db.execute('SELECT started,units,collections,paged,details FROM budgets WHERE ip=?',(key,)).fetchone()
@@ -228,88 +170,62 @@ class Store:
             self.db.execute('UPDATE budgets SET units=units+?,collections=collections+?,paged=paged+?,details=details+? WHERE ip=?',(read['units'],read['kind']=='collection',read['paged'],read['kind']=='detail',session))
 
     def clean(self):
-        now = self.now()
-        if now - self.last_cleanup < 3600:
-            return
-        self.db.execute('DELETE FROM seen WHERE ip IN (SELECT ip FROM budgets WHERE started < ?)', (now-DAY,))
-        self.db.execute('DELETE FROM budgets WHERE started < ?', (now-DAY,))
-        self.db.execute('DELETE FROM passes WHERE expires < ?', (now,))
-        self.db.execute('DELETE FROM puzzles WHERE expires < ?', (now,))
-        self.db.execute('DELETE FROM attempts WHERE started < ?', (now-600,))
-        self.db.execute('DELETE FROM network_seen WHERE scope IN (SELECT scope FROM network_windows WHERE started < ?)',(now-DAY,))
-        self.db.execute('DELETE FROM network_addresses WHERE scope IN (SELECT scope FROM network_windows WHERE started < ?)',(now-DAY,))
-        self.db.execute('DELETE FROM network_windows WHERE started < ?',(now-DAY,))
-        self.db.execute('DELETE FROM network_risk WHERE expires < ?',(now,))
-        self.db.execute('DELETE FROM clearance_totals WHERE started < ?',(now-DAY,))
-        self.last_cleanup = now
+        now=self.now()
+        if now-self.last_cleanup<3600:return
+        self.db.execute('DELETE FROM seen WHERE ip IN (SELECT ip FROM budgets WHERE started<?)',(now-DAY,))
+        self.db.execute('DELETE FROM budgets WHERE started<?',(now-DAY,))
+        self.db.execute('DELETE FROM passes WHERE expires<?',(now,))
+        self.db.execute('DELETE FROM verification_nonces WHERE expires<?',(now,))
+        self.db.execute('DELETE FROM attempts WHERE started<?',(now-600,))
+        self.db.execute('DELETE FROM clearance_totals WHERE started<?',(now-DAY,))
+        if self.geo:self.geo.clean()
+        self.last_cleanup=now
 
-    def check(self, ip, method, uri, cookie='', session=None, user_agent=''):
-        read = reading(method, uri)
-        if read is None:
-            return True, None
-        address = ipaddress.ip_address(ip)
-        targeted = [self.key('network:'+str(network)) for network in self.early_networks if address.version == network.version and address in network and self.now()<self.early_until]
-        early = bool(targeted)
-        ip = self.key(ip)
-        with self.lock, self.db:
+    def check(self,ip,method,uri,cookie='',session=None,user_agent=''):
+        read=reading(method,uri)
+        if read is None:return True,None
+        address=ipaddress.ip_address(ip);ip=self.key(ip)
+        with self.lock,self.db:
             self.clean()
-            networks=list(dict.fromkeys(targeted+self.observe_networks(address,read)))
-            early=early or bool(networks)
-            session=(self.session(cookie) if session is None else session) if self.behavior is not None else ''
-            row = self.budget(ip)
-            session_row=self.budget(session) if session else None
-            _, units, collections, paged, details = row
-            grant = None
+            session=self.session(cookie) if session is None else session
+            row=self.budget(ip);session_row=self.budget(session) if session else None
+            _,units,collections,paged,details=row
+            grant=None
             try:
-                cookies = http.cookies.SimpleCookie(cookie)
-                token = cookies[COOKIE].value if COOKIE in cookies else ''
-                grant_id, signature = token.split('.',1)
+                cookies=http.cookies.SimpleCookie(cookie)
+                grant_id,signature=cookies[COOKIE].value.split('.',1)
                 if hmac.compare_digest(signature,self.sign(grant_id)):
-                    grant = self.db.execute('SELECT id,units,details FROM passes WHERE id=? AND ip=? AND expires>?', (grant_id,ip,self.now())).fetchone()
-            except (ValueError, http.cookies.CookieError):
-                pass
-            snapshot = {'ip_hash':ip,'units':units,'collections':collections,'paged':paged,'details':details}
-            # Country is only an exemption filter. A new challenge additionally
-            # requires a statistically observed cross-network export campaign.
-            # Failure of this optional layer must not bypass existing budgets.
+                    grant=self.db.execute('SELECT id,units,details FROM passes WHERE id=? AND ip=? AND expires>?',(grant_id,ip,self.now())).fetchone()
+            except (ValueError,KeyError,http.cookies.CookieError):pass
+            snapshot={'ip_hash':ip,'units':units,'collections':collections,'paged':paged,'details':details}
             if self.geo:
                 try:
-                    geo_risk = self.geo.observe(address, read, uri, user_agent, risky_network=bool(networks))
-                    if geo_risk and not grant and not self.geo.session_verified(session):
-                        return False, {**snapshot, **geo_risk}
+                    gate=self.geo.country_gate(address,user_agent)
+                    if gate and not grant and not self.geo.session_verified(session):return False,{**snapshot,**gate}
                 except Exception as error:
                     print(json.dumps({'event':'catalog_geo_error','type':type(error).__name__}),flush=True)
             ip_seen=bool(self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(ip,read['signature'])).fetchone())
             session_seen=bool(session and self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(session,read['signature'])).fetchone())
-            session_blocked=bool(session_row and suspicious(*session_row[1:]) and not session_seen)
-            blocked = early or suspicious(units, collections, paged, details) or session_blocked
+            session_blocked=bool(self.mass_export is not None and session_row and suspicious(*session_row[1:]) and not session_seen)
+            blocked=self.mass_export is not None and (suspicious(units,collections,paged,details) or session_blocked)
             scopes=[]
-            if blocked and self.behavior is not None:
-                kind='risk' if early else 'ordinary'
-                personal=(self.behavior[kind+'_clearance_units'],self.behavior[kind+'_clearance_details'])
-                if not ip_seen:scopes.append(('ip:'+ip,*personal))
-                if session and not session_seen:scopes.append(('session:'+session,*personal))
-                if not ip_seen:scopes.extend(('network:'+network,self.behavior['network_clearance_units'],self.behavior['network_clearance_details']) for network in networks)
+            if blocked:
+                limits=(self.mass_export['clearance_units'],self.mass_export['clearance_details'])
+                if not ip_seen:scopes.append(('ip:'+ip,*limits))
+                if session and not session_seen:scopes.append(('session:'+session,*limits))
                 if self.spent_clearance(scopes,read):return False,{**snapshot,'reason':'daily_clearance_budget','recoverable':False}
-            if early and not grant:
-                return False, {**snapshot, 'reason':'network_verification' if networks and not targeted else 'early_network_verification'}
-            # Ordinary visitors retain visited views; targeted networks must
-            # present a live clearance even for old/shared-cache responses.
             if ip_seen and not session_blocked:
                 self.record_session(session,read,session_seen)
-                return True, None
-            max_units, max_details = (2000, 100) if early else (8000, 600)
-            if blocked and grant and grant[1]+read['units'] <= max_units and grant[2]+(read['kind']=='detail') <= max_details:
-                self.db.execute('UPDATE passes SET units=units+?, details=details+? WHERE id=?', (read['units'],read['kind']=='detail',grant[0]))
-                blocked = False
-                self.charge_clearance(scopes,read)
-            if blocked:
-                return False, {**snapshot, 'reason':'clearance_budget' if early else 'daily_budget'}
+                return True,None
+            if blocked and grant and grant[1]+read['units']<=self.mass_export['clearance_units'] and grant[2]+(read['kind']=='detail')<=self.mass_export['clearance_details']:
+                self.db.execute('UPDATE passes SET units=units+?,details=details+? WHERE id=?',(read['units'],read['kind']=='detail',grant[0]))
+                blocked=False;self.charge_clearance(scopes,read)
+            if blocked:return False,{**snapshot,'reason':'daily_budget'}
             if not ip_seen:
-                self.db.execute('INSERT INTO seen VALUES (?,?)', (ip,read['signature']))
-                self.db.execute('UPDATE budgets SET units=units+?,collections=collections+?,paged=paged+?,details=details+? WHERE ip=?', (read['units'],read['kind']=='collection',read['paged'],read['kind']=='detail',ip))
+                self.db.execute('INSERT INTO seen VALUES (?,?)',(ip,read['signature']))
+                self.db.execute('UPDATE budgets SET units=units+?,collections=collections+?,paged=paged+?,details=details+? WHERE ip=?',(read['units'],read['kind']=='collection',read['paged'],read['kind']=='detail',ip))
             self.record_session(session,read,session_seen)
-            return True, None
+            return True,None
 
     def attempt(self, ip, field):
         row = self.db.execute('SELECT started,issued,submitted FROM attempts WHERE ip=?', (ip,)).fetchone()
@@ -322,77 +238,31 @@ class Store:
         self.db.execute('UPDATE attempts SET '+column+'='+column+'+1 WHERE ip=?', (ip,))
         return True
 
-    def puzzle(self, ip):
-        ip = self.key(ip)
-        with self.lock, self.db:
+    def recaptcha_nonce(self,ip,session):
+        ip=self.key(ip)
+        with self.lock,self.db:
             self.clean()
-            if not self.attempt(ip,'issued'):
-                return None
-            identity, answer = secrets.token_urlsafe(24), ''.join(secrets.choice('23456789') for _ in range(4))
-            # Answer is never embedded in the token, image URL, HTML or logs.
-            self.db.execute('INSERT INTO puzzles VALUES (?,?,?,?,0)', (identity,ip,self.sign(identity+':'+answer),self.now()+600))
-            return identity, captcha_png(answer), captcha_audio(answer)
+            if not session or not self.attempt(ip,'issued'):return None
+            identity=secrets.token_urlsafe(24)
+            self.db.execute('INSERT INTO verification_nonces VALUES (?,?,?,?)',(identity,ip,self.sign('recaptcha:'+session+':'+identity),self.now()+600))
+            return identity
 
-    def verify(self, ip, identity, answer, session=''):
-        ip = self.key(ip)
-        with self.lock, self.db:
-            if not self.attempt(ip,'submitted'):
-                return None
-            row = self.db.execute('SELECT answer,attempts FROM puzzles WHERE id=? AND ip=? AND expires>?', (identity,ip,self.now())).fetchone()
-            if not row or row[1]>=5:
-                return None
-            self.db.execute('UPDATE puzzles SET attempts=attempts+1 WHERE id=?', (identity,))
-            if not hmac.compare_digest(row[0],self.sign(identity+':'+answer.strip())):
-                return None
-            self.db.execute('DELETE FROM puzzles WHERE id=?', (identity,))
-            grant = secrets.token_urlsafe(24)
-            self.db.execute('INSERT INTO passes VALUES (?,?,?,0,0)', (grant,ip,self.now()+3600))
+    def consume_recaptcha_nonce(self,ip,session,identity):
+        ip=self.key(ip)
+        with self.lock,self.db:
+            if not session or not self.attempt(ip,'submitted'):return False
+            row=self.db.execute('SELECT binding FROM verification_nonces WHERE id=? AND ip=? AND expires>?',(identity,ip,self.now())).fetchone()
+            if not row or not hmac.compare_digest(row[0],self.sign('recaptcha:'+session+':'+identity)):return False
+            self.db.execute('DELETE FROM verification_nonces WHERE id=?',(identity,))
+            return True
+
+    def clearance(self,ip,session=''):
+        with self.lock,self.db:
+            grant=secrets.token_urlsafe(24)
+            self.db.execute('INSERT INTO passes VALUES (?,?,?,0,0)',(grant,self.key(ip),self.now()+3600))
             if self.geo:self.geo.verified(session)
             return grant+'.'+self.sign(grant)
 
-# Tiny dependency-free raster font; server-side image, not readable SVG text.
-FONT = {
- '2':['11110','00001','00001','01110','10000','10000','11111'],
- '3':['11110','00001','00001','01110','00001','00001','11110'],
- '4':['10010','10010','10010','11111','00010','00010','00010'],
- '5':['11111','10000','10000','11110','00001','00001','11110'],
- '6':['01111','10000','10000','11110','10001','10001','01110'],
- '7':['11111','00001','00010','00100','01000','01000','01000'],
- '8':['01110','10001','10001','01110','10001','10001','01110'],
- '9':['01110','10001','10001','01111','00001','00001','11110']}
-
-def captcha_png(answer):
-    width,height=220,70
-    pixels=bytearray([248,249,250]*(width*height))
-    def dot(x,y,color):
-        if 0<=x<width and 0<=y<height:
-            pos=(y*width+x)*3; pixels[pos:pos+3]=bytes(color)
-    for _ in range(500):
-        dot(secrets.randbelow(width),secrets.randbelow(height),(170,180,190))
-    for at,char in enumerate(answer):
-        ox,oy=18+at*49+secrets.randbelow(5),12+secrets.randbelow(6)
-        skew=secrets.choice([-1,0,1])
-        for y,row in enumerate(FONT[char]):
-            for x,bit in enumerate(row):
-                if bit=='1':
-                    for dy in range(5):
-                        for dx in range(5): dot(ox+x*5+dx+skew*y,oy+y*5+dy,(35,45,55))
-    raw=b''.join(b'\0'+pixels[y*width*3:(y+1)*width*3] for y in range(height))
-    def chunk(name,data): return struct.pack('>I',len(data))+name+data+struct.pack('>I',zlib.crc32(name+data)&0xffffffff)
-    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',width,height,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
-
-def captcha_audio(answer):
-    directory=Path(__file__).with_name('catalog-guard-audio')
-    if not all((directory/(char+'.wav')).exists() for char in answer): return None
-    output=io.BytesIO()
-    with wave.open(output,'wb') as result:
-        result.setnchannels(1);result.setsampwidth(2);result.setframerate(16000)
-        for char in answer:
-            with wave.open(str(directory/(char+'.wav')),'rb') as part:
-                if part.getparams()[:3] != (1,2,16000): raise ValueError('Unsupported challenge audio')
-                result.writeframes(part.readframes(part.getnframes()))
-            result.writeframes(b'\0'*16000)
-    return output.getvalue()
 
 def safe_return(value):
     try:
@@ -404,8 +274,10 @@ def safe_return(value):
         pass
     return '/catalog'
 
+
 def page(body):
     return ('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Продолжить просмотр</title><style>body{font:16px/1.5 system-ui,sans-serif;color:#27303b;background:#fff;margin:0;padding:24px}main{max-width:440px;margin:20px auto}h1{font-size:24px;line-height:1.2}input,button{font:inherit;border-radius:10px;padding:12px;border:1px solid #bcc3ca;max-width:100%;box-sizing:border-box}button{background:#27303b;color:white;cursor:pointer}input{width:100%;margin:8px 0 16px}a{color:#334f81}img{max-width:100%}</style><main>'+body+'</main></html>').encode()
+
 
 class GuardServer(http.server.ThreadingHTTPServer):
     # A single page can open many parallel API reads. The stdlib's default
@@ -457,17 +329,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 target=safe_return(uri)
                 return self.send(303,headers={'Location':'/_catalog-check?return='+urllib.parse.quote(target,safe='')})
             if path=='/_catalog-check':
-                puzzle=self.server.store.puzzle(self.context())
-                if puzzle is None:
-                    return self.send(429,page('<h1>Подождите немного</h1><p>Попробуйте продолжить просмотр через несколько минут.</p><a href="/catalog">Вернуться в каталог</a>'),headers={'Retry-After':'600'})
-                identity,png,audio=puzzle
-                target=safe_return(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('return',['/catalog'])[0])
-                body='<h1>Продолжить просмотр</h1><p>Подтвердите, что вы человек. Введите цифры с картинки, чтобы продолжить.</p><form method="post" action="/_catalog-check"><input type="hidden" name="id" value="'+identity+'"><input type="hidden" name="return" value="'+html.escape(target,quote=True)+'"><img width="220" height="70" alt="Четыре цифры для проверки" src="data:image/png;base64,'+base64.b64encode(png).decode()+'"><label for="answer">Цифры с картинки</label><input id="answer" name="answer" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required><button>Продолжить</button></form><p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Другая картинка</a></p><p>Проверка ограничивает массовое копирование каталога. Ваши заявки и аккаунт доступны.</p>'
-                if audio:
-                    body += '<p>Можно прослушать те же цифры:</p><audio controls aria-label="Прослушать цифры проверки" src="data:audio/wav;base64,'+base64.b64encode(audio).decode()+'"></audio>'
-                if self.server.store.geo:
-                    body += '<p><small>Геоданные: <a href="https://db-ip.com">DB-IP</a>.</small></p>'
-                return self.send(200,page(body))
+                verifier=getattr(self.server,'verification',None)
+                if verifier:
+                    host=self.headers.get('X-Guard-Host','')
+                    if host not in verifier.hosts:return self.send(400)
+                    session,session_cookie=self.server.store.ensure_session(self.headers.get('Cookie',''))
+                    identity=self.server.store.recaptcha_nonce(self.context(),session)
+                    if not identity:return self.send(429,page('<h1>Подождите немного</h1><p>Повторите проверку через несколько минут.</p>'),headers={'Retry-After':'600'})
+                    target=safe_return(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('return',['/catalog'])[0])
+                    body=('<h1>Подтвердите, что вы человек</h1>'
+                          '<form id="catalog-verification" method="post" action="/_catalog-check">'
+                          '<input type="hidden" name="id" value="'+identity+'">'
+                          '<input type="hidden" name="return" value="'+html.escape(target,quote=True)+'">'
+                          '<div class="g-recaptcha" data-sitekey="'+html.escape(verifier.site_key,quote=True)+'" data-callback="catalogGuardVerified"></div>'
+                          '</form><script>window.catalogGuardVerified=function(token){'
+                          'if(!token||window.catalogGuardSubmitting)return;window.catalogGuardSubmitting=true;'
+                          'document.getElementById("catalog-verification").submit();};</script>'
+                          '<script src="https://www.google.com/recaptcha/api.js?hl=ru" async defer></script>')
+                    if self.server.store.geo:body+='<p style="margin-top:32px;font-size:12px"><a href="https://db-ip.com" rel="nofollow" style="color:#777" aria-label="Источник данных DB-IP">DB-IP</a></p>'
+                    return self.send(200,page(body),headers={'Set-Cookie':session_cookie} if session_cookie else None)
+                return self.send(503,page('<h1>Проверка временно недоступна</h1><p>Попробуйте позже.</p>'),headers={'Retry-After':'60'})
             return self.send(404)
         except Exception as error:
             print(json.dumps({'event':'catalog_guard_error','type':type(error).__name__}),flush=True)
@@ -481,16 +362,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size=int(self.headers.get('Content-Length','0'))
             if not 0<size<=4096: return self.send(400)
             values=urllib.parse.parse_qs(self.rfile.read(size).decode('utf-8'))
-            token=self.server.store.verify(self.context(),values.get('id',[''])[0],values.get('answer',[''])[0],session=self.server.store.session(self.headers.get('Cookie','')))
+            target=safe_return(values.get('return',['/catalog'])[0])
+            session=self.server.store.session(self.headers.get('Cookie',''))
+            verifier=getattr(self.server,'verification',None)
+            if verifier:
+                identity=values.get('id',[''])[0]
+                token=None
+                if self.server.store.consume_recaptcha_nonce(self.context(),session,identity):
+                    try:
+                        if verifier.verify(values.get('g-recaptcha-response',[''])[0],self.context(),host):
+                            token=self.server.store.clearance(self.context(),session)
+                    except captcha_module.Unavailable:
+                        return self.send(503,page('<h1>Проверка временно недоступна</h1><p>Попробуйте ещё раз через минуту.</p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Повторить проверку</a>'),headers={'Retry-After':'60'})
+            else:
+                return self.send(503,page('<h1>Проверка временно недоступна</h1><p>Попробуйте позже.</p>'),headers={'Retry-After':'60'})
             target=safe_return(values.get('return',['/catalog'])[0])
             if not token:
-                return self.send(200,page('<h1>Попробуйте ещё раз</h1><p>Цифры не совпали или время проверки истекло.</p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Новая проверка</a>'))
+                return self.send(200,page('<h1>Попробуйте ещё раз</h1><p>Проверка не пройдена или срок её действия истёк.</p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Новая проверка</a>'))
             headers={'Set-Cookie':COOKIE+'='+token+'; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax'}
             body='<h1>Можно продолжить просмотр</h1><a href="'+html.escape(target,quote=True)+'">Вернуться в каталог</a><script>if(parent!==window)parent.postMessage({type:"catalog-verified"},location.origin);else location.replace('+json.dumps(target).replace('<','\\u003c')+');</script>'
             return self.send(200,page(body),headers=headers)
         except Exception as error:
             print(json.dumps({'event':'catalog_guard_error','type':type(error).__name__}),flush=True)
             return self.send(503)
+
 
 def main():
     state=Path(os.environ.get('CATALOG_GUARD_STATE','/var/lib/car-catalog-guard'))
@@ -501,15 +396,16 @@ def main():
         with os.fdopen(fd,'wb') as f: f.write(secrets.token_bytes(32))
     server=GuardServer(('127.0.0.1',int(os.environ.get('CATALOG_GUARD_PORT','8790'))),Handler)
     policy_path=os.environ.get('CATALOG_GUARD_POLICY', Path(__file__).with_name('catalog-guard-policy.json'))
-    networks, until = load_policy(policy_path)
-    behavior=load_behavior_policy(policy_path)
+    server.verification=captcha_module.configured(policy_path)
+    mass_export=load_mass_export_policy(policy_path)
     geo_policy=geo_module.load_policy(policy_path)
     country_path=Path(os.environ.get('CATALOG_GUARD_COUNTRIES',Path(__file__).with_name('catalog-guard-countries.json')))
-    server.store=Store(state/'budgets.sqlite3',keyfile.read_bytes(),early_networks=networks,early_until=until,behavior=behavior,geo_policy=geo_policy,country_path=country_path)
+    server.store=Store(state/'budgets.sqlite3',keyfile.read_bytes(),mass_export=mass_export,geo_policy=geo_policy,country_path=country_path)
     server.mode=os.environ.get('CATALOG_GUARD_MODE','observe')
     if server.mode not in ('observe','enforce'): raise ValueError('invalid mode')
     server.client_script=Path(__file__).with_name('catalog-guard-client.js').read_bytes()
-    print(json.dumps({'event':'catalog_guard_started','mode':server.mode,'early_check_networks':[str(network) for network in networks],'early_check_until':until,'behavior_enabled':behavior is not None,'geo_campaign_enabled':server.store.geo is not None,'geo_countries_ready':bool(server.store.geo and server.store.geo.countries.valid)}),flush=True)
+    print(json.dumps({'event':'catalog_guard_started','mode':server.mode,'verification':'recaptcha_v2','mass_export_enabled':mass_export is not None,'geography_enabled':server.store.geo is not None,'geo_countries_ready':bool(server.store.geo and server.store.geo.countries.valid)}),flush=True)
     server.serve_forever()
 
-if __name__=='__main__': main()
+
+if __name__=='__main__':main()
