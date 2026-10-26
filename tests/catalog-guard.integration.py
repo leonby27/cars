@@ -83,9 +83,19 @@ http {{
         first=request();second=request();assert first[0]==second[0]==200 and second[1].get('X-Cache')=='HIT',(first,second,(path/'error.log').read_text())
         assert first[1]['Set-Cookie'].startswith(guard.SESSION_COOKIE+'=') and 'Set-Cookie' not in second[1]
         assert b'/_catalog-check/client.js' in first[2]
+        home_uris=['/','/?q=Zeekr','/api/pages/static','/api/pages/static?path=','/api/pages/static?path=%2F','/api/pages/static?path=%2F%2F&path=/contacts']
+        for uri in home_uris:
+            assert request(uri)[0]==200
+            assert request(uri)[1].get('X-Cache')=='HIT'
         calls=Backend.calls
         for host in ['a.test','b.test']:
             assert request(ip='127.9.0.1',host=host)[0]==303
+            for uri in home_uris:
+                denied=request(uri,ip='127.9.0.1',host=host)
+                assert denied[0]==(429 if uri.startswith('/api/') else 303)
+                assert b'catalog fixture' not in denied[2]
+            alias=request('/index.html?q=Zeekr',ip='127.9.0.1',host=host)
+            assert alias[0]==302 and alias[1]['Location'].endswith('/?q=Zeekr')
             for uri in ['/api/cars?limit=48','/api/%63ars?limit=48','/api/model-catalog?brand=byd&model=han','/api/pages/car?id=42']:
                 denied=request(uri,ip='127.9.0.1',host=host,headers={'X-Guard-Exempt':'1','X-Forwarded-For':'127.5.0.2'})
                 assert denied[0]==429 and denied[1].get('X-Catalog-Verification')=='/_catalog-check'
@@ -101,6 +111,7 @@ http {{
         assert b'g-recaptcha' in challenge[2] and b'fixture-public' in challenge[2]
         assert b'fixture-secret' not in challenge[2] and b'data:image/png' not in challenge[2] and b'<audio' not in challenge[2]
         assert 'https://www.google.com/recaptcha/' in challenge[1]['Content-Security-Policy']
+        assert challenge[1]['X-Frame-Options']=='DENY' and "frame-ancestors 'none'" in challenge[1]['Content-Security-Policy']
         nonce=challenge[2].decode().split('name="id" value="')[1].split('"')[0]
         args={'id':nonce,'answer':'2222','return':'/catalog'}
         refused=request('/_catalog-check',ip='127.9.0.1',method='POST',body=urllib.parse.urlencode(args),headers={'Origin':'https://a.test'})
@@ -112,9 +123,10 @@ http {{
         result={'success':True,'hostname':'a.test','challenge_ts':datetime.datetime.now(datetime.timezone.utc).isoformat()}
         with patch.object(guard.captcha_module.urllib.request,'urlopen',return_value=io.BytesIO(json.dumps(result).encode())):
             solved=request('/_catalog-check',ip='127.9.0.1',method='POST',body=payload,headers={'Origin':'https://a.test'})
-        assert solved[0]==200 and b'catalog-verified' in solved[2]
+        assert solved[0]==200 and b'location.replace("/catalog")' in solved[2] and b'postMessage' not in solved[2]
         cookie=solved[1]['Set-Cookie'].split(';')[0]
         assert request(ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
+        assert request('/',ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
         assert request(ip='127.9.0.2',headers={'Cookie':sessions[('127.9.0.1','a.test')]})[0]==200
         assert request(ip='127.9.0.3')[0]==303
         replay=request('/_catalog-check',ip='127.9.0.1',method='POST',body=payload,headers={'Origin':'https://a.test'})

@@ -46,14 +46,16 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
     export_rule = 'if ($car_export_denied) { return 403; }'
     if export_rule not in text:
         text = text.replace(rule, rule + '\n' + export_rule)
+    for zone in ('car_audit_v1', 'car_ahrefs_v1'):
+        text = text.replace(f'limit_req zone={zone} burst=30 nodelay;', f'limit_req zone={zone} burst=60 nodelay;')
     # Server-level slow budgets also cover photos outside dynamic proxy locations.
     guard = 'limit_req zone=car_training_v2 burst=1 nodelay;'
     if guard not in text:
         text = text.replace(rule, rule + '\n' + guard + '\nlimit_req_status 429;\nlimit_req_log_level notice;')
-    audit_guard = 'limit_req zone=car_audit_v1 burst=30 nodelay;'
+    audit_guard = 'limit_req zone=car_audit_v1 burst=60 nodelay;'
     if audit_guard not in text:
         text = text.replace(guard, guard + '\n' + audit_guard)
-    ahrefs_guard = 'limit_req zone=car_ahrefs_v1 burst=30 nodelay;'
+    ahrefs_guard = 'limit_req zone=car_ahrefs_v1 burst=60 nodelay;'
     if ahrefs_guard not in text:
         text = text.replace(audit_guard, audit_guard + '\n' + ahrefs_guard)
     retry = 'add_header Retry-After $car_ai_retry_after always;'

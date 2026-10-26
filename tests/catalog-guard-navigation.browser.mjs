@@ -14,7 +14,7 @@ import { findCatalogLanding, landingFilterParams } from '../src/catalog-landings
 
 const build = resolve(process.env.NAVIGATION_BUILD_DIR || 'dist');
 try { await symlink(resolve('node_modules'), join(build,'node_modules')); } catch (e) { if(e.code!=='EEXIST')throw e; }
-const { renderCatalogApp, renderCarApp, renderAppPage } = await import(pathToFileURL(join(build,'ssr/entry-server.js')));
+const { renderCatalogApp, renderCarApp, renderStaticApp } = await import(pathToFileURL(join(build,'ssr/entry-server.js')));
 const client = pathToFileURL(join(build,'client/'));
 const shell = await readFile(new URL('index.html',client),'utf8');
 const entry = shell.match(/<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/)[0]+'</script>';
@@ -38,7 +38,7 @@ class Fixture(g.Handler):
    elif mode=='threshold':
     store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),))
    elif mode=='early':
-    store.geo=types.SimpleNamespace(country_gate=lambda address,ua:{'reason':'geo_country_verification'},session_verified=lambda sid:False,verified=lambda sid:None,clean=lambda:None)
+    store.geo=types.SimpleNamespace(countries=types.SimpleNamespace(verified_service=lambda address,ua:False),country_gate=lambda address,ua:{'reason':'geo_country_verification'},session_verified=lambda sid:False,verified=lambda sid:None,clean=lambda:None)
    elif mode=='exhaust':
     store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),));store.db.execute('INSERT OR REPLACE INTO clearance_totals VALUES (?,?,8000,600)',('ip:'+store.key('${fixtureIp}'),time.time()))
   self.send(204)
@@ -46,7 +46,7 @@ server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);server.store=sto
 print(json.dumps({'port':server.server_port}),flush=True);server.serve_forever()
 `;
 await writeFile(join(scratch,'fixture.py'),fixture);
-const guard = spawn('python3',[join(scratch,'fixture.py'),resolve('deploy/catalog-guard.py'),scratch],{stdio:['ignore','pipe','pipe']});
+const guard = spawn('python3',['-B',join(scratch,'fixture.py'),resolve('deploy/catalog-guard.py'),scratch],{stdio:['ignore','pipe','pipe']});
 const lines=createInterface({input:guard.stdout});
 const guardPort=await new Promise((yes,no)=>{lines.once('line',line=>yes(JSON.parse(line).port));guard.once('error',no);guard.once('exit',code=>no(new Error('guard exited '+code)));});
 const guardBase=`http://127.0.0.1:${guardPort}`;
@@ -64,7 +64,7 @@ const server=createServer({key:await readFile(join(scratch,'key.pem')),cert:awai
   if(url.pathname.startsWith('/_catalog-check')) {
    const body=req.method==='POST'?await new Promise(resolve=>{const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>resolve(Buffer.concat(chunks)));}):undefined;
    const response=await fetch(guardBase+req.url,{method:req.method,headers:{...guardHeaders,'X-Guard-Host':'localhost','Origin':req.headers.origin===base?'https://localhost':req.headers.origin||'','Content-Type':req.headers['content-type']||''},body,redirect:'manual'});
-   res.setHeader('X-Frame-Options','SAMEORIGIN');await send(response);return;
+   res.setHeader('X-Frame-Options','DENY');await send(response);return;
   }
   const checked=await fetch(guardBase+'/check',{headers:{...guardHeaders,'X-Guard-URI':req.url,'X-Guard-Method':req.method}});
   if(checked.headers.get('X-Guard-Session'))res.setHeader('Set-Cookie',checked.headers.get('X-Guard-Session'));
@@ -90,7 +90,7 @@ const server=createServer({key:await readFile(join(scratch,'key.pem')),cert:awai
    boot={catalogPath:url.pathname,catalogSearch:'',catalogSeed:'s3',catalogValue:listing(params),catalogFacts:{total:3,updatedAt:'2026-10-04T10:00:00Z'},...catalogMetaBoot(params,meta(params))};root=renderCatalogApp(url.pathname,url.search,boot);
   } else if(url.pathname.startsWith('/cars/')) {
    const car={...cars.find(c=>c.id.endsWith(url.pathname.split('/').at(-1))),_summary:false};boot={carId:car.id,carValue:car,relatedValue:[]};root=renderCarApp(url.pathname,{car});
-  } else root=renderAppPage(url.pathname,boot);
+  } else root=renderStaticApp(url.pathname,url.search,boot);
   res.setHeader('Content-Type','text/html');res.end(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}<script src="/_catalog-check/client.js" defer></script></head><body><div id="root" data-prerender="${url.pathname}">${root}</div><script>window.__boot=${JSON.stringify(boot)}</script>${entry}</body></html>`);
  } catch(e) {res.statusCode=500;res.end(e.message);}
 });
@@ -126,25 +126,27 @@ try {
   await page.waitForURL('**/login');
   const draft=page.locator('.auth-modal input[type="tel"]');await draft.fill('+375290000000');const draftValue=await draft.inputValue();
   await control('threshold');
-  const denied=page.evaluate(()=>{window.__testRead=fetch('/api/cars?offset=900').then(r=>r.status);});await denied;await modal().waitFor();
-  await modal().getByRole('button',{name:'Закрыть'}).click();assert.equal(await page.evaluate(()=>window.__testRead),403);assert.equal(await draft.inputValue(),draftValue);
+  assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/cars?offset=900');return r.status;}),429);
+  assert.equal(await draft.inputValue(),draftValue);assert.equal(new URL(page.url()).pathname,'/login');assert.equal(await modal().count(),0);
   await page.locator('.auth-modal').getByRole('button',{name:'Закрыть',exact:true}).click();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');
-  await page.evaluate(()=>{window.__testAbort=new AbortController();window.__testRead=fetch('/api/cars?offset=901',{signal:window.__testAbort.signal}).then(r=>r.status,e=>e.name);});await modal().waitFor();
-  await page.evaluate(()=>window.__testAbort.abort());await modal().waitFor({state:'detached'});assert.equal(await page.evaluate(()=>window.__testRead),'AbortError');
-  // A real React detail request must abort when browser Back unmounts the card.
-  // This used to leave its verification modal over the restored catalog.
-  await page.locator('.car-row[data-car-id="che168-99900001"]').click({position:{x:100,y:90}});
-  await page.waitForURL('**/cars/99900001');await modal().waitFor();
-  await page.goBack();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');await modal().waitFor({state:'detached'});
-  await page.evaluate(()=>{window.__testRead=fetch('/api/cars?offset=902').then(r=>r.status);});await modal().waitFor();
-  const frame=page.frameLocator('iframe[title="Подтвердить продолжение просмотра"]');await frame.locator('[name=\"g-recaptcha-response\"]').fill('fixture-token');await frame.getByRole('button',{name:'Проверить тестовый виджет',exact:true}).click();await modal().waitFor({state:'detached'});assert.equal(await page.evaluate(()=>window.__testRead),200);
+  await page.evaluate(()=>{void fetch('/api/cars?offset=902');});await page.waitForURL('**/_catalog-check?return=*');
+  assert.equal(await modal().count(),0);assert.equal(await page.locator('iframe').count(),0);
+  assert.equal(await page.getByRole('button',{name:'Закрыть',exact:true}).count(),0);
+  assert.equal(new URL(page.url()).searchParams.get('return').split('?')[0],'/catalog/zeekr');
+  const solve=async()=>{await page.locator('[name="g-recaptcha-response"]').fill('fixture-token');await page.getByRole('button',{name:'Проверить тестовый виджет',exact:true}).click();};
+  await solve();await page.waitForURL(url=>url.pathname==='/catalog/zeekr');await hydrated();
   await control('reset');await control('early');
-  await page.goto(base+'/cars/99900002');await page.waitForURL('**/_catalog-check?return=*');
-  await page.locator('[name=\"g-recaptcha-response\"]').fill('fixture-token');await page.getByRole('button',{name:'Проверить тестовый виджет',exact:true}).click();await page.waitForURL('**/cars/99900002');await hydrated();
-  await control('exhaust');assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/cars?offset=903');return r.status;}),429);assert.equal(await modal().count(),0);
+  await page.goto(base+'/?q=Zeekr');await page.waitForURL('**/_catalog-check?return=*');
+  assert.equal(new URL(page.url()).searchParams.get('return'),'/?q=Zeekr');
+  assert.equal(await page.locator('.car-row').count(),0);assert.equal(await modal().count(),0);
+  await page.reload();assert.equal(new URL(page.url()).pathname,'/_catalog-check');
+  await solve();await page.waitForURL(url=>url.pathname==='/');await hydrated();
+  await page.goto(base+'/cars/99900002');await page.waitForURL('**/cars/99900002');await hydrated();
+  await control('exhaust');assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/cars?offset=903');return r.status;}),429);
+  assert.equal(new URL(page.url()).pathname,'/cars/99900002');assert.equal(await modal().count(),0);
   assert.equal(await page.evaluate(async()=>{const r=await fetch('/api/auth/me');return r.status;}),200);
   assert.equal(await page.locator('.maintenance-page').count(),0);assert.deepEqual(errors,[]);
-  console.log(`PASS ${process.env.TEST_BROWSER||'chromium'} ${mobile?'mobile':'desktop'}: filters, card/back, menu/login, preserved draft, aborted verification, solved verification, direct HTML recovery, exhausted quota, CSP, no page errors`);
+  console.log(`PASS ${process.env.TEST_BROWSER||'chromium'} ${mobile?'mobile':'desktop'}: filters, card/back, menu/login, preserved private form, full-page API verification, no close or iframe, home blocked before HTML, reload stays on verification, automatic return, exhausted quota, no page errors`);
   if(browserWarnings.length)console.log(JSON.stringify({browser_native_media_warnings:browserWarnings}));
   await context.close();
  }

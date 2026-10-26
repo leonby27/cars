@@ -97,6 +97,20 @@ def reading(method, uri):
     return {'signature': hashlib.sha256(canonical.encode()).hexdigest(), 'units': units, 'paged': int(paged), 'kind': kind}
 
 
+
+def geographic_home(method, uri):
+    # Home HTML embeds catalog cards before the browser requests any API data.
+    # Match the renderer's first path parameter and slash normalization too.
+    if method != 'GET':return False
+    parts=urllib.parse.urlsplit(uri)
+    path=urllib.parse.unquote(parts.path).rstrip('/')
+    if path in ('','/index.html'):return True
+    if path!='/api/pages/static':return False
+    params={}
+    for key,value in urllib.parse.parse_qsl(parts.query,keep_blank_values=True):params.setdefault(key,value)
+    return not params.get('path','').strip('/')
+
+
 def suspicious(units, collections, paged, details):
     # Requires a long enumeration, not an initial page/filter burst. Repeated
     # identical reads do not count. Units are requested capacity, not saved cars.
@@ -183,12 +197,16 @@ class Store:
 
     def check(self,ip,method,uri,cookie='',session=None,user_agent=''):
         read=reading(method,uri)
-        if read is None:return True,None
-        address=ipaddress.ip_address(ip);ip=self.key(ip)
+        if read is None and not geographic_home(method,uri):return True,None
+        address=ipaddress.ip_address(ip)
+        # Verified Ahrefs uses nginx's shared crawl budget, not visitor CAPTCHA.
+        if self.geo and self.geo.countries.verified_service(address,user_agent):return True,None
+        ip=self.key(ip)
         with self.lock,self.db:
             self.clean()
             session=self.session(cookie) if session is None else session
-            row=self.budget(ip);session_row=self.budget(session) if session else None
+            row=self.budget(ip) if read else (self.now(),0,0,0,0)
+            session_row=self.budget(session) if read and session else None
             _,units,collections,paged,details=row
             grant=None
             try:
@@ -204,6 +222,7 @@ class Store:
                     if gate and not grant and not self.geo.session_verified(session):return False,{**snapshot,**gate}
                 except Exception as error:
                     print(json.dumps({'event':'catalog_geo_error','type':type(error).__name__}),flush=True)
+            if read is None:return True,None
             ip_seen=bool(self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(ip,read['signature'])).fetchone())
             session_seen=bool(session and self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(session,read['signature'])).fetchone())
             session_blocked=bool(self.mass_export is not None and session_row and suspicious(*session_row[1:]) and not session_seen)
@@ -306,7 +325,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path=='/health': return self.send(204)
             if path=='/check':
                 if self.headers.get('X-Guard-Exempt') in ('1','10','01','11'): return self.send(204)
-                if reading(self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/')) is None:return self.send(204)
+                method=self.headers.get('X-Guard-Method','GET');uri=self.headers.get('X-Guard-URI','/')
+                if reading(method,uri) is None and not geographic_home(method,uri):return self.send(204)
                 session,session_cookie=self.server.store.ensure_session(self.headers.get('Cookie',''))
                 allowed,snapshot=self.server.store.check(self.context(),self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/'),self.headers.get('Cookie',''),session=session,user_agent=self.headers.get('User-Agent',''))
                 if not allowed:
@@ -380,7 +400,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not token:
                 return self.send(200,page('<h1>Попробуйте ещё раз</h1><p>Проверка не пройдена или срок её действия истёк.</p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Новая проверка</a>'))
             headers={'Set-Cookie':COOKIE+'='+token+'; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax'}
-            body='<h1>Можно продолжить просмотр</h1><a href="'+html.escape(target,quote=True)+'">Вернуться в каталог</a><script>if(parent!==window)parent.postMessage({type:"catalog-verified"},location.origin);else location.replace('+json.dumps(target).replace('<','\\u003c')+');</script>'
+            body='<h1>Можно продолжить просмотр</h1><a href="'+html.escape(target,quote=True)+'">Вернуться в каталог</a><script>location.replace('+json.dumps(target).replace('<','\\u003c')+');</script>'
             return self.send(200,page(body),headers=headers)
         except Exception as error:
             print(json.dumps({'event':'catalog_guard_error','type':type(error).__name__}),flush=True)

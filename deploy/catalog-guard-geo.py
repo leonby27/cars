@@ -89,7 +89,9 @@ class Countries:
         return ('unknown','exempt','outside')[packed[at+width*2]] if value <= last else 'unknown'
 
     def verified_service(self, address, ua):
-        return bool(self.valid and re.search(r'ahrefs(?:bot|siteaudit)', ua, re.I)
+        if self.now() >= self.next_reload:
+            self.reload()
+        return bool(self.valid and self.now() < self.expires and re.search(r'ahrefs(?:bot|siteaudit)', ua, re.I)
                     and any(address.version == n.version and address in n for n in self.ahrefs))
 
 

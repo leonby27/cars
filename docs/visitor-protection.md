@@ -15,3 +15,14 @@ Validation includes ordinary browsing, first-read geographic challenge, managed 
 The remaining limits are heuristics and shared IPs can still aggregate activity; zero false positives cannot be guaranteed. Geographic CAPTCHA also cannot prevent exempt-country proxies, paid solvers or stolen valid cookies. The cleanup does not justify removing working server protection before the replacement is installed.
 
 The verification page shows the heading and Google checkbox, then submits automatically after a successful widget callback. Extra continue/refresh buttons and the clearance-duration explanation are omitted. The small DB-IP attribution remains with `rel="nofollow"`. Error pages retain their recovery action.
+
+
+## Full-page correction release — 26 October 2026
+
+The owner authorized commit, push and server installation of all prepared changes on 26 October 2026. The owner reported that an outside-country visitor could dismiss the remaining iframe dialog and continue viewing cards already embedded in the homepage. This was a mismatch between the verification page and its old API-recovery wrapper, plus the unguarded initial home HTML.
+
+The candidate replaces the dismissible iframe with a single full-page navigation on a marked, active, same-origin catalog GET refusal. It preserves the current public path, filters and fragment for automatic return; it does not retry denied catalog reads. Aborted requests, forms, authentication/account pages and unmarked capacity refusals do not trigger this navigation. Private background reads remain denied rather than granting catalog access.
+
+The geographic rule now covers `/`, its query variants and direct `/api/pages/static` home representations before shared-cache delivery. `/index.html` redirects to the guarded root. Home checks do not consume personal enumeration budgets. Verified search/internal exemptions, allowed countries, one-hour signed clearance and stale-data availability behavior remain. The CAPTCHA page refuses iframe embedding; its completion script returns directly to the requested public page.
+
+Regression checks cover cached home HTML denied on both hosts, encoded/direct aliases, no modal/close path, single navigation for parallel refusals, private forms, reload before solving and automatic return with the fake test provider. No live CAPTCHA was solved during automated verification.

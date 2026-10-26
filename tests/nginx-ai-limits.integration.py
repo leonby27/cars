@@ -64,8 +64,8 @@ http {{
         if ($abcars_blocked_bot) {{ return 403; }}
         if ($car_export_denied) {{ return 403; }}
         limit_req zone=car_training_v2 burst=1 nodelay;
-        limit_req zone=car_audit_v1 burst=30 nodelay;
-        limit_req zone=car_ahrefs_v1 burst=30 nodelay;
+        limit_req zone=car_audit_v1 burst=60 nodelay;
+        limit_req zone=car_ahrefs_v1 burst=60 nodelay;
         limit_req_status 429;
         add_header Retry-After $car_ai_retry_after always;
         location /photo/ {{ proxy_pass http://127.0.0.1:{backend.server_port}; }}
@@ -134,14 +134,14 @@ http {{
                 family if n % 2 else 'Mozilla/5.0 ' + family,
                 address=f'127.0.0.{40+n%8}', host='a.test' if n%3 else 'b.test',
                 url='/photo/fixture.jpg' if n%4 == 0 else f'/cars/crawl-{n}',
-            ) for n in range(40)]
+            ) for n in range(70)]
             counts[family] = dict(collections.Counter(status for status, _ in replies))
-            assert counts[family] == {200:31, 429:9}, counts
-            assert Backend.calls-before == 31, 'Rejected Ahrefs requests reached the backend'
+            assert counts[family] == {200:61, 429:9}, counts
+            assert Backend.calls-before == 61, 'Rejected Ahrefs requests reached the backend'
             assert all(retry == '10' for status, retry in replies if status == 429)
             assert request('Mozilla/5.0 ' + family, address='127.0.0.4', host='b.test') == (429, '10')
-        # One token recovers after a second, not the old ten-second interval.
-        time.sleep(1.1)
+        # At 100/minute, one token recovers every 0.6 seconds.
+        time.sleep(.65)
         for family in ['AhrefsBot/7.0', 'AhrefsSiteAudit/6.1']:
             assert request(family, address='127.0.0.49', host='b.test')[0] == 200
             assert request(family, url='/assets/fixture.js')[0] == 200

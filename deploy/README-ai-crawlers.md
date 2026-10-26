@@ -1,5 +1,17 @@
 # Shared crawler and catalog protection
 
+## Ahrefs relaxation release — 26 October 2026
+
+Owner authorized commit, push and server installation on 26 October 2026. Official Ahrefs IP + AhrefsBot/AhrefsSiteAudit UA bypass personal IP/session export budgets as well as geographic verification. The local official network snapshot must be valid and unexpired; refresh happens before checking the exemption. A forged UA or an ordinary UA from an Ahrefs IP retains visitor safeguards.
+
+Both crawler families retain independent shared 100 requests/minute allowances across IPs and both domains, including source photos. Their immediate burst increases from 30 to 60 requests to accommodate rendering. Build assets and robots remain outside those allowances. The standalone installer upgrades existing server-level burst directives too. Crawl-delay remains one second; a crawler exceeding the bounded allowance still receives 429. In Site Audit start at 30 URLs/minute or below; photos and rendering/API fetches also spend server allowance.
+
+Verified by geo/personal-budget unit checks and isolated nginx integration on a temporary listener, without replacing production configuration. Existing Site Audit issues (redirecting sitemap entries, image/page sizes and genuine metadata/indexation findings) require separate investigation and a fresh audit; this change does not suppress them.
+
+## Full-page verification correction release — 26 October 2026
+
+Authorized for the same release: replace the API recovery dialog with full-page navigation; check the root homepage and its direct static-page API aliases before delivering cached or embedded catalog data. Direct `/index.html` requests redirect to that guarded root. Verification cannot be embedded in an iframe. Homepage checks are geographic only and do not spend catalog enumeration budgets. Private forms, aborted reads, trusted search and geographic exemptions remain; account-page background catalog requests stay denied without interrupting data entry. See `docs/visitor-protection.md` for the reported failure and regression coverage.
+
 ## Active replacement — 25 October 2026
 
 Google reCAPTCHA v2 replaces all local verification puzzles and all previous collective-risk challenge heuristics. The owner authorized creation of the Google v2 key and installation on both sites. The replacement entered enforce mode at 08:19 Minsk; relaxed nginx allowances followed at 08:20. A final provider timing refinement was installed with backup. Google domain verification is enabled for abcars.by and abdrive.ru; credentials are only in the root-managed service environment (0600). Live widgets load on both domains. See the deployment receipt under outputs/2026-10-25-protection-release in the parent workspace.
