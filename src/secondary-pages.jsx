@@ -2252,7 +2252,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       <FilterPanel metaLoading={metaLoading} filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
       {metaLoading && filters.brand !== "Все марки" && <div className="model-quick-chips" role="status" aria-label="Загружаем модели"><span className="catalog-data-skeleton" /></div>}
       {!metaLoading && filters.brand !== "Все марки" && models.length > 1 && (
-        <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
+        <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`} style={{
+          "--model-quick-rows": Math.ceil(quickModels.length / 7),
+          "--model-quick-rows-tablet": Math.ceil(quickModels.length / 3),
+        }}>
           {quickModels.map((model) => {
             const active = model === ANY_MODEL ? !selectedModels.length : selectedModels.includes(model);
             const count = modelOptionCounts.get(model);
