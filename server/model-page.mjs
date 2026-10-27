@@ -1,3 +1,4 @@
+import {preparedModelFacts} from "./prepared-catalog.mjs";
 // Каталожная страница модели `/catalog/<марка>/<модель>`, собранная в момент запроса.
 //
 // С 25.09.2026 у модели одна страница, и она — раздел каталога: сверху список
@@ -12,7 +13,7 @@
 import { existsSync } from "node:fs";
 import { catalogMetaBoot } from "./app-render.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { brandModels, getCatalogMeta, listCars, modelCatalogFacts, modelClassStock, priceEdges } from "./repository.mjs";
+import { brandModels, listCars, modelCatalogFacts, modelClassStock, minimumPricedCar, readyCatalogMeta } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { MODEL_PAGES, modelPageRedirect } from "../src/model-pages.js";
@@ -97,7 +98,7 @@ export const plainModelSearch = (params) => [...params.keys()].every((key) => PL
  * Данные каталожной страницы модели — то же, что отдаёт `/api/model-catalog` и что
  * встраивается в готовую страницу. `null`, когда такой модели нет.
  */
-export async function modelCatalogData({ brandSlug, modelSlug: slug, params = new URLSearchParams(), light = false }) {
+export async function modelCatalogData({ brandSlug, modelSlug: slug, params = new URLSearchParams(), light = false, initial = false }) {
   const brand = brandForSlug(brandSlug);
   if (!brand || !/^[a-z0-9-]+$/.test(String(slug || ""))) return null;
   const models = await brandModels(brand);
@@ -107,21 +108,22 @@ export async function modelCatalogData({ brandSlug, modelSlug: slug, params = ne
   const name = review?.name || `${brand} ${model}`;
   const modelName = model || review.model;
   const page = requestedPage(params);
-  if (page === null) return { invalid: true };
+  if (page === null || page > CATALOG_MAX_PAGES) return { invalid: true };
   const { sort } = modelListQuery(params);
   const seed = sort === "default" ? (/^s\d{1,2}$/.test(params.get("seed") || "") ? params.get("seed") : catalogShuffleSeed()) : null;
   // Тот же запрос, что шлёт каталог в /api/cars для этого раздела.
   const listParams = new URLSearchParams({ brand, model: modelName, sort, limit: String(CATALOG_PAGE_SIZE), offset: String((page - 1) * CATALOG_PAGE_SIZE) });
   if (seed) listParams.set("seed", seed);
-  const [list, facts, edges] = await Promise.all([
+  const prepared=preparedModelFacts(brand,modelName);
+  if(initial)listParams.set("summary","defer");
+  const [list, facts, cheapest] = await Promise.all([
     light ? { items: [], total: null, hasMore: false, changedAt: null } : listCars(listParams),
-    modelCatalogFacts(brand, modelName),
-    priceEdges(new URLSearchParams({ brand, model: modelName })),
+    initial ? {...(prepared||{}), pending:true, powertrains:[], bodyTypes:[]} : modelCatalogFacts(brand, modelName),
+    minimumPricedCar(new URLSearchParams({ brand, model: modelName })),
   ]);
-  // Края вилки — живым расчётом, как на карточках; сохранённая оценка отстаёт.
-  if (edges?.cheapest) facts.priceFrom = estimateLandedCost(edges.cheapest).totalUsd;
-  if (edges?.dearest) facts.priceTo = estimateLandedCost(edges.dearest).totalUsd;
-  const total = light ? facts.total : list.total;
+  // Минимум — живым расчётом, как на карточках; сохранённая оценка отстаёт.
+  if (cheapest) facts.priceFrom = estimateLandedCost(cheapest).totalUsd;
+  const total = initial ? (list.items.length ? (prepared?.total > 0 ? prepared.total : null) : 0) : light ? facts.total : list.total;
   const pages = Math.max(1, Math.min(CATALOG_MAX_PAGES, catalogPageCount(total)));
   const path = `/catalog/${brandSlug}/${slug}`;
   const siblings = MODEL_PAGES.filter((item) => item.brand === brand && item.path !== path).slice(0, siblingsOnPage).map(({ path: p, name: n }) => ({ path: p, name: n }));
@@ -131,7 +133,7 @@ export async function modelCatalogData({ brandSlug, modelSlug: slug, params = ne
     ...priceBandsForCar({ type: klass.type, landedUsd: facts.priceFrom }),
   ].map(({ path: p, name: n }) => ({ path: p, name: n }));
   const journal = BLOG_ENABLED && review ? blogPostsForModel(review.path).map((post) => ({ path: post.path, name: post.name })) : [];
-  const similar = await similarModels(brand, klass);
+  const similar = initial ? [] : await similarModels(brand, klass);
   return {
     model: { brand, model: modelName, name, path, brandSlug, modelSlug: slug, inCatalog: Boolean(model) },
     review: review
@@ -182,12 +184,12 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   const params = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
-  const data = await modelCatalogData({ brandSlug, modelSlug: slug, params });
+  const data = await modelCatalogData({ brandSlug, modelSlug: slug, params, initial:true });
   if (!data || data.invalid) return { status: 404, html: renderer.landingMissingPage() };
   const path = data.model.path;
   const location = catalogRedirect({ path, brand: data.model.brand, model: data.model.model }, params);
   if (location) return { status: 301, location };
-  if (data.page > data.pages && data.total) return { status: 404, html: renderer.landingMissingPage() };
+  if (data.page > 1 && !data.cars.length) return { status: 404, html: renderer.landingMissingPage() };
   const review = data.review ? modelPageWithText(MODEL_PAGES.find((item) => item.slug === data.review.slug)) : null;
   const seo = modelCatalogSeo({ name: data.model.name, brand: data.model.brand, facts: data.facts, review, page: data.page });
   const faq = data.page > 1 ? [] : modelFaq({ name: data.model.name, facts: data.facts, review });
@@ -201,11 +203,12 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   for (const [key, value] of params) if (PLAIN_KEYS.has(key)) kept.append(key, value);
   const search = kept.toString();
   const plain = plainModelSearch(params);
-  const meta = await getCatalogMeta(null, data.model.brand, null);
+  const meta = readyCatalogMeta(null, data.model.brand, null);
   const boot = {
     modelCatalog: { ...data, cars: [] },
+    catalogSummaryPending:true,
     // То, что каталог просит первым запросом: список и справочник фильтров.
-    catalogValue: plain ? { items: data.cars, total: data.total, hasMore: data.hasMore, changedAt: data.changedAt } : null,
+    catalogValue: plain ? { items: data.cars, total: null, summaryPending:true, hasMore: data.hasMore, changedAt: data.changedAt } : null,
     catalogPath: path,
     catalogSearch: search,
     catalogSeed: data.query.seed,
@@ -222,13 +225,10 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     "@type": "ItemList",
     name: seo.h1,
     url: canonical,
-    numberOfItems: data.total,
+    numberOfItems: data.total ?? undefined,
     itemListElement: data.cars.slice(0, 24).map((car, index) => renderer.carListItem(car, first + index + 1)),
   };
-  // Вилка цен по модели: «BYD Seal, 286 предложений, от … до … $» — так было у прежних
-  // обзоров и так делает хаб модели у IM4CAR. При переделке в каталожную страницу
-  // разметка потерялась (найдено 25.09.2026). Только у страницы модели: у разделов
-  // («Электромобили», «BYD») её нет намеренно — это не товар.
+  // Цена «от» и число предложений — только у модели, а не у общих разделов.
   const aggregate = data.total && Number(data.facts?.priceFrom) > 0
     ? {
         "@context": "https://schema.org",
@@ -241,7 +241,6 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
           "@type": "AggregateOffer",
           priceCurrency: "USD",
           lowPrice: Math.round(Number(data.facts.priceFrom)),
-          highPrice: Math.round(Number(data.facts.priceTo) || Number(data.facts.priceFrom)),
           offerCount: data.total,
           availability: "https://schema.org/InStock",
           itemCondition: "https://schema.org/UsedCondition",
@@ -260,7 +259,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     // Модель без единой машины и без обзора страницы не имеет (404 выше); с обзором —
     // индексируется: текст есть, предложение «под заказ» тоже. Без обзора и меньше
     // чем с тремя машинами — тонкая страница из автотекста: noindex.
-    indexable: allowIndexing && modelPageIndexable({ facts: data.facts, review: data.review }),
+    indexable: allowIndexing && modelPageIndexable({ facts: {...data.facts,total:data.total ?? data.cars.length}, review: data.review }),
     prev: data.page > 1 ? renderer.routeUrl(pageRoute(data.page - 1)) : null,
     next: data.page < data.pages ? renderer.routeUrl(pageRoute(data.page + 1)) : null,
     appRoot,

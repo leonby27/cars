@@ -4,7 +4,7 @@ export function createBoundedCache({ttl=60_000,negativeTtl=5_000,maxEntries=500,
  const entries=new Map();let bytes=0,generation;
  const remove=key=>{const entry=entries.get(key);if(entry){bytes-=entry.bytes;entries.delete(key);}};
  const trim=()=>{while(entries.size>maxEntries||bytes>maxBytes)remove(entries.keys().next().value);};
- return async(key,load,{version,bypass=false,expiresAt}={})=>{
+ const read=async(key,load,{version,bypass=false,expiresAt}={})=>{
   if(version!==generation){entries.clear();bytes=0;generation=version;}
   const old=entries.get(key);
   if(!bypass&&old&&(old.pending||now()<old.expiresAt)){
@@ -23,4 +23,6 @@ export function createBoundedCache({ttl=60_000,negativeTtl=5_000,maxEntries=500,
   }).catch(error=>{if(entries.get(key)===entry)remove(key);throw error;});
   return entry.pending;
  };
+ read.peek=key=>{const entry=entries.get(key);return entry&&!entry.pending&&now()<entry.expiresAt?entry.value:null;};
+ return read;
 }

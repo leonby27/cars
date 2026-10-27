@@ -44,7 +44,7 @@ import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
 
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
-import { catalogHref, catalogLocationKey, catalogRedirect } from "./catalog-url.js";
+import { catalogSort, catalogHref, catalogLocationKey, catalogRedirect } from "./catalog-url.js";
 import { clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { getListingAddedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, formatChangePercent, getPriceChange, minskClock } from "./price-change.js";
@@ -666,12 +666,7 @@ function useRoute(user) {
       for (const name of handOverEvents) window.removeEventListener(name, handOver);
     };
   }, [route.key, route.restoreY, route.restoreAnchor, route.restoreOffset]);
-  // Переход на страницу каталога ждёт справочник её фильтров (не дольше
-  // CATALOG_META_WAIT_MS): тогда новая страница сразу рисуется с рядом моделей марки,
-  // а не получает его через мгновение — ряд в несколько строк сдвигал вниз всю выдачу
-  // (жалоба Сергея 25.09.2026: «микролаги» при переходах между марками). Прежняя
-  // страница остаётся на экране эти доли секунды. Два быстрых перехода подряд —
-  // выполняется последний.
+  // Переход не ждёт справочник: зависимые поля обновляются отдельно от карточек.
   const navigationTurn = useRef(0);
   const navigate = useCallback((next, options = {}) => {
     const turn = ++navigationTurn.current;
@@ -683,7 +678,8 @@ function useRoute(user) {
     const go = () => {
       if (navigationTurn.current === turn) navigateNow(next, options);
     };
-    Promise.race([requestCatalogMeta(query), new Promise((resolve) => setTimeout(resolve, CATALOG_META_WAIT_MS))]).then(go, go);
+    requestCatalogMeta(query).catch(() => {});
+    go();
   }, [user]);
   const navigateNow = (next, { replace = false, preserveScroll = false, preserveCatalog = false, catalogState = null } = {}) => {
     if (next === -1) {
@@ -1738,7 +1734,7 @@ function CardSkeleton({ row }) {
 // пункта, а поисковик по ссылке доходит до раздела — фильтр в коде страницы был
 // кнопками, и до разделов марок и кузовов робот с каталога дойти не мог. `rel` —
 // «nofollow» для адресов, у которых нет своей страницы (сочетание фильтров).
-function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false, brandGrid = false }) {
+function SelectField({ label, value, options, loading = false, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false, brandGrid = false }) {
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
@@ -1967,7 +1963,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
 
   return (
     <div className={`select-field custom-select${brandGrid ? " brand-grid-select" : ""}${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
-      <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
+      <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}${loading ? " select-data-pending" : ""}`} aria-busy={loading || undefined} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled || loading} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
         {MobileIcon && <MobileIcon className="select-trigger-mobile-icon" size={22} weight="bold" aria-hidden="true" />}
         <b>{triggerText}</b>
@@ -2232,7 +2228,7 @@ const brandGroupOf = (brand) => (
 
 // `optionHrefs` — адреса разделов для пунктов марки, типа двигателя и кузова (каталог):
 // пункт, выбор которого ведёт на другой раздел, становится ссылкой (см. SelectField).
-function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false, onExpandedChange = null, optionHrefs = null, canReset = null }) {
+function VehicleSearch({ metaLoading = false, constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false, onExpandedChange = null, optionHrefs = null, canReset = null }) {
   const currency = useCurrency();
   const narrow = useNarrowViewport();
   // На широком экране «Ещё фильтры» раскрывают строку прямо в панели, на телефоне
@@ -2267,9 +2263,9 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           широком экране. */}
       <SelectField className={className} label="Тип двигателя" icon={Engine} value={selectedType} onChange={onTypeChange} options={POWERTRAIN_TABS} formatOption={powertrainLabel} optionHref={optionHrefs?.type} />
       <SelectField className={className} label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
-      <SelectField className={className} label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple optionHref={optionHrefs?.bodyType} />
+      <SelectField className={className} loading={metaLoading} label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple optionHref={optionHrefs?.bodyType} />
       <SelectField className={className} label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />
-      {filterAvailable(availability, "drive", selectedType) && <SelectField className={className} label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />}
+      {filterAvailable(availability, "drive", selectedType) && <SelectField className={className} loading={metaLoading} label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />}
       {filterAvailable(availability, "owners", selectedType) && <SelectField className={className} label="Владельцы" icon={UsersThree} value={values.owners} onChange={actions.owners} options={ownerOptions} />}
       {filterAvailable(availability, "battery", selectedType) && <SelectField className={className} label="Батарея" icon={BatteryHigh} value={values.battery} onChange={actions.battery} options={batteryOptions} />}
       {filterAvailable(availability, "condition", selectedType) && <SelectField className={className} label="Состояние" icon={ShieldCheck} value={values.condition} onChange={actions.condition} options={conditionOptions} />}
@@ -2290,10 +2286,10 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     price: ["Цена", () => priceRange()],
     year: ["Год выпуска", () => yearRange()],
     mileage: ["Пробег", () => <SelectField label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />],
-    bodyType: ["Кузов", () => <SelectField label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple optionHref={optionHrefs?.bodyType} />],
+    bodyType: ["Кузов", () => <SelectField loading={metaLoading} label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple optionHref={optionHrefs?.bodyType} />],
     color: ["Цвет", () => <SelectField label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />],
     country: ["Страна", () => <SelectField label="Страна" icon={MapPin} value={values.country || ANY_COUNTRY} onChange={actions.country} options={options.countries || [ANY_COUNTRY]} />],
-    drive: ["Привод", () => <SelectField label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />],
+    drive: ["Привод", () => <SelectField loading={metaLoading} label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />],
     owners: ["Владельцы", () => <SelectField label="Владельцы" icon={UsersThree} value={values.owners} onChange={actions.owners} options={ownerOptions} />],
     battery: ["Батарея", () => <SelectField label="Батарея" icon={BatteryHigh} value={values.battery} onChange={actions.battery} options={batteryOptions} />],
     condition: ["Состояние", () => <SelectField label="Состояние" icon={ShieldCheck} value={values.condition} onChange={actions.condition} options={conditionOptions} />],
@@ -2345,7 +2341,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   ].filter(Boolean);
   const sheetFooter = (
     <button type="button" className="primary sheet-submit" onClick={() => { setSheet(null); onSubmit?.(); }}>
-      {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
+      {resultCount == null ? <>Показать <span className="catalog-data-skeleton" aria-label="Загружаем количество" /> авто</> : `Показать ${resultCount} авто`}
     </button>
   );
   const brandRows = options.brands.filter((item) => item !== "Все марки");
@@ -2365,7 +2361,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           {/* Одна кнопка вместо двух списков: марка сверху, под ней модели или
               подсказка «Указать модель». Крестик снимает выбор по ступеням. */}
           <div className={`brand-model-field${brandChosen ? " chosen" : ""}`}>
-            <button type="button" className="brand-model-open" onClick={() => setSheet(brandChosen ? "models" : "brands")}>
+            <button type="button" className={`brand-model-open${metaLoading ? " select-data-pending" : ""}`} aria-busy={metaLoading || undefined} disabled={metaLoading} onClick={() => setSheet(brandChosen ? "models" : "brands")}>
               <CarProfile size={22} weight="duotone" aria-hidden="true" />
               <span className="brand-model-text">
                 <b>{brandChosen ? values.brand : "Марка и модель"}</b>
@@ -2421,8 +2417,8 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         </>
       ) : (
         <div className="filter-primary-row unified-filter-primary">
-          <SelectField brandGrid label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
-          <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
+          <SelectField loading={metaLoading} brandGrid label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
+          <SelectField loading={metaLoading} label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
           {yearRange()}
           {priceRange()}
         </div>
@@ -2605,7 +2601,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           )}
           <button type="button" className="primary search-submit" onClick={onSubmit}>
             <MagnifyingGlass size={20} weight="bold" />
-            {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
+            {resultCount == null ? <>Показать <span className="catalog-data-skeleton" aria-label="Загружаем количество" /> авто</> : `Показать ${resultCount} авто`}
           </button>
         </div>
       )}
@@ -3003,7 +2999,7 @@ const savedFilterDefaults = {
   fuel: ANY_FUEL,
   ...emptyExclusions(),
   // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
-  sort: "default",
+  sort: "price_asc",
 };
 const savedSearchSortLabels = {
   price_asc: "сначала дешёвые",
@@ -3133,7 +3129,6 @@ const heroApiParams = (parsed) => {
 
 // Те же варианты сортировки, что и в каталоге, — выдача поиска ведёт себя одинаково.
 const HERO_SORT_OPTIONS = [
-  { value: "default", label: "По умолчанию" },
   { value: "price_asc", label: "Дешёвые" },
   { value: "price_desc", label: "Дорогие" },
   { value: "newest", label: "Новые объявления" },
@@ -3498,15 +3493,21 @@ function useModelLanding(path) {
     return key && boot?.model?.path === key ? { key, landing: modelLandingObject(boot), failed: false } : { key: null, landing: null, failed: false };
   });
   useEffect(() => {
-    if (!key || state.key === key) return undefined;
+    if (!key || (state.key === key && !state.landing?.facts?.pending)) return undefined;
     const controller = new AbortController();
-    fetch(`/api/model-catalog?brand=${encodeURIComponent(parsed.brandSlug)}&model=${encodeURIComponent(parsed.modelSlug)}&light=1`, { signal: controller.signal })
+    const load = () => fetch(`/api/model-catalog?brand=${encodeURIComponent(parsed.brandSlug)}&model=${encodeURIComponent(parsed.modelSlug)}&light=1`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status === 404 ? "missing" : "unavailable"))))
-      .then((data) => setState({ key, landing: modelLandingObject(data), failed: false }))
+      .then((data) => {if(!controller.signal.aborted)setState({ key, landing: modelLandingObject(data), failed: false });})
       .catch((error) => {
-        if (error.name !== "AbortError") setState({ key, landing: null, failed: error.message === "missing" ? "missing" : true });
+        if (controller.signal.aborted) return;
+        setState(current => current.key === key && current.landing
+          ? {...current, landing:{...current.landing, facts:{...current.landing.facts,pending:true,failed:true}}}
+          : {key,landing:null,failed:error.message === "missing" ? "missing" : true});
       });
-    return () => controller.abort();
+    const retry = event => {if(event.detail === key)load();};
+    window.addEventListener("catalog:model-details-retry",retry);
+    load();
+    return () => {controller.abort();window.removeEventListener("catalog:model-details-retry",retry);};
   }, [key]);
   if (!key) return { landing: null, provisional: null, loading: false, failed: false };
   const ready = state.key === key;
@@ -4355,7 +4356,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   } : null));
   // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
   // и открывается иконкой в строке поиска.
-  const [heroSort, setHeroSort] = useState(restoredHero?.sort || "default");
+  const [heroSort, setHeroSort] = useState(catalogSort(new URLSearchParams({sort:restoredHero?.sort || ""})));
   // «По умолчанию» в выдаче поиска — тот же замес, что и в каталоге: сервер
   // раскладывает строки по зерну, а клиент разносит похожие карточки. Без этого
   // «зикр» открывался десятком одинаковых дорогих машин подряд.
@@ -4651,7 +4652,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
                 label="Сортировка"
                 value={(HERO_SORT_OPTIONS.find((option) => option.value === heroSort) || HERO_SORT_OPTIONS[0]).label}
                 options={HERO_SORT_OPTIONS.map((option) => option.label)}
-                onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "default")}
+                onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "price_asc")}
               />
               <ViewToggle value={heroView} onChange={updateHeroView} />
               <AppLink className="primary search-catalog-link" href={heroSearch.href || "/catalog"} navigate={navigate} aria-label="В каталог">
@@ -6567,8 +6568,6 @@ const catalogMetaQueryForPath = (href) => {
   const filters = catalogFiltersFromParams(landingFilterParams(landing));
   return catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country);
 };
-// Сколько переход на страницу каталога ждёт её справочник (см. navigate в useRoute).
-const CATALOG_META_WAIT_MS = 800;
 const prefetchCatalogMeta = (href) => {
   const query = catalogMetaQueryForPath(href);
   if (query === null || resolvedCatalogMeta(query)) return;
@@ -6591,7 +6590,7 @@ let catalogRequest = null;
 // Каталог и страницы марок/типов открывают свой запрос с фильтрами, поэтому список
 // из шестидесяти карточек им не нужен: просим одну — её достаточно, чтобы узнать
 // размер каталога и что база отвечает.
-const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=newest" : "/api/cars?limit=60&sort=variety");
+const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=price_asc&summary=defer" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
 const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
 // Загрузившись на /catalog, приложение знает одну машину — витрину главной и блок
@@ -6942,7 +6941,7 @@ export function App() {
         }
         if (!cancelled) {
           setCatalogCars(initialCars);
-          setCatalogTotal(Number(payload.total) || initialCars.length);
+          if(payload.total != null)setCatalogTotal(Number(payload.total));
           if (payload.refreshedAt) setCatalogUpdatedAt(payload.refreshedAt);
           setApiMode(true);
         }

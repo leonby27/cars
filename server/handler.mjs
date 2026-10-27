@@ -634,7 +634,7 @@ export async function handleApiRequest(request, response) {
         return html(response, status, fallback, { "cache-control":"no-store" });
       }
     }
-    if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
+    if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), url.searchParams.has("summary") ? catalogMetaCache : catalogCache);
     if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), metaCache);
     if (request.method === "GET" && url.pathname === "/api/brand-guide") {
       const guide = await brandCatalogGuide(url.searchParams.get("brand"));

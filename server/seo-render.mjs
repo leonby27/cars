@@ -312,24 +312,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
-  /**
-   * Вилка цен по набору: «в наличии 5 673 автомобиля, от 9 950 до 56 300 $».
-   * `edges` — самая дешёвая и самая дорогая машина набора, посчитанные тем же
-   * расчётом, что и карточка.
-   */
-  function priceSpread(edges, shown = []) {
+  /** Минимальная цена тем же расчётом, что и цены показанных карточек. */
+  function minimumLandedPrice(cheapest, shown = []) {
     const prices = [];
-    for (const car of [edges?.cheapest, edges?.dearest, ...shown]) if (car) prices.push(estimateLandedCost(car).totalUsd);
+    for (const car of [cheapest, ...shown]) if (car) prices.push(estimateLandedCost(car).totalUsd);
     if (!prices.length) return null;
-    // Края набора выбираются по столбцу `estimated_total_usd`, а он пересчитывается
-    // только при обновлении объявления и после смены правил расчёта какое-то время
-    // отстаёт. Поэтому вилку раздвигаем ценами машин, показанных на этой же странице:
-    // иначе в разметке нижняя граница оказывалась выше, чем цена в списке под ней.
-    return { from: Math.min(...prices), to: Math.max(...prices) };
+    // Сохранённый порядок цен может отставать от текущего расчёта: цена «от»
+    // не должна оказаться выше цены одной из уже показанных машин.
+    return Math.min(...prices);
   }
-
-  /** Словами: «от 9 950 $» или «от 9 950 до 56 300 $». */
-  const spreadText = (spread) => (spread.to > spread.from ? `от ${number(spread.from)} до ${number(spread.to)} $` : `от ${number(spread.from)} $`);
 
   /**
    * Подпись «данные обновлены такого-то числа». Ставится там, где содержимое страницы
@@ -714,13 +705,13 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
    * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
    */
-  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, app = null }) {
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, cheapest = null, priced = [], changedAt = null, app = null }) {
     const canonical = routeUrl(pageRoute(CATALOG_INDEX.route, page));
     const first = (page - 1) * perPage;
-    const spread = priceSpread(edges, priced);
+    const priceFrom = minimumLandedPrice(cheapest, priced);
     const countLine = total
       ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${
-          spread ? `, цены ${spreadText(spread)} с доставкой до Минска` : " — цены указаны с доставкой до Минска"
+          priceFrom ? `, цены от ${number(priceFrom)} $ с доставкой до Минска` : " — цены указаны с доставкой до Минска"
         }.${
           pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
         }</p>`
@@ -738,7 +729,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       "@type": "ItemList",
       name: CATALOG_INDEX.h1,
       url: canonical,
-      numberOfItems: total || items.length,
+      numberOfItems: total == null ? undefined : total || items.length,
       itemListElement: (priced.length ? priced : items.slice(0, 24)).map((car, index) =>
         priced.length
           ? carListItem(car, first + index + 1)
@@ -749,8 +740,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       canonical,
       html: renderHtml({
         title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} ▶ Абкарс` : CATALOG_INDEX.title,
-        // Сначала живые цифры (число машин и вилка цен), потом постоянный текст.
-        description: `${landingSeoDescription({}, { total, priceFrom: spread?.from })}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
+        // Сначала живые цифры (число машин и цена «от»), потом постоянный текст.
+        description: `${landingSeoDescription({}, { total, priceFrom })}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
         body,
         type: "website",
@@ -798,21 +789,22 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // `app` — готовая разметка приложения ({ appRoot, appRootPath, bootData }): тогда
   // страницу видят одинаково человек и робот, а собранный здесь текст остаётся только
   // запасной версией на случай, когда сборка приложения недоступна.
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], models = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, guide = null, seo = null, app = null }) {
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], models = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, cheapest = null, priced = [], changedAt = null, guide = null, seo = null, app = null }) {
     const canonical = routeUrl(pageRoute(landing.path, page));
     const first = (page - 1) * perPage;
-    const spread = priceSpread(edges, priced);
+    const priceFrom = minimumLandedPrice(cheapest, priced);
     // На первой странице — сколько всего машин в разделе и почём они; дальше ещё и какие
     // именно здесь показаны, иначе страницы отличались бы друг от друга только списком.
     const countLine = total
       ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${
-          spread ? `, цены ${spreadText(spread)} с доставкой до Минска` : " — цены указаны с доставкой до Минска"
+          priceFrom ? `, цены от ${number(priceFrom)} $ с доставкой до Минска` : " — цены указаны с доставкой до Минска"
         }.${
           pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
         }</p>`
       // Пустой раздел без объяснения — тонкая страница и тупик. Часть марок мы
       // перестали возить из наличия, но привезти под заказ можем: так и пишем,
       // а ниже идут ссылки на соседние разделы и весь каталог.
+      : total == null ? ""
       : `<p><strong>Сейчас в этом разделе машин нет.</strong> Машину можно привезти под заказ: подберём подходящий вариант ${siteInPhrase()} и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей ${siteFromPhrase()}</a>.</p>`;
     const paging = paginationLinks({ route: landing.path, page, pages });
     const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей ${siteFromPhrase()}</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом ${siteFromPhrase()}</a></p></section>`;
@@ -887,7 +879,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       "@type": "ItemList",
       name: landing.h1,
       url: canonical,
-      numberOfItems: total || items.length,
+      numberOfItems: total == null ? undefined : total || items.length,
       // Нумерация сквозная по всему разделу: на второй странице список начинается
       // не с первого места, а со сто первого. У первых двух десятков стоит цена —
       // ради неё в разметку и добавлены цены: по ней поисковик показывает подборку
@@ -903,7 +895,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       html: renderHtml({
         // Группы используют доступные остатки и цены, марки и страны — свой шаблон.
         title: isCatalogGroup(landing) || landing.kind === "brand" || landing.kind === "origin"
-          ? catalogPageTitle(seo?.title || landingSeoTitle(landing, { total, priceFrom: spread?.from }), page)
+          ? catalogPageTitle(seo?.title || landingSeoTitle(landing, { total, priceFrom }), page)
           : page > 1 ? `${catalogSeoWording(landing.h1, landing.brand, landing.origin)} — страница ${page} ▶ Абкарс` : seo?.title || landing.seoTitle,
         description: `${seo?.description || landing.seoDescription}${page > 1 ? ` Страница ${page} из ${pages}.` : ""}`,
         canonical,
@@ -1015,14 +1007,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * `cars` — самые доступные машины этой модели, `total` — сколько их всего,
    * `siblings` — другие модели той же марки, `brandLanding` — раздел каталога марки.
    */
-  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null, sections = [], similar = [], changedAt = null }) {
+  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, cheapest = null, sections = [], similar = [], changedAt = null }) {
     const canonical = routeUrl(page.path);
-    // Вилку берём по всем машинам модели, а не по загруженной дюжине: дюжина — самые
-    // доступные, и верхняя граница по ней вышла бы заниженной.
-    const spread = priceSpread(edges, items);
+    const priceFrom = minimumLandedPrice(cheapest, items);
     // Строка с наличием и ценой — то, чего человек ждёт от запроса «сколько стоит».
     const availability = total
-      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${spread ? `, ${spreadText(spread)} с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} ${siteFromPhrase()}</a>.` : ""}</p>`
+      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${priceFrom ? `, от ${number(priceFrom)} $ с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} ${siteFromPhrase()}</a>.` : ""}</p>`
       // Пустая страница без выходов — тупик и для человека, и для поисковика.
       // Поэтому здесь честное «нет», предложение подбора под заказ и ссылки на
       // замену: раздел марки и её другие обзоры (они идут блоком ниже).
@@ -1069,11 +1059,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         itemListElement: items.slice(0, 12).map((car, index) => carListItem(car, index + 1)),
       });
     }
-    // Вилка цен по модели. Здесь она уместна как нигде: страница про одну машину,
-    // и «BYD Han, 616 предложений, от 15 800 до 29 400 $» — это ровно то, что
-    // описывает `AggregateOffer`. На разделах каталога такой разметки нет намеренно:
-    // «Электромобили» — не товар, и вилка цен по ним была бы натяжкой.
-    if (total && spread && Number.isFinite(spread.from)) {
+    // Минимальная цена и число предложений модели, без верхнего предела.
+    if (total && priceFrom && Number.isFinite(priceFrom)) {
       schemas.push({
         "@context": "https://schema.org",
         "@type": "Car",
@@ -1084,8 +1071,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         offers: {
           "@type": "AggregateOffer",
           priceCurrency: "USD",
-          lowPrice: spread.from,
-          highPrice: spread.to,
+          lowPrice: priceFrom,
           offerCount: total,
           availability: "https://schema.org/InStock",
           itemCondition: "https://schema.org/UsedCondition",

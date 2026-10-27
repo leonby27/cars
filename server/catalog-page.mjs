@@ -1,17 +1,17 @@
+import {preparedCatalogFacts,preparedBrandStock,preparedBrandModels} from "./prepared-catalog.mjs";
 // Страницы каталога, собранные в момент запроса: общая `/catalog` и разделы под марку,
 // тип двигателя или кузов — `/catalog/byd`, `/catalog/electric`, `/catalog/suv`.
 //
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
-// тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
-// берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { brandCatalogGuide, brandModels, brandStock, getCatalogMeta, listCars, priceEdges } from "./repository.mjs";
+// готовые файлы и пересобирать сайт ради обновления списка незачем. Карточки берём
+// из базы; сводку для SEO — из готовых данных, без ожидания нового подсчёта.
+import { listCars, minimumPricedCar, readyCatalogMeta, readyCatalogSummary } from "./repository.mjs";
 import { bootCars, catalogBootSearch, catalogMetaBoot, catalogSortFor, dailyShuffleSeed, plainCatalogSearch, renderCatalogAppMarkup } from "./app-render.mjs";
 import { catalogRedirect } from "../src/catalog-url.js";
 import { estimateLandedCost } from "../src/pricing.js";
-import { isBrandGuideLanding } from "../src/brand-guide.js";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogPageCount, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, CATALOG_MAX_PAGES, catalogLandingMoved, catalogPageCount, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 import { withoutTrackingParams } from "../src/tracking-params.js";
 // Вычеркнутые марки: из наличия их убрали, но раздел оставили с предложением
@@ -86,6 +86,7 @@ async function firstListing(filters, query, number, summary = null) {
   if (seed) params.set("seed", seed);
   params.set("limit", String(carsOnPage));
   params.set("offset", String((number - 1) * carsOnPage));
+  params.set("summary", "defer");
   const list = await listCars(params, { summary, includeYears:true });
   return { list, sort, seed };
 }
@@ -106,20 +107,20 @@ async function catalogContext(filters) {
   if (brandFilter) metaQuery.set("brand", brandFilter);
   for (const value of bodyType) metaQuery.append("bodyType", value);
   if (country) metaQuery.set("country", country);
-  // Full-catalog scans compete on the two-core host. Keep them staged for broad
-  // sections; without these restrictions metadata already has every brand count.
-  const stock = type || bodyType.length || country ? await brandStock() : null;
-  const meta = await getCatalogMeta(type || null, brandFilter || null, bodyType, country);
-  return { metaQuery, meta, stock:stock || new Map(meta.brands.map(({ brand, count }) => [brand, count])) };
+  // Use only prepared values here; the browser refreshes filter metadata separately.
+  const stock = preparedBrandStock();
+  const meta = readyCatalogMeta(type || null, brandFilter || null, bodyType, country);
+  return { metaQuery, meta, stock };
 }
 
 function catalogBoot({ path, query, list, seed, context, guide = null, brand = null }) {
   return {
-    catalogValue: plainCatalogSearch(query) ? { items: bootCars(list.items), total: list.total, hasMore: Boolean(list.hasMore), changedAt: list.changedAt || null } : null,
+    catalogValue: plainCatalogSearch(query) ? { items: bootCars(list.items), total: list.total, summaryPending: true, hasMore: Boolean(list.hasMore), changedAt: list.changedAt || null } : null,
     catalogPath: path,
     catalogSearch: catalogBootSearch(query),
     catalogSeed: seed,
     ...catalogMetaBoot(context.metaQuery, context.meta),
+    catalogSummaryPending: true,
     ...(guide && brand ? { brandGuideValue: guide, brandGuideBrand: brand } : {}),
   };
 }
@@ -144,28 +145,30 @@ export async function renderCatalogIndex(searchParams) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const number = requestedPage(params);
-  if (number === null) return { status: 404, html: renderer.landingMissingPage() };
+  if (number === null || number > CATALOG_MAX_PAGES) return { status: 404, html: renderer.landingMissingPage() };
   // «?page=1» — тот же самый каталог, что и без параметра: два адреса с одной выдачей
   // поисковику не нужны.
   if (params.get("page") !== null && number === 1) return { status: 301, location: pageLocation("/catalog", 1, params) };
 
-  // Порядок по цене, а не выдача по умолчанию: та перемешана и от запроса к запросу
-  // меняется, а страницы списка должны делить каталог на непересекающиеся куски.
+  // Без явной сортировки первая порция сразу выбирается по возрастанию цены.
   const filters = new URLSearchParams();
-  const [{ list, seed }, edges] = await Promise.all([
+  const [{ list, seed }, cheapest] = await Promise.all([
     firstListing(filters, params, number),
-    priceEdges(new URLSearchParams({ sort: "price_asc" })),
+    minimumPricedCar(new URLSearchParams()),
   ]);
-  const { items, total, changedAt } = list;
+  const { items } = list;
+  const known = readyCatalogSummary(filters) || preparedCatalogFacts("/catalog");
+  const total = items.length ? (known?.total > 0 ? known.total : null) : 0;
+  const changedAt = known?.changedAt || null;
   const pages = catalogPageCount(total);
-  if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
+  if (number > 1 && !items.length) return { status: 404, html: renderer.landingMissingPage() };
   const context = await catalogContext(filters);
 
   // Полные записи машин (с ценой) — из того же ответа: первые 24 идут в разметку
   // предложений, весь список — в готовую страницу.
   const priced = items.slice(0, 24);
   const app = await catalogApp("/catalog", catalogBoot({ path: "/catalog", query: params, list, seed, context }), params);
-  const page = renderer.catalogIndexPage({ app, cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(context.stock)), page: number, pages, perPage: carsOnPage, edges, priced, changedAt });
+  const page = renderer.catalogIndexPage({ app, cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(context.stock)), page: number, pages, perPage: carsOnPage, cheapest, priced, changedAt });
   return { status: 200, html: page.html };
 }
 
@@ -191,37 +194,30 @@ export async function renderCatalogPage(slug, searchParams) {
   const location = catalogRedirect(landing, query);
   if (location) return { status: 301, location };
   const number = requestedPage(query);
-  if (number === null) return { status: 404, html: renderer.landingMissingPage() };
+  if (number === null || number > CATALOG_MAX_PAGES) return { status: 404, html: renderer.landingMissingPage() };
   if (query.get("page") !== null && number === 1) return { status: 301, location: pageLocation(landing.path, 1, query) };
 
   const params = landingApiParams(landing);
-  const guideRead = isBrandGuideLanding(landing) ? brandCatalogGuide(landing.brand) : null;
-  const [{ list, seed }, edges, guide, models, preparedContext] = await Promise.all([
-    firstListing(params, query, number, guideRead),
-    priceEdges(params),
-    // Сводку по марке каталог показывает под выдачей на любой странице списка —
-    // готовой странице она нужна тоже на любой, иначе там стояло бы «Загружаем…».
-    guideRead,
-    // Все модели марки в наличии: со страницы марки ведут ссылки на каталожные
-    // страницы моделей (с 25.09.2026 — у каждой модели, обзор написан или нет).
-    landing.brand && number === 1
-      ? guideRead ? guideRead.then((guide) => (guide?.models || []).map(({ model, count }) => ({ model, count }))) : brandModels(landing.brand)
-      : [],
-    // Only brand guides eliminated enough duplicate reads to overlap this work.
-    // Broad sections keep metadata after the listing scans to limit contention.
-    guideRead ? catalogContext(params) : null,
+  const [{ list, seed }, cheapest] = await Promise.all([
+    firstListing(params, query, number),
+    minimumPricedCar(params),
   ]);
-  const { items, total, changedAt } = list;
+  const guide = null;
+  const models = landing.brand && number === 1 ? preparedBrandModels(landing.brand) : [];
+  const { items } = list;
+  const known = readyCatalogSummary(params) || preparedCatalogFacts(landing.path);
+  const total = items.length ? (known?.total > 0 ? known.total : null) : 0;
+  const changedAt = known?.changedAt || null;
   const pages = catalogPageCount(total);
-  if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
+  if (number > 1 && !items.length) return { status: 404, html: renderer.landingMissingPage() };
   // Раздел без единой машины обычно значит «марку ещё не загрузили» — такой страницы
   // для посетителя нет. Но у вычеркнутых марок (31.08.2026) машин не будет никогда,
   // а привезти их под заказ мы можем: страница остаётся и честно это предлагает.
   // Иначе 21 раздел, уже отданный поисковику, разом превратился бы в 404.
   // Страница страны без машин (Корея до первого импорта) тоже остаётся: предлагает
   // привезти под заказ, а от поиска закрыта — landingIndexable при нуле даёт noindex.
-  if (!total && !droppedBrands.has(landing.brand) && landing.kind !== "origin") return { status: 404, html: renderer.landingMissingPage() };
-  const context = preparedContext || await catalogContext(params);
+  if (!items.length && !droppedBrands.has(landing.brand) && landing.kind !== "origin") return { status: 404, html: renderer.landingMissingPage() };
+  const context = await catalogContext(params);
   const priced = items.slice(0, 24);
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
@@ -240,13 +236,12 @@ export async function renderCatalogPage(slug, searchParams) {
   // что в карточке) и годы. На пагинации групп сохраняем цифры и добавляем номер.
   const stats = {
     total,
-    priceFrom: edges?.cheapest ? estimateLandedCost(edges.cheapest).totalUsd : null,
-    priceTo: edges?.dearest ? estimateLandedCost(edges.dearest).totalUsd : null,
+    priceFrom: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
     yearMin: number === 1 ? list.yearMin ?? null : null,
     yearMax: number === 1 ? list.yearMax ?? null : null,
   };
   const seo = { title: landingSeoTitle(landing, stats), description: landingSeoDescription(landing, stats) };
   const app = await catalogApp(landing.path, catalogBoot({ path: landing.path, query, list, seed, guide, brand: landing.brand, context }), query);
-  const page = renderer.landingPage({ app, landing, cars: items, total, modelPages, models, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt, guide, indexable: landingIndexable({ total }), seo });
+  const page = renderer.landingPage({ app, landing, cars: items, total, modelPages, models, others, page: number, pages, perPage: carsOnPage, cheapest, priced, changedAt, guide, indexable: total == null ? allowIndexing : landingIndexable({ total }), seo });
   return { status: 200, html: page.html };
 }

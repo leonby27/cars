@@ -39,20 +39,20 @@ test('all remaining filters, multiselections and exclusions survive route change
   assert.ok(href.startsWith('/catalog/byd?'));
 });
 
-test('pagination preserves filters and sort, omitting only the default sort',()=>{
+test('pagination preserves filters and sort, normalizing the hidden default sort to price ascending',()=>{
   for(const sort of CATALOG_SORTS) {
     const p=new URLSearchParams({brand:'Zeekr',model:'7X',country:'china',sort});
     for(const page of [1,2,5]) {
       const href=catalogHref(p,{page}),restored=selection(href,'7X');
       assert.equal(restored.get('country'),'china');
-      assert.equal(catalogSort(restored),sort,href);
-      assert.equal(restored.get('sort'),sort==='default'?null:sort,href);
+      assert.equal(catalogSort(restored),sort==='default'?'price_asc':sort,href);
+      assert.equal(restored.get('sort'),['default','price_asc'].includes(sort)?null:sort,href);
       assert.equal(Number(restored.get('page')||1),page);
     }
   }
   assert.equal(catalogHref('country=china&sort=default',{page:2}),'/catalog/china?page=2');
   assert.equal(catalogHref('brand=Audi&model=A4&sort=default'),'/catalog/audi/a4');
-  assert.equal(catalogHref('brand=Audi&model=A4&sort=price_asc'),'/catalog/audi/a4?sort=price_asc');
+  assert.equal(catalogHref('brand=Audi&model=A4&sort=price_asc'),'/catalog/audi/a4');
 });
 
 test('query overrides path defaults, placeholders and tracking are not selection filters',()=>{
@@ -93,14 +93,14 @@ test('the catalog HTTP entry uses the same destination without reading the datab
   const landing={path:'/catalog/audi/a4',brand:'Audi',model:'A4'};
   assert.equal(catalogRedirect(landing,'sort=default&page=2',landing.path),'/catalog/audi/a4?page=2');
   assert.equal(catalogRedirect(landing,'page=2',landing.path),null);
-  assert.equal(catalogRedirect(landing,'page=2&sort=price_asc',landing.path),null);
+  assert.equal(catalogRedirect(landing,'page=2&sort=price_asc',landing.path),'/catalog/audi/a4?page=2');
 });
 
 test('server model sorting agrees with the shared URL defaults and explicit sort', async()=>{
   const {modelListQuery}=await import('../server/model-page.mjs');
   for(const sort of CATALOG_SORTS) {
-    assert.equal(modelListQuery(new URLSearchParams({sort})).sort,sort);
+    assert.equal(modelListQuery(new URLSearchParams({sort})).sort,sort==='default'?'price_asc':sort);
   }
-  assert.equal(modelListQuery(new URLSearchParams()).sort,'default');
-  assert.equal(modelListQuery(new URLSearchParams('page=2')).sort,'default');
+  assert.equal(modelListQuery(new URLSearchParams()).sort,'price_asc');
+  assert.equal(modelListQuery(new URLSearchParams('page=2')).sort,'price_asc');
 });

@@ -1,4 +1,5 @@
-import {cachedCatalogRead,cachedCatalogValue,clearCatalogReadCache} from "./catalog-read-cache.mjs";
+import {cachedCatalogRead,cachedCatalogValue,readyCatalogValue,clearCatalogReadCache} from "./catalog-read-cache.mjs";
+import {CATALOG_PAGE_SIZE, CATALOG_MAX_PAGES} from '../src/catalog-landings.js';
 import { readFileSync } from "node:fs";
 import { createAsyncCache } from "./async-cache.mjs";
 import { createInputAwareCache } from "./input-aware-cache.mjs";
@@ -315,21 +316,33 @@ export const catalogHasMore = (offset, count, total) => offset + count < Math.mi
  * запрос копируют, поэтому вторым заходом слова ищутся по основе.
  */
 export async function listCars(searchParams, { summary = null, includeYears = false } = {}) {
+  const summaryOnly = searchParams.get("summary") === "only";
   const words = searchTextWords(searchParams.get("text"));
-  const answer = await listCarsPage(searchParams, { summary, includeYears });
-  if (answer.total || !words.length) return answer;
+  const answer = summaryOnly ? await catalogSummary(searchParams) : await listCarsPage(searchParams, { summary, includeYears });
+  if (answer.total || answer.items?.length || !words.length) return answer;
   const stems = words.map(searchWordStem);
   if (!stems.some((stem, at) => stem !== words[at])) return answer;
+  // A later empty batch can mean that exact matches ended, rather than that the
+  // original phrase has no matches. Check existence without counting the catalog.
+  if (!summaryOnly && answer.summaryPending && Number(searchParams.get("offset")) > 0) {
+    const first = new URLSearchParams(searchParams);
+    first.set("offset", "0");
+    first.set("limit", "1");
+    if ((await listCarsPage(first)).items.length) return answer;
+  }
   const relaxed = new URLSearchParams(searchParams);
   relaxed.set("text", stems.join(" "));
-  const retry = await listCarsPage(relaxed, { includeYears });
-  return retry.total ? retry : answer;
+  const retry = summaryOnly ? await catalogSummary(relaxed) : await listCarsPage(relaxed, { includeYears });
+  return retry.total || retry.items?.length ? retry : answer;
 }
 
 async function listCarsPage(searchParams, { summary = null, includeYears = false } = {}) {
   const { where, values } = buildCarFilters(searchParams);
   const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);
+  const deferSummary = searchParams.get("summary") === "defer";
+  const deferredCap = Math.min(maxOffset, CATALOG_PAGE_SIZE * CATALOG_MAX_PAGES);
+  const queryLimit = deferSummary ? Math.min(limit + 1, Math.max(0, deferredCap - offset)) : limit;
   if (searchParams.get("sort") === "variety") {
     const comparison = await marketComparison(modelPriceStats);
     const query = homeFeedQuery({ where, values, limit, references:homeMarketReferences(comparison), carSelect });
@@ -347,18 +360,33 @@ async function listCarsPage(searchParams, { summary = null, includeYears = false
       // перекладывает каждую машину вместе с source_payload: на 80 тыс. машин сортировка
       // «по умолчанию» не влезала в память и писала на диск ~48 МБ на каждый запрос.
       // Порядок у всех сортировок завершается l.id, поэтому внешний ORDER BY его повторяет.
-      : cachedCatalogValue(pool, ["list-items", where, values, order, limit, offset], async () => {
+      : cachedCatalogValue(pool, ["list-items", where, values, order, queryLimit, offset], async () => {
         const result = await pool.query(`WITH picked AS (
           SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
           ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}
         )
-        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,limit,offset]);
+        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,queryLimit,offset]);
         return result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
       }),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
     // Count is independent of page, sort and shuffle seed. A brand page can provide
     // the same facts from its guide; subsequent API batches reuse that result too.
-    cachedCatalogValue(pool, ["list-summary", where, values], async () => {
+    deferSummary ? Promise.resolve(null) : catalogSummary(searchParams, { summary }),
+  ]);
+  if (deferSummary) return {items:items.slice(0,limit),total:null,refreshedAt:null,changedAt:null,summaryPending:true,
+    limit,offset,hasMore:offset+limit<deferredCap && items.length>limit};
+  return { items, total:counts.total, refreshedAt:counts.refreshedAt, changedAt:counts.changedAt, limit, offset, hasMore:catalogHasMore(offset, items.length, counts.total),
+    ...(includeYears ? { yearMin:counts.yearMin, yearMax:counts.yearMax } : {}) };
+}
+
+export function readyCatalogSummary(searchParams) {
+  const {where,values}=buildCarFilters(searchParams);
+  return readyCatalogValue(pool,["list-summary",where,values]);
+}
+
+export async function catalogSummary(searchParams, {summary=null}={}) {
+  const {where,values}=buildCarFilters(searchParams);
+  return cachedCatalogValue(pool, ["list-summary", where, values], async () => {
       if (summary) {
         const facts = await summary;
         return { total:facts?.total || 0, refreshedAt:facts?.refreshedAt || null, changedAt:facts?.changedAt || null,
@@ -370,10 +398,7 @@ async function listCarsPage(searchParams, { summary = null, includeYears = false
         FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
       const row = result.rows[0];
       return { total:row.total, refreshedAt:row.refreshed_at, changedAt:row.changed_at || null, yearMin:row.year_min ?? null, yearMax:row.year_max ?? null };
-    }, { expiresAt:(facts) => facts.validUntil }),
-  ]);
-  return { items, total:counts.total, refreshedAt:counts.refreshedAt, changedAt:counts.changedAt, limit, offset, hasMore:catalogHasMore(offset, items.length, counts.total),
-    ...(includeYears ? { yearMin:counts.yearMin, yearMax:counts.yearMax } : {}) };
+    }, { expiresAt:(facts) => facts.validUntil });
 }
 
 // Related cards need a small list, never total counts or refresh timestamps.
@@ -442,7 +467,7 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
  *
  * Цены здесь нет намеренно: столбец `estimated_total_usd` пересчитывается при
  * обновлении объявления и после смены правил расчёта какое-то время отстаёт, поэтому
- * цену по-прежнему берут из самой дешёвой строки целиком (см. `priceEdges`).
+ * цену по-прежнему берут из самой дешёвой строки целиком (см. `minimumPricedCar`).
  */
 export async function modelSummary(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
@@ -595,22 +620,16 @@ export async function sectionStats(searchParams) {
 }
 
 /**
- * Самая дешёвая и самая дорогая машина набора — чтобы показать вилку цен: «в наличии
- * 5 673 автомобиля, от 14 900 до 78 300 $». Цену считаем тем же `estimateLandedCost`,
+ * Самая дешёвая машина набора — для цены «от». Цену считаем тем же `estimateLandedCost`,
  * что и карточка, поэтому берём строки целиком, а не столбец `estimated_total_usd`:
  * тот пересчитывается только при обновлении объявления, и после смены правил расчёта
  * (пошлина на последовательные гибриды, курс) он какое-то время отстаёт. Публиковать
  * в разметке цену ниже той, что человек увидит на странице машины, нельзя.
- *
- * Обе строки достаём одним запросом: условия отбора в обеих половинах те же самые,
- * поэтому и подстановки одни и те же.
  */
-export async function priceEdges(searchParams) {
+export async function minimumPricedCar(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
-  const half = (direction) => `(${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ${direction} NULLS LAST, l.id LIMIT 1)`;
-  const result = await cachedCatalogRead(pool, `${half("ASC")} UNION ALL ${half("DESC")}`, values);
-  const cars = result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
-  return { cheapest: cars[0] || null, dearest: cars[1] || cars[0] || null };
+  const result = await cachedCatalogRead(pool, `${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ASC NULLS LAST, l.id LIMIT 1`, values);
+  return result.rows[0] ? withoutDetailPayload(rowToCar(result.rows[0])) : null;
 }
 
 /**
@@ -662,7 +681,7 @@ export async function brandModels(brand) {
  * Живые цифры одной модели для каталожной страницы: сколько машин, годы, пробег,
  * вилка и середина цен, типы двигателя, кузова и лучшие характеристики. Один скан
  * по объявлениям модели; цены — по сохранённой оценке до Минска (та же, что в
- * сортировке), края вилки страница потом пересчитывает живым расчётом.
+ * сортировке), минимальную цену страница потом пересчитывает живым расчётом.
  */
 export async function modelCatalogFacts(brand, model) {
   const numeric = (source) => `(CASE WHEN ${source} ~ '^[0-9]+([.,][0-9]+)?$' THEN replace(${source}, ',', '.')::numeric END)`;
@@ -846,7 +865,10 @@ export async function modelClassStock() {
  */
 // `country` — ключ страны (src/origin.js): на странице страны марки, модели и счётчики
 // считаются только по её источникам, иначе на /catalog/korea висели бы китайские марки.
-export async function getCatalogMeta(type, brand, bodyType, country = null) {
+const metaCacheKey=(type,brand,bodyType,country)=>["catalog-meta",type||null,brand||null,multiParamValues(bodyType,"Все кузова"),country||null];
+export const readyCatalogMeta=(type,brand,bodyType,country=null)=>readyCatalogValue(pool,metaCacheKey(type,brand,bodyType,country));
+export const getCatalogMeta=(type,brand,bodyType,country=null)=>cachedCatalogValue(pool,metaCacheKey(type,brand,bodyType,country),()=>loadCatalogMeta(type,brand,bodyType,country));
+async function loadCatalogMeta(type, brand, bodyType, country = null) {
   const origin = originFromParam(country);
   const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
   // У каждого прохода свой набор подстановок, номера $n в каждом идут подряд.

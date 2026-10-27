@@ -77,11 +77,11 @@
         try { id = detail ? decodeURIComponent(detail[1]) : null; } catch { id = detail[1]; }
         const showcase = !/^\/catalog(?:\/|$)/.test(location.pathname);
         const metaType = { "/catalog/electric": "Электромобиль", "/catalog/hybrid": "Гибрид", "/catalog/petrol": "ДВС" }[location.pathname];
-        const metaWanted = metaType || location.pathname === "/" || location.pathname === "/catalog";
+        const metaWanted = showcase && (metaType || location.pathname === "/");
         const metaQuery = metaType ? new URLSearchParams({ type: metaType }).toString() : "";
         const meta = metaWanted ? start(`/api/catalog/meta${metaQuery ? `?${metaQuery}` : ""}`) : null;
         window.__boot = {
-          catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=newest"),
+          catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=price_asc&summary=defer"),
           carId: id,
           car: id ? start(`/api/cars/${encodeURIComponent(id)}`) : null,
           metaQuery,

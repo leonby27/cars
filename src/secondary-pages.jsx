@@ -1180,6 +1180,7 @@ function ModelLandingNotes({ landing, page, navigate }) {
       <div className="model-page-article">
         <div className="model-page-intro model-page-summary">
           <h2 id="model-landing-notes-title">{name} в каталоге: что есть и почём</h2>
+          {facts.failed ? <p role="status">Не удалось обновить статистику модели. <button type="button" className="text-button" onClick={() => window.dispatchEvent(new CustomEvent("catalog:model-details-retry", {detail:landing.path}))}>Повторить</button></p> : facts.pending && <p role="status" aria-label="Загружаем статистику модели"><span className="catalog-data-skeleton" /></p>}
           {autoText.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
@@ -1331,7 +1332,7 @@ const emptyCatalogFilters = () => ({
   ...emptyExclusions(),
 });
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null, catalogHrefFor = savedSearchCatalogHref }) {
+function FilterPanel({ filters, setFilters, metaLoading = false, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null, catalogHrefFor = savedSearchCatalogHref }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   // Модель не сбрасываем: её выбирал посетитель, см. такой же changeType выше.
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, ...POWERTRAIN_FILTER_RESET }));
@@ -1388,6 +1389,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives, countries }}
       optionCounts={optionCounts}
       availability={availability}
+      metaLoading={metaLoading}
       resultCount={resultCount}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
@@ -1754,7 +1756,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // retrigger the query this component already issued at mount.
   const useApi = apiMode !== false;
   const sortOptions = [
-    { value: "default", label: "По умолчанию" },
     { value: "price_asc", label: "Дешёвые" },
     { value: "price_desc", label: "Дорогие" },
     { value: "newest", label: "Новые объявления" },
@@ -1796,7 +1797,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // каталога — «/catalog» (раздела у него нет).
   const listPath = landing?.path || "/catalog";
   const serverListHere = Boolean(window.__boot?.catalogValue && window.__boot.catalogPath === listPath);
-  const restoredCatalog = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
+  const restoredCandidate = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
+  const restoredCatalog = restoredCandidate?.sort === "default" ? null : restoredCandidate;
   const [filters, setFilters] = useState(() => initialFilters);
   // Первая страница выдачи, встроенная сервером в готовую страницу (каталог, разделы,
   // страницы моделей): берём её, если она про этот адрес и этот отбор, и ничего не
@@ -1811,7 +1813,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // Порядок «по умолчанию» перемешан по ключу. Для встроенного списка ключ выбрал
   // сервер (один на сутки): со случайным ключом браузер переставил бы машины, и
   // готовая разметка разошлась бы с первым кадром.
-  const bootSeed = bootList && /^s\d{1,2}$/.test(String(window.__boot.catalogSeed || "")) ? window.__boot.catalogSeed : null;
+  const bootSeed = bootList && catalogSort(params) === "default" && /^s\d{1,2}$/.test(String(window.__boot.catalogSeed || "")) ? window.__boot.catalogSeed : null;
   const bootListUsed = useRef(Boolean(bootList));
   const [remoteCars, setRemoteCars] = useState(() => {
     if (!bootList) return [];
@@ -1820,7 +1822,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     return bootSeed ? varietyOrder(items, seededRandom(`${bootSeed}:0`), []) : items;
   });
   const [remoteReceived, setRemoteReceived] = useState(Boolean(bootList));
-  const [remoteTotal, setRemoteTotal] = useState(bootList ? Number(bootList.total) || 0 : 0);
+  const [remoteTotal, setRemoteTotal] = useState(bootList?.total == null ? null : Number(bootList.total));
   // «Есть ли ещё» решает сервер, а не сравнение загруженного с общим числом: у API
   // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
   // бы пустые страницы и показывала ошибку загрузки на ровном месте.
@@ -1828,9 +1830,11 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
+  const [metaLoading, setMetaLoading] = useState(() => !bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)));
+  const [detailsError, setDetailsError] = useState(false);
+  const detailsRetry = useRef(null);
   // Filters and sort come from the URL; history restores only the loaded list and scroll.
-  // Без sort используем «По умолчанию» на всех страницах; выбранный другой порядок
-  // хранится в адресе и одинаково восстанавливается сервером и браузером.
+  // Без sort используем «Дешёвые»; другие порядки хранятся в адресе.
   const urlSort = catalogSort(params);
   const [sort, setSort] = useState(urlSort);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
@@ -1977,7 +1981,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const typedCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand));
   const brandCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
-  const models = ["Все модели", ...(useApi ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
+  const models = [...new Set(["Все модели", ...multiValues(filters.model, ANY_MODEL), ...(useApi ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))])];
   // Запоминаем модели марки: по ним переход на страницу модели обходится без ожидания.
   if (useApi && filters.brand !== "Все марки" && remoteMeta.models.length) brandModelsCache.set(filters.brand, remoteMeta.models.map((item) => item.model));
   const brandEntries = useApi ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
@@ -2027,6 +2031,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     const query = new URLSearchParams({
       limit: String(loadedLimit),
       offset: String(startOffset),
+      summary: "defer",
     });
     query.set("sort", sort);
     if (sort === "default") query.set("seed", shuffleSeed);
@@ -2057,36 +2062,45 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   useEffect(() => {
     if (!useApi) return;
     const controller = new AbortController();
-    // Даже если список уже встроен в HTML, его справочник мог быть собран раньше:
-    // проверяем марки и модели заново после оживления страницы.
-    requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country))
-      .then((meta) => {
-        if (!controller.signal.aborted) setRemoteMeta(meta);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setRemoteError(true);
-      });
+    const cachedMeta=bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country));
+    setMetaLoading(!cachedMeta);
+    if(cachedMeta)setRemoteMeta(cachedMeta);
+    const loadDetails = () => {
+      if (controller.signal.aborted) return;
+      setDetailsError(false);
+      requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country))
+        .then(meta => {if (!controller.signal.aborted) {setRemoteMeta(meta);setMetaLoading(false);}})
+        .catch(() => {if (!controller.signal.aborted) {setDetailsError(true);setMetaLoading(false);}});
+      const statsQuery=requestParams();statsQuery.set("summary","only");
+      fetchCarsJson(`/api/cars?${statsQuery}`,controller.signal)
+        .then(stats=>{if(!controller.signal.aborted)setRemoteTotal(stats.total);})
+        .catch(error=>{if(!controller.signal.aborted)setDetailsError(true);});
+    };
+    detailsRetry.current=loadDetails;
+    const afterCards = () => requestAnimationFrame(() => requestAnimationFrame(loadDetails));
     // Первая страница уже встроена сервером — первый запрос пропускаем. Встроенный
     // список одноразовый: при следующем заходе на этот адрес внутри сайта он был бы
     // уже устаревшим.
     if (bootListUsed.current) {
       bootListUsed.current = false;
       if (window.__boot) window.__boot.catalogValue = null;
+      afterCards();
       return () => controller.abort();
     }
     setRemoteLoading(true);
     setRemoteError(false);
+    setRemoteTotal(null);
     const query = requestParams();
-    // Справочник и список машин идут врозь: какие поля показывать, известно из
-    // справочника, а он отвечает быстрее выдачи. Раньше их ждали вместе, и панель
-    // фильтров достраивалась только после того, как загрузится каталог.
+    // Сначала получаем карточки; справочник и сводку запускаем после их отрисовки.
     fetch(`/api/cars?${query}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog unavailable"))))
       .then((catalog) => {
+        if (controller.signal.aborted) return;
         setRemoteCars(restoreRemoteOrder(catalog.items.map(normalizeImportedCar)));
         setRemoteReceived(true);
-        setRemoteTotal(catalog.total);
+        if (catalog.total != null) setRemoteTotal(catalog.total);
         setRemoteHasMore(Boolean(catalog.hasMore));
+        afterCards();
       })
       .catch((error) => {
         if (error.name !== "AbortError") setRemoteError(true);
@@ -2127,7 +2141,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       const catalog = await response.json();
       setRemoteCars((current) => [...current, ...orderRemoteBatch(catalog.items.map(normalizeImportedCar), current)]);
       setLoadedLimit((current) => current + catalog.items.length);
-      setRemoteTotal(catalog.total);
+      if (catalog.total != null) setRemoteTotal(catalog.total);
       setRemoteHasMore(Boolean(catalog.hasMore));
     } catch (error) {
       if (error.name !== "AbortError") setRemoteError(true);
@@ -2147,7 +2161,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const displayed = useApi ? remoteCars : filtered.slice(startOffset, startOffset + loadedLimit);
   const resultCount = useApi ? remoteTotal : filtered.length;
   // Until the first page answers there is no count yet, and "0" reads as an empty result.
-  const knownResultCount = remoteLoading && !remoteCars.length ? null : resultCount;
+  const knownResultCount = useApi && remoteTotal == null ? null : resultCount;
   // Без API считаем от начала списка, а не от показанного: при заходе по адресу со
   // страницей («?page=7») первые шестьсот машин в выдачу не попадают, и сравнение
   // «показано меньше, чем найдено» оставляло бы кнопку висеть на конце списка.
@@ -2235,8 +2249,9 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           <CatalogHeading title={heading.title} tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} />
         </div>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
-      {filters.brand !== "Все марки" && models.length > 1 && (
+      <FilterPanel metaLoading={metaLoading} filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
+      {metaLoading && filters.brand !== "Все марки" && <div className="model-quick-chips" role="status" aria-label="Загружаем модели"><span className="catalog-data-skeleton" /></div>}
+      {!metaLoading && filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {quickModels.map((model) => {
             const active = model === ANY_MODEL ? !selectedModels.length : selectedModels.includes(model);
@@ -2282,7 +2297,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         <section className="results-list" aria-busy={remoteLoading && !displayed.length ? "true" : undefined}>
           <div className="result-tools">
             <div className="result-summary">
-              <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} шт.`}</b>
+              <b>{knownResultCount == null ? <span className="catalog-data-skeleton" role="status" aria-label="Загружаем количество автомобилей" /> : `${knownResultCount} шт.`}</b>
               {/* Слова из поиска, которых нет в выпадающих списках (комплектация,
                   химия батареи, размер шин). Без этой пометки выдача была бы уже
                   общей, а объяснения этому на странице не нашлось бы. */}
@@ -2320,6 +2335,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           ) : (
             <CustomSearchCta variant="empty" />
           )}
+          {detailsError && <p className="catalog-message" role="status">Не удалось обновить данные фильтров или количество. <button type="button" className="text-button" onClick={() => detailsRetry.current?.()}>Повторить</button></p>}
           {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
           {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает
               и получает продолжение на месте, робот идёт по адресу. Номеров страниц

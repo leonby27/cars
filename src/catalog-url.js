@@ -8,8 +8,8 @@ const MULTI = new Set(["model", "body", "color", "brandNot", "modelNot", "bodyTy
 
 export const catalogShuffleSeed = (now = Date.now()) => `s${Math.floor((now + 3 * 3600 * 1000) / 86400000) % 12}`;
 
-export const catalogSort = (params) => CATALOG_SORTS.has(params.get("sort"))
-  ? params.get("sort") : "default";
+export const catalogSort = (params) => CATALOG_SORTS.has(params.get("sort")) && params.get("sort") !== "default"
+  ? params.get("sort") : "price_asc";
 
 /** Path filters are defaults; explicit query values take precedence. */
 export function catalogUrlParams(landing, search) {
@@ -53,8 +53,9 @@ export function catalogHref(search, { page, tracking = false } = {}) {
     if (params.getAll(key).length === 1 && params.get(key) === value) params.delete(key);
   }
   const selectedSort = catalogSort(params);
-  if (selectedSort === "default") params.delete("sort");
-  if (selectedSort !== "default") params.delete("seed");
+  if (selectedSort === "price_asc") params.delete("sort");
+  else params.set("sort", selectedSort);
+  params.delete("seed");
   params.sort();
   const query = params.toString();
   return `${path}${query ? `?${query}` : ""}`;

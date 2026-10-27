@@ -8,7 +8,7 @@ import { createSeoRenderer } from "../server/seo-render.mjs";
 
 // Раньше поисковику уходил список названий без единой суммы, хотя цена — главное,
 // зачем человек открывает подборку. Теперь у машин в разметке есть цена, а у страницы
-// модели — вилка по всем предложениям.
+// модели — минимальная цена по всем предложениям.
 
 const shell = `<!doctype html>
 <html lang="ru">
@@ -37,9 +37,19 @@ const car = (id, chinaPrice, year = 2023) => ({
 const priceOf = (item) => estimateLandedCost(item).totalUsd;
 const pricesIn = (html) => [...html.matchAll(/"price":(\d+)/g)].map((match) => Number(match[1]));
 
-test("в разделе видна вилка цен, а у машин в разметке — своя цена", () => {
+test("неизвестное количество не превращается в пустой раздел или число показанных карточек", () => {
+  const shown = [car(1, 90000)];
+  const section = renderer.landingPage({ landing: findCatalogLanding("/catalog/byd"), cars: shown, total: null, priced: shown });
+  const index = renderer.catalogIndexPage({ cars: shown, total: null, priced: shown });
+  for (const page of [section, index]) {
+    assert.doesNotMatch(page.html, /Сейчас в этом разделе машин нет/);
+    assert.doesNotMatch(page.html, /"numberOfItems"/);
+    assert.match(page.html, /"itemListElement"/);
+  }
+});
+
+test("в разделе видна цена от, а у машин в разметке — своя цена", () => {
   const cheapest = car(1, 90000);
-  const dearest = car(2, 400000);
   const shown = [cheapest, car(3, 120000), car(4, 150000)];
   const page = renderer.landingPage({
     landing: findCatalogLanding("/catalog/byd"),
@@ -48,10 +58,11 @@ test("в разделе видна вилка цен, а у машин в раз
     page: 1,
     pages: 50,
     perPage: 99,
-    edges: { cheapest, dearest },
+    cheapest,
     priced: shown,
   });
-  assert.match(page.html, new RegExp(`цены от ${priceOf(cheapest).toLocaleString("ru-RU").replace(/ /g, "\\s")} до`));
+  assert.match(page.html, new RegExp(`цены от ${priceOf(cheapest).toLocaleString("ru-RU").replace(/ /g, "\\s")} \\$ с доставкой`));
+  assert.doesNotMatch(page.html, /цены от [\d\s  ]+ до [\d\s  ]+ \$/);
   const prices = pricesIn(page.html);
   assert.equal(prices.length, shown.length, "цена должна стоять у каждой показанной машины");
   for (const item of shown) assert.ok(prices.includes(priceOf(item)), `нет цены машины ${item.id}`);
@@ -59,7 +70,7 @@ test("в разделе видна вилка цен, а у машин в раз
   assert.doesNotMatch(page.html, /AggregateOffer/);
 });
 
-test("нижняя граница вилки не выше цены, показанной на этой же странице", () => {
+test("цена от не выше цены, показанной на этой же странице", () => {
   // Порядок в разделе задаёт столбец с ценой в базе, а он после смены правил расчёта
   // какое-то время отстаёт: «самая дешёвая» машина набора может оказаться дороже той,
   // что стоит в списке. Публиковать вилку, которая спорит со списком под ней, нельзя.
@@ -72,7 +83,7 @@ test("нижняя граница вилки не выше цены, показ�
     page: 1,
     pages: 1,
     perPage: 99,
-    edges: { cheapest: stale, dearest: stale },
+    cheapest: stale,
     priced: [cheaperInList],
   });
   const prices = pricesIn(page.html);
@@ -81,31 +92,29 @@ test("нижняя граница вилки не выше цены, показ�
   assert.ok(written <= shownLow, `в тексте «от ${written} $», а в списке есть машина за ${shownLow} $`);
 });
 
-test("на странице модели стоит вилка цен по всем предложениям", () => {
+test("на странице модели остаются минимум и число предложений без верхней цены", () => {
   const modelPage = modelPageWithText(MODEL_PAGES.find((item) => item.brand === "BYD" && item.model === "Han") || MODEL_PAGES[0]);
   const cheapest = car(1, 90000);
-  const dearest = car(2, 300000);
   const shown = [cheapest, car(3, 130000)];
   const page = renderer.modelPage({
     modelPage,
     cars: shown,
     total: 616,
-    edges: { cheapest, dearest },
+    cheapest,
   });
-  const aggregate = page.html.match(/"@type":"AggregateOffer","priceCurrency":"USD","lowPrice":(\d+),"highPrice":(\d+),"offerCount":(\d+)/);
-  assert.ok(aggregate, "вилки цен в разметке нет");
+  const aggregate = page.html.match(/"@type":"AggregateOffer","priceCurrency":"USD","lowPrice":(\d+),"offerCount":(\d+)/);
+  assert.ok(aggregate, "минимальной цены и числа предложений в разметке нет");
   assert.equal(Number(aggregate[1]), priceOf(cheapest));
-  assert.equal(Number(aggregate[2]), priceOf(dearest));
-  assert.equal(Number(aggregate[3]), 616, "число предложений должно быть по всему наличию, а не по показанным");
+  assert.doesNotMatch(page.html, /"highPrice"/);
+  assert.equal(Number(aggregate[2]), 616, "число предложений должно быть по всему наличию, а не по показанным");
   const prices = pricesIn(page.html);
   assert.ok(Number(aggregate[1]) <= Math.min(...prices), "нижняя граница выше цены в списке");
-  assert.ok(Number(aggregate[2]) >= Math.max(...prices), "верхняя граница ниже цены в списке");
   assert.match(page.html, /в наличии: 616 [^<]*с доставкой до Минска/);
 });
 
 test("когда модели нет в наличии, вилки цен не появляется", () => {
   const modelPage = modelPageWithText(MODEL_PAGES[0]);
-  const page = renderer.modelPage({ modelPage, cars: [], total: 0, edges: null });
+  const page = renderer.modelPage({ modelPage, cars: [], total: 0, cheapest: null });
   assert.doesNotMatch(page.html, /AggregateOffer/);
   assert.doesNotMatch(page.html, /"price":/);
 });
@@ -180,7 +189,7 @@ test("в видимом списке раздела у каждой машины
     page: 1,
     pages: 1,
     perPage: 48,
-    edges: { cheapest: shown[0], dearest: shown[1] },
+    cheapest: shown[0],
     priced: shown,
   });
   const number = (value) => new Intl.NumberFormat("ru-RU").format(value);

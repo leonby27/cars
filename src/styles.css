@@ -25532,3 +25532,9 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
 .partner-header .header-menu-shell { grid-area:1 / 3; justify-self:end; margin-left:0; }
 .partner-header .header-menu:not(.header-menu-drawer) { min-height:96px; }
 @media(max-width:380px) { .partner-header .partner-header-title { font-size:21px; } }
+
+/* Independent catalog fields keep their space while their data loads. */
+.catalog-data-skeleton{display:inline-block;vertical-align:middle;width:5em;height:1em;border-radius:5px;background:linear-gradient(90deg,var(--panel),var(--line),var(--panel));background-size:200% 100%;animation:skeleton-shimmer 1.6s infinite}
+.select-data-pending{position:relative}
+.select-data-pending:after{content:"";position:absolute;left:14px;right:34px;height:16px;border-radius:5px;background:linear-gradient(90deg,var(--panel),var(--line),var(--panel));background-size:200% 100%;animation:skeleton-shimmer 1.6s infinite}
+@media(prefers-reduced-motion:reduce){.catalog-data-skeleton,.select-data-pending:after{animation:none}}

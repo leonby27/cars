@@ -9,4 +9,5 @@ export function cachedCatalogValue(db,key,load,options) {
  return read(JSON.stringify(key),load,options);
 }
 export const cachedCatalogRead=(db,sql,values=[])=>cachedCatalogValue(db,["sql",sql,values],async()=>({rows:(await db.query(sql,values)).rows}));
+export const readyCatalogValue=(db,key)=>pools.get(db)?.peek(JSON.stringify(key)) ?? null;
 export const clearCatalogReadCache=()=>{pools=new WeakMap();};

@@ -37,13 +37,10 @@ export const yearsPhrase = (yearMin, yearMax) => {
   return `${from}–${to} годов выпуска`;
 };
 
-/** «от 27 400 до 61 900 $» / «от 27 400 $»; null без цен. */
-export const priceSpan = (priceFrom, priceTo) => {
+/** «от 27 400 $»; null без минимальной цены. */
+export const priceFromText = (priceFrom) => {
   const from = finite(priceFrom);
-  const to = finite(priceTo);
-  if (!from && !to) return null;
-  if (!from || !to || from === to) return `от ${usd(from || to)}`;
-  return `от ${number(from)} до ${usd(to)}`;
+  return from ? `от ${usd(from)}` : null;
 };
 
 /**
@@ -76,7 +73,7 @@ export function modelCatalogSeo({ name, brand, facts = null, review = null, page
   const pageTail = page > 1 ? ` — страница ${page}` : "";
   const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${origin ? fromPhrase(origin) : siteFromPhrase()} с доставкой в Беларусь`;
   // Цифры ещё не пришли (переход внутри сайта): нейтральный заголовок, а не «под заказ».
-  if (!facts) {
+  if (!facts || (facts.pending && facts.total == null)) {
     return {
       title: `${base} — цены и наличие${pageTail} ▶ Абкарс`,
       description: catalogDescription({ subject: name, origin: seoOrigin, model: true }),
@@ -102,10 +99,11 @@ export const modelPageIndexable = ({ facts = null, review = null } = {}) => Bool
 
 /** Строка под заголовком: что есть и почём — шапка списка, а не текст. */
 export function modelStockLine(facts, { page = 1, pages = 1, first = 0, shown = 0 } = {}) {
+  if (facts?.pending) return "";
   const total = Number(facts?.total) || 0;
   if (!total) return `Сейчас в наличии нет. Можно привезти под заказ: найдём вариант на площадках ${siteCountriesGenitive()} и рассчитаем цену до Минска.`;
   const parts = [`В наличии ${cars(total)}`];
-  const span = priceSpan(facts?.priceFrom, facts?.priceTo);
+  const span = priceFromText(facts?.priceFrom);
   if (span) parts.push(`цены ${span} до Минска`);
   const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
   if (years) parts.push(years);
@@ -131,6 +129,7 @@ const powertrainCount = (row) => {
  * авторский текст про версии не меняется, цифры наличия меняются каждую ночь.
  */
 export function modelAutoText({ name, facts }) {
+  if(facts?.pending)return [];
   const total = Number(facts?.total) || 0;
   if (!total) {
     return [
@@ -149,7 +148,7 @@ export function modelAutoText({ name, facts }) {
   paragraphs.push(first.join(" "));
 
   const money = [];
-  const span = priceSpan(facts.priceFrom, facts.priceTo);
+  const span = priceFromText(facts.priceFrom);
   if (span) money.push(`Цены с доставкой до Минска — ${span}.`);
   if (finite(facts.priceP25) && finite(facts.priceP75) && facts.priceP25 < facts.priceP75) {
     money.push(`Половина предложений укладывается в ${number(facts.priceP25)}–${usd(facts.priceP75)}.`);
@@ -184,7 +183,7 @@ export function modelFaq({ name, facts, review = null }) {
   const own = (review?.faq || []).map((item) => ({ q: item.q, a: item.a }));
   const auto = [];
   const total = Number(facts?.total) || 0;
-  const span = priceSpan(facts?.priceFrom, facts?.priceTo);
+  const span = facts?.pending ? null : priceFromText(facts?.priceFrom);
   if (total && span && !covered(own, /сколько стоит|цен[аы]|стоимост/i)) {
     auto.push({
       q: `Сколько стоит ${name} ${siteFromPhrase()} с доставкой в Минск?`,

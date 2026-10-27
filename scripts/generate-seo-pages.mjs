@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {prepareCatalogPageFacts} from "../server/prepared-catalog.mjs";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { catalogRateKey, catalogBuildKey, readCatalogBuildCache, writeCatalogBuildCache } from "./lib/catalog-build-cache.mjs";
@@ -1022,6 +1023,7 @@ const homeShowcase = live.showcase.map(({ images, priceHistory: _history, ...car
 const brandCount = new Set([...live.models.keys()].map((key) => key.split("|")[0])).size;
 const catalogFacts = { brandCount, total: live.activeCars || 0, updatedAt: live.catalogRefreshedAt || "" };
 writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase, catalogFacts })}\n`);
+writeFileSync(path.join(path.dirname(clientDir), "catalog-page-facts.json"), JSON.stringify(prepareCatalogPageFacts(live)));
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки

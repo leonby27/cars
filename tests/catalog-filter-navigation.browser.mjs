@@ -39,7 +39,7 @@ const matching = p => cars.filter(c =>
   (!p.has('bodyType') || p.getAll('bodyType').includes(c.bodyType)) &&
   (!p.get('yearMin') || c.year >= Number(p.get('yearMin'))));
 const listing = p => {
-  const all = sortCars(matching(p), p.get('sort') || 'default', p.get('seed') || catalogShuffleSeed());
+  const all = sortCars(matching(p), p.get('sort') || 'price_asc', p.get('seed') || catalogShuffleSeed());
   const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || CATALOG_PAGE_SIZE);
   return { items: all.slice(offset, offset + limit), total: all.length, hasMore: offset + limit < all.length };
 };
@@ -183,7 +183,7 @@ try {
 
       await page.getByRole('button', { name: /Сортировка:/ }).click();
       await page.getByRole('option', { name: 'Дешёвые', exact: true }).click();
-      await page.waitForURL(url => url.searchParams.get('sort') === 'price_asc');
+      await page.waitForURL(url => !url.searchParams.has('sort'));
       assert.equal((await freshState(page.url())).sort, 'price_asc');
       await page.getByRole('button', { name: /Год от:/ }).first().click();
       await page.getByRole('option', { name: /2022/ }).first().click();
@@ -204,13 +204,13 @@ try {
 
     }
     await ready('/catalog/audi/a4');
-    assert.equal((await state(page)).sort, 'default');
+    assert.equal((await state(page)).sort, 'price_asc');
     assert.equal(new URL(page.url()).searchParams.has('sort'), false);
     const displayedIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     for (const [sort, label] of [
-      ['price_asc', 'Дешёвые'], ['price_desc', 'Дорогие'], ['newest', 'Новые объявления'],
+      ['price_desc', 'Дорогие'], ['price_asc', 'Дешёвые'], ['newest', 'Новые объявления'],
       ['mileage_asc', 'С наименьшим пробегом'], ['range_desc', 'С наибольшим запасом хода'],
-      ['year_desc', 'Новые по году'], ['year_asc', 'Старые по году'], ['default', 'По умолчанию'],
+      ['year_desc', 'Новые по году'], ['year_asc', 'Старые по году'],
     ]) {
       await page.getByRole('button', { name: /Сортировка:/ }).click();
       const listingResponse = page.waitForResponse(response => {
@@ -219,7 +219,7 @@ try {
           && url.searchParams.get('model') === 'A4' && url.searchParams.get('sort') === sort;
       });
       await page.getByRole('option', { name: label, exact: true }).click();
-      await page.waitForURL(url => sort === 'default' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
+      await page.waitForURL(url => sort === 'price_asc' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
       await listingResponse; await settle();
       const before = await displayedIds();
       assert.ok(before.length > 0, sort);
@@ -230,7 +230,7 @@ try {
       assert.deepEqual(await displayedIds(), before, `${sort}: reload preserves the vehicle order`);
     }
     assert.deepEqual(errors, []);
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: filters, pagination, model navigation, all 8 sorts and vehicle order after reload${mobile ? "" : ", back/forward"}`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: filters, pagination, model navigation, all 7 public sorts and vehicle order after reload${mobile ? "" : ", back/forward"}`);
     await context.close();
   }
 } finally {
