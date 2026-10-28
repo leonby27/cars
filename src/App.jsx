@@ -44,7 +44,7 @@ import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
 
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
-import { catalogSort, catalogHref, catalogLocationKey, catalogRedirect } from "./catalog-url.js";
+import { CATALOG_DEFAULT_SORT, catalogSort, catalogHref, catalogLocationKey, catalogRedirect } from "./catalog-url.js";
 import { clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { getListingAddedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, formatChangePercent, getPriceChange, minskClock } from "./price-change.js";
@@ -2999,7 +2999,7 @@ const savedFilterDefaults = {
   fuel: ANY_FUEL,
   ...emptyExclusions(),
   // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
-  sort: "price_asc",
+  sort: CATALOG_DEFAULT_SORT,
 };
 const savedSearchSortLabels = {
   price_asc: "сначала дешёвые",
@@ -3129,9 +3129,9 @@ const heroApiParams = (parsed) => {
 
 // Те же варианты сортировки, что и в каталоге, — выдача поиска ведёт себя одинаково.
 const HERO_SORT_OPTIONS = [
+  { value: "newest", label: "Новые объявления" },
   { value: "price_asc", label: "Дешёвые" },
   { value: "price_desc", label: "Дорогие" },
-  { value: "newest", label: "Новые объявления" },
   { value: "mileage_asc", label: "С наименьшим пробегом" },
   { value: "range_desc", label: "С наибольшим запасом хода" },
   { value: "year_desc", label: "Новые по году" },
@@ -4652,7 +4652,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
                 label="Сортировка"
                 value={(HERO_SORT_OPTIONS.find((option) => option.value === heroSort) || HERO_SORT_OPTIONS[0]).label}
                 options={HERO_SORT_OPTIONS.map((option) => option.label)}
-                onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "price_asc")}
+                onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || CATALOG_DEFAULT_SORT)}
               />
               <ViewToggle value={heroView} onChange={updateHeroView} />
               <AppLink className="primary search-catalog-link" href={heroSearch.href || "/catalog"} navigate={navigate} aria-label="В каталог">
@@ -6590,7 +6590,7 @@ let catalogRequest = null;
 // Каталог и страницы марок/типов открывают свой запрос с фильтрами, поэтому список
 // из шестидесяти карточек им не нужен: просим одну — её достаточно, чтобы узнать
 // размер каталога и что база отвечает.
-const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=price_asc&summary=defer" : "/api/cars?limit=60&sort=variety");
+const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=newest&summary=defer" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
 const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
 // Загрузившись на /catalog, приложение знает одну машину — витрину главной и блок

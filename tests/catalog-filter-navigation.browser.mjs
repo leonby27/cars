@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { catalogMetaBoot } from '../server/app-render.mjs';
 import { CATALOG_PAGE_SIZE, findCatalogLanding, landingApiParams, parseModelLandingPath } from '../src/catalog-landings.js';
 import { modelLandingObject } from '../src/model-landing.js';
@@ -28,6 +28,7 @@ const cars = Array.from({ length: 240 }, (_, i) => {
     source: origin === 'china' ? 'Che168' : 'Encar', type: i % 3 ? 'Электромобиль' : 'ДВС',
     sourceFuelType: i % 3 ? 'Electric' : 'Gasoline', bodyType: i % 2 ? 'SUV / кроссовер' : 'Седан',
     chinaPrice: 150000, usdPrice: 21000, sourcePriceUsd: 21000, estimatedTotalUsd: 24000 + i * 10, mileage: 10000 + i * 100, drive: 'Задний',
+    firstSeenAt:new Date(Date.UTC(2026,9,1)+i*3600000).toISOString(),
     battery: 75, range: 500 + i, available: true, image: null, images: [], _summary: true,
   };
 });
@@ -39,7 +40,7 @@ const matching = p => cars.filter(c =>
   (!p.has('bodyType') || p.getAll('bodyType').includes(c.bodyType)) &&
   (!p.get('yearMin') || c.year >= Number(p.get('yearMin'))));
 const listing = p => {
-  const all = sortCars(matching(p), p.get('sort') || 'price_asc', p.get('seed') || catalogShuffleSeed());
+  const all = sortCars(matching(p), p.get('sort') || 'newest', p.get('seed') || catalogShuffleSeed());
   const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || CATALOG_PAGE_SIZE);
   return { items: all.slice(offset, offset + limit), total: all.length, hasMore: offset + limit < all.length };
 };
@@ -96,7 +97,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ headless: true });
+const browser = await (process.env.TEST_BROWSER === 'webkit' ? webkit : chromium).launch({ headless: true });
 try {
   for (const mobile of process.env.TEST_MOBILE ? [process.env.TEST_MOBILE === "1"] : [false, true]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 }, isMobile: mobile, hasTouch: mobile });
@@ -138,6 +139,12 @@ try {
     const batchIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     const initialBatch = await batchIds();
     assert.equal(initialBatch.length, CATALOG_PAGE_SIZE);
+    assert.equal((await state(page)).sort,'newest');
+    assert.equal(new URL(page.url()).searchParams.has('sort'),false);
+    await page.evaluate(()=>history.replaceState({...history.state,catalog:{...history.state.catalog,sort:'price_asc',order:[...document.querySelectorAll('main.catalog [data-car-id]')].map(n=>n.dataset.carId).reverse()}},'',location.href));
+    await page.reload();
+    await page.waitForFunction(()=>history.state?.catalog?.sort==='newest'&&document.querySelectorAll('main.catalog [data-car-id]').length===48);
+    assert.deepEqual(await batchIds(),initialBatch,'an old cheap-default snapshot cannot reorder the new default');
     const nextBatchResponse = page.waitForResponse(response => {
       const url = new URL(response.url());
       return url.pathname === '/api/cars' && url.searchParams.get('offset') === String(CATALOG_PAGE_SIZE);
@@ -183,7 +190,7 @@ try {
 
       await page.getByRole('button', { name: /Сортировка:/ }).click();
       await page.getByRole('option', { name: 'Дешёвые', exact: true }).click();
-      await page.waitForURL(url => !url.searchParams.has('sort'));
+      await page.waitForURL(url => url.searchParams.get('sort') === 'price_asc');
       assert.equal((await freshState(page.url())).sort, 'price_asc');
       await page.getByRole('button', { name: /Год от:/ }).first().click();
       await page.getByRole('option', { name: /2022/ }).first().click();
@@ -204,7 +211,7 @@ try {
 
     }
     await ready('/catalog/audi/a4');
-    assert.equal((await state(page)).sort, 'price_asc');
+    assert.equal((await state(page)).sort, 'newest');
     assert.equal(new URL(page.url()).searchParams.has('sort'), false);
     const displayedIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     for (const [sort, label] of [
@@ -219,7 +226,7 @@ try {
           && url.searchParams.get('model') === 'A4' && url.searchParams.get('sort') === sort;
       });
       await page.getByRole('option', { name: label, exact: true }).click();
-      await page.waitForURL(url => sort === 'price_asc' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
+      await page.waitForURL(url => sort === 'newest' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
       await listingResponse; await settle();
       const before = await displayedIds();
       assert.ok(before.length > 0, sort);

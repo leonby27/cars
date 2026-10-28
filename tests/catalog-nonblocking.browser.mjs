@@ -52,7 +52,7 @@ try{
  assert.equal(await uniqueCards(page),48);
  assert.equal(await page.locator('main.catalog .skeleton-card').count(),0);
  assert.equal(await page.locator('.result-summary [aria-label="Загружаем количество автомобилей"]').count(),1);
- assert.ok((await page.locator('.sort-custom-select .select-trigger').innerText()).includes('Дешёвые'));
+ assert.ok((await page.locator('.sort-custom-select .select-trigger').innerText()).includes('Новые объявления'));
  assert.equal(new URL(page.url()).search,'');
  waiting.filter(w=>w.kind==='summary').forEach(w=>w.send());
  await page.waitForFunction(()=>document.querySelector('.result-summary b')?.textContent==='240 шт.');
@@ -66,6 +66,9 @@ try{
  await page.waitForURL('**/catalog?sort=price_desc');
  await page.locator('.sort-custom-select .select-trigger').click();
  await page.getByRole('option',{name:'Дешёвые',exact:true}).click();
+ await page.waitForURL('**/catalog?sort=price_asc');
+ await page.locator('.sort-custom-select .select-trigger').click();
+ await page.getByRole('option',{name:'Новые объявления',exact:true}).click();
  await page.waitForURL('**/catalog');assert.equal(new URL(page.url()).search,'');
  assert.deepEqual(errors,[]);await page.close();
  const other=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),failed=await other.newPage();fail=true;

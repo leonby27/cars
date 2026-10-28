@@ -37,7 +37,7 @@ async function boot(path, rejectFirst = false) {
 test('all catalog routes skip the 60-car showcase preload', async () => {
   for (const path of ['/catalog','/catalog/','/catalog/byd','/catalog/china','/catalog/korea','/catalog/tesla/model-y','/catalog/under-15000?page=4']) {
     const {requests} = await boot(path);
-    assert.ok(requests.includes('/api/cars?limit=1&sort=price_asc&summary=defer'), path);
+    assert.ok(requests.includes('/api/cars?limit=1&sort=newest&summary=defer'), path);
     assert.ok(!requests.some(url => url.includes('limit=60')), path);
   }
 });
@@ -52,6 +52,6 @@ test('home and car detail preserve the showcase and detail preload', async () =>
 
 test('early bootstrap waits the full 10 seconds before retrying a 429', async () => {
   const {requests, pauses} = await boot('/catalog/byd', true);
-  assert.deepEqual(requests, ['/api/cars?limit=1&sort=price_asc&summary=defer', '/api/cars?limit=1&sort=price_asc&summary=defer']);
+  assert.deepEqual(requests, ['/api/cars?limit=1&sort=newest&summary=defer', '/api/cars?limit=1&sort=newest&summary=defer']);
   assert.deepEqual(pauses, [10000]);
 });

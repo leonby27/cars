@@ -81,7 +81,7 @@
         const metaQuery = metaType ? new URLSearchParams({ type: metaType }).toString() : "";
         const meta = metaWanted ? start(`/api/catalog/meta${metaQuery ? `?${metaQuery}` : ""}`) : null;
         window.__boot = {
-          catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=price_asc&summary=defer"),
+          catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=newest&summary=defer"),
           carId: id,
           car: id ? start(`/api/cars/${encodeURIComponent(id)}`) : null,
           metaQuery,

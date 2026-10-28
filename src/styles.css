@@ -203,11 +203,17 @@ button {
   line-height: 0;
   text-decoration: none;
 }
+a.wordmark {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .wordmark-image {
   display: block;
   aspect-ratio: 480 / 100;
   width: calc(var(--wordmark-height) * 4.8);
   height: var(--wordmark-height);
+  pointer-events: none;
 }
 .wordmark-image-dark {
   display: none;

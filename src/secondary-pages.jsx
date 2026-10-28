@@ -1,6 +1,6 @@
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
-import { catalogHref, catalogShuffleSeed, catalogSort, catalogUrlParams } from "./catalog-url.js";
+import { CATALOG_DEFAULT_SORT, catalogHref, catalogShuffleSeed, catalogSort, catalogUrlParams } from "./catalog-url.js";
 import { isTrackingParam, withoutTrackingParams } from "./tracking-params.js";
 import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1756,9 +1756,9 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // retrigger the query this component already issued at mount.
   const useApi = apiMode !== false;
   const sortOptions = [
+    { value: "newest", label: "Новые объявления" },
     { value: "price_asc", label: "Дешёвые" },
     { value: "price_desc", label: "Дорогие" },
-    { value: "newest", label: "Новые объявления" },
     { value: "mileage_asc", label: "С наименьшим пробегом" },
     { value: "range_desc", label: "С наибольшим запасом хода" },
     { value: "year_desc", label: "Новые по году" },
@@ -1768,6 +1768,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
   const params = catalogUrlParams(landing, window.location.search);
   const initialFilters = catalogFiltersFromParams(params);
+  const urlSort = catalogSort(params);
   // Поисковая строка в адресе: `/catalog?q=byd han до 25000`. Нужна двум вещам —
   // разметке «поиск по сайту», по которой Google показывает строку поиска прямо
   // в выдаче, и внешним ссылкам на готовый поиск. Разбираем ту же строку тем же
@@ -1798,7 +1799,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const listPath = landing?.path || "/catalog";
   const serverListHere = Boolean(window.__boot?.catalogValue && window.__boot.catalogPath === listPath);
   const restoredCandidate = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
-  const restoredCatalog = restoredCandidate?.sort === "default" ? null : restoredCandidate;
+  const restoredCatalog = restoredCandidate?.sort === urlSort ? restoredCandidate : null;
   const [filters, setFilters] = useState(() => initialFilters);
   // Первая страница выдачи, встроенная сервером в готовую страницу (каталог, разделы,
   // страницы моделей): берём её, если она про этот адрес и этот отбор, и ничего не
@@ -1834,8 +1835,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [detailsError, setDetailsError] = useState(false);
   const detailsRetry = useRef(null);
   // Filters and sort come from the URL; history restores only the loaded list and scroll.
-  // Без sort используем «Дешёвые»; другие порядки хранятся в адресе.
-  const urlSort = catalogSort(params);
+  // Без sort используем «Новые объявления»; другие порядки хранятся в адресе.
   const [sort, setSort] = useState(urlSort);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
@@ -2312,7 +2312,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
               {quickViewToggle}
             </div>
             <div className="result-controls">
-              <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
+              <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || CATALOG_DEFAULT_SORT)} />
               <ViewToggle value={view} onChange={updateView} />
             </div>
           </div>

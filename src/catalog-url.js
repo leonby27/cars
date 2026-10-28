@@ -2,6 +2,7 @@ import { CATALOG_LANDINGS, catalogLandingForFilters, catalogPlaceholderRedirect,
 import { originFromParam } from "./origin.js";
 import { isTrackingParam, withoutTrackingParams } from "./tracking-params.js";
 
+export const CATALOG_DEFAULT_SORT = "newest";
 export const CATALOG_SORTS = new Set(["default", "price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);
 const BRAND_NAMES = new Map(CATALOG_LANDINGS.filter(landing => landing.kind === "brand").map(landing => [landing.brand.toLowerCase(), landing.brand]));
 const MULTI = new Set(["model", "body", "color", "brandNot", "modelNot", "bodyTypeNot", "typeNot", "driveNot", "colorNot"]);
@@ -9,7 +10,7 @@ const MULTI = new Set(["model", "body", "color", "brandNot", "modelNot", "bodyTy
 export const catalogShuffleSeed = (now = Date.now()) => `s${Math.floor((now + 3 * 3600 * 1000) / 86400000) % 12}`;
 
 export const catalogSort = (params) => CATALOG_SORTS.has(params.get("sort")) && params.get("sort") !== "default"
-  ? params.get("sort") : "price_asc";
+  ? params.get("sort") : CATALOG_DEFAULT_SORT;
 
 /** Path filters are defaults; explicit query values take precedence. */
 export function catalogUrlParams(landing, search) {
@@ -53,7 +54,7 @@ export function catalogHref(search, { page, tracking = false } = {}) {
     if (params.getAll(key).length === 1 && params.get(key) === value) params.delete(key);
   }
   const selectedSort = catalogSort(params);
-  if (selectedSort === "price_asc") params.delete("sort");
+  if (selectedSort === CATALOG_DEFAULT_SORT) params.delete("sort");
   else params.set("sort", selectedSort);
   params.delete("seed");
   params.sort();
