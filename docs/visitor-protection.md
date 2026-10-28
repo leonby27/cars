@@ -1,4 +1,19 @@
-# Catalog protection replacement — 25 October 2026
+# Geographic access — 28 October 2026
+
+The owner requested verification of all traffic outside the existing CIS/Europe country list and a full Singapore block. Cyprus, Georgia and Turkey remain in the existing list. The rules are shared by abcars.by and abdrive.ru. Country classification uses the current DB-IP country source for both IPv4 and IPv6.
+
+Installed on both production domains on 28 October 2026 at 17:36 Europe/Minsk. Configuration backup: `/var/backups/car-catalog-guard.q_omi7t2`. Installed-policy checks passed on both hosts; the daily updater completed successfully after installation. The initial protection installation did not rebuild the application.
+
+- Every content location inherits the geographic auth check: informational/private pages, HTML aliases, model metadata, authentication/submission APIs, analytics endpoints, static assets and photos. The verification endpoints stay reachable to visitors who need to solve reCAPTCHA. Safe same-origin return paths now cover informational pages and account entry too. Non-catalog requests do not spend catalog-export budgets.
+- SG is denied by nginx before location handling, provider exemptions, cache delivery or valid visitor clearance. The same denial covers HTTP/www redirect servers and the CAPTCHA endpoints. It remains active if the Python verification service is stopped or its country data expires. Both nginx rules and Python country classes derive from the same validated source; there is no independent hand-maintained IP list.
+- Verified search crawlers and internal warmers retain their exemptions. Ahrefs requires its published address ranges and matching agent. OpenAI GPTBot, Claude training, Common Crawl and Amazon crawlers require their published crawler ranges and matching agent; Meta crawlers require its AS32934 networks from RIPEstat and matching agent. Existing search/user fetch verification and all provider capacity limits remain. A crawler name alone grants no exemption. SG denial takes precedence over every exemption.
+- The daily country updater also refreshes crawler ranges, validates the generated classifier and nginx country map, and reloads nginx only when the denial map changes. A failed feed retains its previous verified list; failed nginx validation restores both old country data and old denial rules. The existing stale/unknown country-data availability fallback for CAPTCHA is preserved; it does not disable the independent nginx country block.
+
+Validation: country policy/clearance/IPv6 checks, source generation and failed-refresh rollback, installer rollback, isolated nginx-to-service checks on both hosts (static locations, all methods, cached pages, signed clearance, spoofed agents, blocked country with the service stopped), actual October country-map checks, and Chromium desktop/mobile navigation with a fake managed widget. No live visitor CAPTCHA was solved automatically.
+
+The owner subsequently authorized committing, pushing and synchronizing these changes to the server on 28 October 2026. Use the standalone protection installer for this release. Further changes require their own publication authorization.
+
+## Previous policy — 25 October 2026
 
 Status: activated on both production sites on 25 October 2026 after explicit owner authorization. The owner authorized committing, pushing and publishing the prepared protection changes and simplified verification page on 26 October 2026. A new domain-restricted Google v2 key was created in abcars-search-analytics, with the secret stored only in the root-managed service environment.
 

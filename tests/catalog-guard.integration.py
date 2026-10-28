@@ -36,7 +36,7 @@ def number(ip):return int(__import__('ipaddress').ip_address(ip))
 with tempfile.TemporaryDirectory(prefix='catalog-guard-fixture-') as directory:
     path=Path(directory);policy=guard.geo_module.load_policy(root/'deploy/catalog-guard-policy.json')
     countries=path/'countries.json'
-    countries.write_text(json.dumps({'exempt_countries':policy['exempt_countries'],'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,number('127.5.0.0')-1,'outside'],[number('127.5.0.0'),number('127.5.255.255'),'exempt'],[number('127.6.0.0'),2**32-1,'outside']],'6':[[0,2**128-1,'outside']]},'ahrefs_networks':['127.6.0.0/24']}))
+    countries.write_text(json.dumps({'exempt_countries':policy['exempt_countries'],'blocked_countries':policy['blocked_countries'],'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,number('127.5.0.0')-1,'outside'],[number('127.5.0.0'),number('127.5.255.255'),'exempt'],[number('127.6.0.0'),number('127.8.0.0')-1,'outside'],[number('127.8.0.0'),number('127.8.255.255'),'blocked'],[number('127.9.0.0'),2**32-1,'outside']],'6':[[0,2**128-1,'outside']]},'ahrefs_networks':['127.6.0.0/24']}))
     store=guard.Store(path/'state.sqlite3',b'fixture-secret',mass_export={},geo_policy=policy,country_path=countries)
     service=guard.GuardServer(('127.0.0.1',0),guard.Handler);service.store=store;service.mode='enforce';service.client_script=(root/'deploy/catalog-guard-client.js').read_bytes()
     service.verification=guard.captcha_module.Recaptcha('fixture-public','fixture-secret',['a.test','b.test'])
@@ -53,9 +53,11 @@ http {{
  access_log off;
  proxy_cache_path {path}/cache levels=1:2 keys_zone=fixture:1m;
  geo $car_internal_address {{ default 0;127.0.0.1 1; }}
+ geo $car_country_blocked {{ default 0;127.8.0.0/16 1; }}
  map "$remote_addr:$http_user_agent" $car_verified_search {{ default 0;"127.0.0.10:Googlebot/2.1" 1;"127.0.0.11:YandexBot/3.0" 1; }}
  server {{ listen 127.0.0.1:{listen};server_name a.test b.test;
  include {path}/server.conf;
+ location /assets/ {{ root {path};try_files $uri =404;add_header X-Fixture-Asset yes; }}
  location / {{
  include {path}/location.conf;
  proxy_pass http://127.0.0.1:{backend.server_port};
@@ -67,6 +69,7 @@ http {{
     subprocess.run([nginx,'-t','-p',directory,'-c',str(config)],check=True,capture_output=True)
     process=subprocess.Popen([nginx,'-p',directory,'-c',str(config),'-g','daemon off;'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
     sessions={}
+    (path/'assets').mkdir();(path/'assets/a.js').write_text('fixture-asset')
     def request(uri='/catalog',ip='127.5.0.2',host='a.test',method='GET',headers=None,body=None):
         c=http.client.HTTPConnection('127.0.0.1',listen,source_address=(ip,0),timeout=3)
         h={'Host':host,'User-Agent':'Mozilla/5.0',**(headers or {})}
@@ -104,9 +107,15 @@ http {{
         assert request(ip='127.9.0.1',headers={'User-Agent':'Googlebot/2.1'})[0]==303
         assert request(ip='127.0.0.1')[0]==200
         assert request(ip='127.6.0.1',headers={'User-Agent':'AhrefsBot/7.0'})[0]==200
-        for uri in ['/api/auth/me','/api/analytics/events','/api/image','/assets/a.js']:
-            assert request(uri,ip='127.9.0.1')[0]==200
-        assert request('/api/cars',ip='127.9.0.1',method='POST')[0]==200
+        for uri in ['/api/auth/me','/api/analytics/events','/api/image','/api/model-catalog?light=1','/contacts','/login','/blog/article','/documents/privacy-policy.pdf','/robots.txt','/assets/a.js']:
+            assert request(uri,ip='127.9.0.1')[0]==(429 if uri.startswith('/api/') else 303),uri
+            assert request(uri,ip='127.5.0.2')[0]==200,uri
+        assert request('/api/cars',ip='127.9.0.1',method='POST')[0]==429
+        for host in ['a.test','b.test']:
+            for uri in ['/','/contacts','/api/cars','/assets/a.js','/_catalog-check','/_catalog-check/client.js','/index.html']:
+                for method in ['GET','HEAD','POST']:
+                    denied=request(uri,ip='127.8.0.1',host=host,method=method,headers={'User-Agent':'Googlebot/2.1','X-Guard-Exempt':'1'})
+                    assert denied[0]==403 and 'X-Catalog-Verification' not in denied[1],(uri,method,denied)
         challenge=request('/_catalog-check?return=/catalog',ip='127.9.0.1')
         assert b'g-recaptcha' in challenge[2] and b'fixture-public' in challenge[2]
         assert b'fixture-secret' not in challenge[2] and b'data:image/png' not in challenge[2] and b'<audio' not in challenge[2]
@@ -127,6 +136,10 @@ http {{
         cookie=solved[1]['Set-Cookie'].split(';')[0]
         assert request(ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
         assert request('/',ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
+        assert request('/contacts',ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
+        assert request('/assets/a.js',ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
+        assert request('/api/auth/me',ip='127.9.0.1',headers={'Cookie':cookie})[0]==200
+        assert request('/contacts',ip='127.8.0.1',headers={'Cookie':cookie+'; '+sessions[('127.9.0.1','a.test')]})[0]==403
         assert request(ip='127.9.0.2',headers={'Cookie':sessions[('127.9.0.1','a.test')]})[0]==200
         assert request(ip='127.9.0.3')[0]==303
         replay=request('/_catalog-check',ip='127.9.0.1',method='POST',body=payload,headers={'Origin':'https://a.test'})
@@ -147,6 +160,7 @@ http {{
         unavailable=request('/_catalog-check',ip='127.9.0.3');assert unavailable[0]==503 and b'data:image/png' not in unavailable[2]
         service.shutdown();service.server_close()
         assert request('/api/cars/new',ip='127.9.0.3')[0]==200
+        assert request('/assets/a.js',ip='127.8.0.1')[0]==403
         assert request('/_catalog-check/client.js')[0]==200
         print(json.dumps({'geographic_first_read_both_hosts_cache_and_encoded_paths':'passed','verified_search_and_service_exemptions':'passed','managed_only_recovery_and_nonce_replay':'passed','ordinary_browsing_and_personal_export_limits':'passed','old_network_state_ignored':'passed','missing_provider_no_local_fallback':'passed','guard_transport_fail_open':'passed'}))
     finally:

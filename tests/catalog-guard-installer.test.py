@@ -24,11 +24,12 @@ class Checks(unittest.TestCase):
         for p in (root/'deploy').iterdir():
             if p.is_file():shutil.copy2(p,self.stage/p.name)
         policy=json.loads((self.stage/'catalog-guard-policy.json').read_text())['geography']
-        (self.stage/'catalog-guard-countries.json').write_text(json.dumps({'exempt_countries':sorted(policy['exempt_countries']),'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,2**32-1,'outside']],'6':[[0,2**128-1,'outside']]},'ahrefs_networks':['202.8.40.0/24']}))
+        (self.stage/'catalog-guard-countries.json').write_text(json.dumps({'exempt_countries':sorted(policy['exempt_countries']),'blocked_countries':policy['blocked_countries'],'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,2**32-2,'outside'],[2**32-1,2**32-1,'blocked']],'6':[[0,2**128-1,'outside']]},'ahrefs_networks':['202.8.40.0/24']}))
         self.settings=self.mapped('/etc/default/car-catalog-guard');self.settings.parent.mkdir(parents=True)
         self.settings.write_text('CATALOG_GUARD_MODE=enforce\nCATALOG_RECAPTCHA_SITE_KEY=public-fixture\nCATALOG_RECAPTCHA_SECRET_KEY=never-print-this-fixture-secret\n')
         for name in ['/etc/nginx/snippets/abcars-site.conf','/etc/nginx/sites-available/abdrive']:
             p=self.mapped(name);p.parent.mkdir(parents=True,exist_ok=True);p.write_text('if ($car_blocked_bot) { return 403; }\ninclude /etc/nginx/snippets/car-ai-limit.conf;\n')
+        self.mapped('/etc/nginx/sites-available/abcars').write_text('server { server_name abcars.by www.abcars.by; location / { return 301 https://abcars.by$request_uri; } }\n')
         self.proxy=self.mapped('/etc/nginx/snippets/abcars-proxy.conf');self.proxy.write_text('proxy_cache_key "$scheme$host$request_method$request_uri";\n')
         self.audio=self.mapped('/usr/local/lib/car-catalog-guard/catalog-guard-audio');self.audio.mkdir(parents=True);(self.audio/'old.wav').write_bytes(b'old-audio-fixture')
         self.calls=[];self.fail_validation=False
@@ -74,6 +75,9 @@ class Checks(unittest.TestCase):
         backups=Path(receipt['backup']);paths=json.loads((backups/'paths.json').read_text());index=paths.index(str(self.audio))
         self.assertEqual((backups/str(index)/'old.wav').read_bytes(),b'old-audio-fixture')
         self.assertTrue(self.mapped('/usr/local/lib/car-catalog-guard/catalog-guard-recaptcha.py').exists())
+        self.assertTrue(self.mapped('/etc/nginx/conf.d/car-country-access.conf').exists())
+        self.assertIn('255.255.255.255/32 1;',self.mapped('/usr/local/lib/car-catalog-guard/catalog-guard-blocked.conf').read_text())
+        self.assertIn('server_name abcars.by www.abcars.by;\n    if ($car_country_blocked)',self.mapped('/etc/nginx/sites-available/abcars').read_text())
     def test_failed_nginx_validation_restores_old_config_and_audio(self):
         self.fail_validation=True;before=self.proxy.read_bytes()
         with self.assertRaises(subprocess.CalledProcessError):self.execute()

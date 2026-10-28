@@ -1,11 +1,11 @@
 [Unit]
-Description=Refresh country exemptions and verified Ahrefs networks
+Description=Refresh country access rules and verified crawler networks
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/lib/car-catalog-guard/update-catalog-guard-geo.py --output /usr/local/lib/car-catalog-guard/catalog-guard-countries.json
+ExecStart=/usr/bin/python3 /usr/local/lib/car-catalog-guard/update-catalog-guard-geo.py --output /usr/local/lib/car-catalog-guard/catalog-guard-countries.json --nginx-output /usr/local/lib/car-catalog-guard/catalog-guard-blocked.conf --reload-nginx
 Nice=19
 CPUWeight=10
 MemoryMax=192M
@@ -13,5 +13,5 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/usr/local/lib/car-catalog-guard
+ReadWritePaths=/usr/local/lib/car-catalog-guard /var/log/nginx /var/lib/nginx /var/cache/nginx /run/lock
 UMask=0022

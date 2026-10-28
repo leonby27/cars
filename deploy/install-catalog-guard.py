@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import shlex
 import subprocess
@@ -31,6 +32,11 @@ def main():
     if geo_policy:
         countries=module.geo_module.Countries(source/'catalog-guard-countries.json',geo_policy,time.time)
         if not countries.valid:raise RuntimeError('Fresh countries matching policy are required')
+        spec=importlib.util.spec_from_file_location('catalog_country_update',source/'update-catalog-guard-geo.py')
+        updater=importlib.util.module_from_spec(spec);spec.loader.exec_module(updater)
+        (source/'catalog-guard-blocked.conf').write_text(updater.blocked_config(countries))
+    else:
+        (source/'catalog-guard-blocked.conf').write_text('geo $car_country_blocked { default 0; }\n')
     handles=[]
     for name in ['abdrive-release','car-bot-protection','car-catalog-guard']:
         f=open('/run/lock/'+name+'.lock','w'); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); handles.append(f)
@@ -45,12 +51,14 @@ def main():
      'car-catalog-guard.service':'/etc/systemd/system/car-catalog-guard.service',
      'nginx-catalog-guard-server.conf':'/etc/nginx/snippets/catalog-guard-server.conf',
      'nginx-catalog-guard-location.conf':'/etc/nginx/snippets/catalog-guard-location.conf',
+     'nginx-catalog-guard-country.conf':'/etc/nginx/conf.d/car-country-access.conf',
+     'catalog-guard-blocked.conf':'/usr/local/lib/car-catalog-guard/catalog-guard-blocked.conf',
      'car-catalog-geo-update.service':'/etc/systemd/system/car-catalog-geo-update.service',
      'car-catalog-geo-update.timer':'/etc/systemd/system/car-catalog-geo-update.timer',
     }
     if geo_policy:destinations['catalog-guard-countries.json']='/usr/local/lib/car-catalog-guard/catalog-guard-countries.json'
     retired_audio=Path('/usr/local/lib/car-catalog-guard/catalog-guard-audio')
-    paths=[Path(p) for p in destinations.values()]+[retired_audio]+[Path('/etc/nginx/snippets/abcars-site.conf'),Path('/etc/nginx/snippets/abcars-proxy.conf'),Path('/etc/nginx/sites-available/abdrive'),Path('/etc/default/car-catalog-guard')]
+    paths=[Path(p) for p in destinations.values()]+[retired_audio]+[Path('/etc/nginx/snippets/abcars-site.conf'),Path('/etc/nginx/snippets/abcars-proxy.conf'),Path('/etc/nginx/sites-available/abcars'),Path('/etc/nginx/sites-available/abdrive'),Path('/etc/default/car-catalog-guard')]
     existed=[]
     geo_timer_enabled=subprocess.run(['systemctl','is-enabled','--quiet','car-catalog-geo-update.timer']).returncode==0
     for n,path in enumerate(paths):
@@ -62,6 +70,13 @@ def main():
         if retired_audio.exists():shutil.rmtree(retired_audio)
         for name,destination in destinations.items():
             p=Path(destination);p.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source/name,p);p.chmod(0o644)
+        for name in ('abcars','abdrive'):
+            p=Path('/etc/nginx/sites-available')/name
+            text=p.read_text()
+            # Redirect-only HTTP/www servers must deny Singapore before returning.
+            rule='if ($car_country_blocked) { return 403; }'
+            text=re.sub(r'(server_name\s+[^;]*(?:abcars\.by|abdrive\.ru)[^;]*;)(?!\s*if \(\$car_country_blocked\))',lambda m:m[1]+'\n    '+rule,text)
+            p.write_text(text)
         for p in [Path('/etc/nginx/snippets/abcars-site.conf'),Path('/etc/nginx/sites-available/abdrive')]:
             text=p.read_text(); rule='include /etc/nginx/snippets/catalog-guard-server*.conf;'
             if rule not in text:
@@ -102,6 +117,6 @@ def main():
         subprocess.run(['systemctl','restart' if existed[-1] else 'stop','car-catalog-guard'])
         if subprocess.run(['nginx','-t']).returncode==0:subprocess.run(['systemctl','reload','nginx'])
         raise
-    print(json.dumps({'backup':str(backup),'mode':next((line.split('=',1)[1] for line in env.read_text().splitlines() if line.startswith('CATALOG_GUARD_MODE=')),'observe'),'disable':'Set CATALOG_GUARD_MODE=observe in /etc/default/car-catalog-guard and restart car-catalog-guard. Stopping the service also makes requests fail open.'}))
+    print(json.dumps({'backup':str(backup),'mode':next((line.split('=',1)[1] for line in env.read_text().splitlines() if line.startswith('CATALOG_GUARD_MODE=')),'observe'),'disable':'Set CATALOG_GUARD_MODE=observe in /etc/default/car-catalog-guard and restart for CAPTCHA recovery. This does not disable nginx country denial. For full rollback restore the backup paths, restart the guard, validate and reload nginx.'}))
 
 if __name__=='__main__':main()

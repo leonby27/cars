@@ -10,6 +10,7 @@
   },
   "geography": {
     "enabled": true,
+    "blocked_countries": ["SG"],
     "exempt_countries": [
       "AD",
       "AL",

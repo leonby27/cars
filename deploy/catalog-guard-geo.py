@@ -6,17 +6,29 @@ import json
 from pathlib import Path
 import re
 
+SERVICE_AGENTS={
+    'gptbot':r'\bgptbot/',
+    'claude_training':r'\b(?:claudebot|anthropic-ai|claude-web)(?:/|\b)',
+    'commoncrawl':r'\bccbot/',
+    'amazonbot':r'\bamazonbot/',
+    'amazon_search':r'\bamzn-searchbot/',
+    'amazon_user':r'\bamzn-user/',
+    'meta':r'\b(?:meta-externalagent|meta-externalfetcher|meta-webindexer|meta-externalads|facebookexternalhit)/',
+}
 
 def load_policy(path):
     policy=json.loads(Path(path).read_text())
     if 'geography' not in policy:raise ValueError('Explicit geography policy required')
     value=policy['geography']
     if not isinstance(value,dict) or type(value.get('enabled',False)) is not bool:raise ValueError('Invalid geography policy')
-    if set(value)-{'enabled','exempt_countries'}:raise ValueError('Unknown geography setting')
+    if set(value)-{'enabled','exempt_countries','blocked_countries'}:raise ValueError('Unknown geography setting')
     if not value.get('enabled',False):return None
     countries=value.get('exempt_countries')
     if not isinstance(countries,list) or not countries or any(not isinstance(c,str) or not re.fullmatch('[A-Z]{2}',c) for c in countries):raise ValueError('Explicit country exemptions required')
-    return {'exempt_countries':sorted(set(countries))}
+    blocked=value.get('blocked_countries',[])
+    if not isinstance(blocked,list) or any(not isinstance(c,str) or not re.fullmatch('[A-Z]{2}',c) for c in blocked):raise ValueError('Invalid blocked countries')
+    if set(blocked)&set(countries):raise ValueError('Blocked countries cannot be exempt')
+    return {'exempt_countries':sorted(set(countries)), 'blocked_countries':sorted(set(blocked))}
 
 
 class Countries:
@@ -26,7 +38,7 @@ class Countries:
         self.next_reload = 0
         self.mtime = None
         self.valid = False
-        self.ranges, self.starts, self.ahrefs = {}, {}, ()
+        self.ranges, self.starts, self.ahrefs, self.services = {}, {}, (), {}
         self.reload()
 
     def reload(self):
@@ -38,6 +50,8 @@ class Countries:
             data = json.loads(self.path.read_text())
             if data['exempt_countries'] != self.policy['exempt_countries']:
                 raise ValueError('Country database does not match policy')
+            if data.get('blocked_countries',[]) != self.policy.get('blocked_countries',[]):
+                raise ValueError('Blocked countries do not match policy')
             expires = datetime.datetime.fromisoformat(data['expires_utc'].replace('Z', '+00:00')).timestamp()
             if expires <= self.now():
                 raise ValueError('Country database expired')
@@ -49,21 +63,26 @@ class Countries:
                 if isinstance(source, str):
                     packed = base64.b64decode(source, validate=True)
                 else:
-                    packed = b''.join(int(a).to_bytes(width, 'big')+int(b).to_bytes(width, 'big')+bytes([('unknown','exempt','outside').index(tag)]) for a,b,tag in source)
+                    packed = b''.join(int(a).to_bytes(width, 'big')+int(b).to_bytes(width, 'big')+bytes([('unknown','exempt','outside','blocked').index(tag)]) for a,b,tag in source)
                 if not packed or len(packed)%stride:
                     raise ValueError('Invalid country ranges')
                 previous = -1
                 for at in range(0, len(packed), stride):
                     first = int.from_bytes(packed[at:at+width], 'big')
                     last = int.from_bytes(packed[at+width:at+width*2], 'big')
-                    if first <= previous or first > last or packed[at+width*2] > 2:
+                    if first <= previous or first > last or packed[at+width*2] > 3:
                         raise ValueError('Invalid country range ordering')
                     previous = last
                 ranges[version] = (packed, width, stride)
             services = tuple(ipaddress.ip_network(n) for n in data['ahrefs_networks'])
             if not services or any(n.prefixlen == 0 for n in services):
                 raise ValueError('Invalid verified service ranges')
-            self.ranges, self.ahrefs = ranges, services
+            extra={}
+            for name,networks in data.get('service_networks',{}).items():
+                if name not in SERVICE_AGENTS:raise ValueError('Unknown verified crawler')
+                extra[name]=tuple(ipaddress.ip_network(n) for n in networks)
+                if not extra[name] or any(n.prefixlen==0 or not n.is_global for n in extra[name]):raise ValueError('Invalid verified crawler networks')
+            self.ranges, self.ahrefs, self.services = ranges, services, extra
             self.mtime = mtime
             self.expires, self.valid = expires, True
         except (OSError, ValueError, KeyError, TypeError):
@@ -86,13 +105,28 @@ class Countries:
             return 'unknown'
         at = (low-1)*stride
         last = int.from_bytes(packed[at+width:at+width*2], 'big')
-        return ('unknown','exempt','outside')[packed[at+width*2]] if value <= last else 'unknown'
+        return ('unknown','exempt','outside','blocked')[packed[at+width*2]] if value <= last else 'unknown'
+
+    def blocked_networks(self):
+        """Derive nginx CIDRs from the same validated country ranges."""
+        if not self.valid:raise ValueError('Valid country data required')
+        result=[]
+        for version,(packed,width,stride) in self.ranges.items():
+            address=ipaddress.IPv4Address if version==4 else ipaddress.IPv6Address
+            for at in range(0,len(packed),stride):
+                if packed[at+width*2]!=3:continue
+                first=int.from_bytes(packed[at:at+width],'big')
+                last=int.from_bytes(packed[at+width:at+width*2],'big')
+                result.extend(str(n) for n in ipaddress.summarize_address_range(address(first),address(last)))
+        return result
 
     def verified_service(self, address, ua):
         if self.now() >= self.next_reload:
             self.reload()
-        return bool(self.valid and self.now() < self.expires and re.search(r'ahrefs(?:bot|siteaudit)', ua, re.I)
-                    and any(address.version == n.version and address in n for n in self.ahrefs))
+        if not self.valid or self.now()>=self.expires:return False
+        if re.search(r'ahrefs(?:bot|siteaudit)',ua,re.I) and any(address.version==n.version and address in n for n in self.ahrefs):return True
+        return any(re.search(SERVICE_AGENTS[name],ua,re.I) and any(address.version==n.version and address in n for n in networks)
+                   for name,networks in self.services.items())
 
 
 class Geography:

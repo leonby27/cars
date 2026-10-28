@@ -38,7 +38,7 @@ class Fixture(g.Handler):
    elif mode=='threshold':
     store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),))
    elif mode=='early':
-    store.geo=types.SimpleNamespace(countries=types.SimpleNamespace(verified_service=lambda address,ua:False),country_gate=lambda address,ua:{'reason':'geo_country_verification'},session_verified=lambda sid:False,verified=lambda sid:None,clean=lambda:None)
+    store.geo=types.SimpleNamespace(countries=types.SimpleNamespace(classification=lambda address:'outside',verified_service=lambda address,ua:False),country_gate=lambda address,ua:{'reason':'geo_country_verification'},session_verified=lambda sid:False,verified=lambda sid:None,clean=lambda:None)
    elif mode=='exhaust':
     store.budget(store.key('${fixtureIp}'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('${fixtureIp}'),));store.db.execute('INSERT OR REPLACE INTO clearance_totals VALUES (?,?,8000,600)',('ip:'+store.key('${fixtureIp}'),time.time()))
   self.send(204)

@@ -98,19 +98,6 @@ def reading(method, uri):
 
 
 
-def geographic_home(method, uri):
-    # Home HTML embeds catalog cards before the browser requests any API data.
-    # Match the renderer's first path parameter and slash normalization too.
-    if method != 'GET':return False
-    parts=urllib.parse.urlsplit(uri)
-    path=urllib.parse.unquote(parts.path).rstrip('/')
-    if path in ('','/index.html'):return True
-    if path!='/api/pages/static':return False
-    params={}
-    for key,value in urllib.parse.parse_qsl(parts.query,keep_blank_values=True):params.setdefault(key,value)
-    return not params.get('path','').strip('/')
-
-
 def suspicious(units, collections, paged, details):
     # Requires a long enumeration, not an initial page/filter burst. Repeated
     # identical reads do not count. Units are requested capacity, not saved cars.
@@ -197,8 +184,10 @@ class Store:
 
     def check(self,ip,method,uri,cookie='',session=None,user_agent=''):
         read=reading(method,uri)
-        if read is None and not geographic_home(method,uri):return True,None
+        if read is None and not self.geo:return True,None
         address=ipaddress.ip_address(ip)
+        if self.geo and self.geo.countries.classification(address)=='blocked':
+            return False,{'reason':'geo_country_blocked','recoverable':False}
         # Verified Ahrefs uses nginx's shared crawl budget, not visitor CAPTCHA.
         if self.geo and self.geo.countries.verified_service(address,user_agent):return True,None
         ip=self.key(ip)
@@ -287,7 +276,8 @@ def safe_return(value):
     try:
         parts=urllib.parse.urlsplit(value)
         if not parts.scheme and not parts.netloc and value.startswith('/') and not value.startswith('//') and '\\' not in value and not any(ord(c)<32 for c in value):
-            if parts.path.startswith(('/catalog','/cars/','/models/')) or parts.path=='/':
+            path=urllib.parse.unquote(parts.path)
+            if not path.startswith(('//','/api/','/_catalog-check','/_catalog_guard_auth')) and '\\' not in path and not any(ord(c)<32 for c in path):
                 return value[:2000]
     except ValueError:
         pass
@@ -324,9 +314,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path=urllib.parse.urlsplit(self.path).path
             if path=='/health': return self.send(204)
             if path=='/check':
+                geo=self.server.store.geo
+                if geo and geo.countries.classification(ipaddress.ip_address(self.context()))=='blocked':
+                    return self.send(403,headers={'X-Guard-Reason':'geo_country_blocked'})
                 if self.headers.get('X-Guard-Exempt') in ('1','10','01','11'): return self.send(204)
                 method=self.headers.get('X-Guard-Method','GET');uri=self.headers.get('X-Guard-URI','/')
-                if reading(method,uri) is None and not geographic_home(method,uri):return self.send(204)
+                # Allowed-country assets need neither a session nor catalog budgets.
+                if reading(method,uri) is None and (not geo or geo.countries.classification(ipaddress.ip_address(self.context())) in ('exempt','unknown')):return self.send(204)
                 session,session_cookie=self.server.store.ensure_session(self.headers.get('Cookie',''))
                 allowed,snapshot=self.server.store.check(self.context(),self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/'),self.headers.get('Cookie',''),session=session,user_agent=self.headers.get('User-Agent',''))
                 if not allowed:
@@ -339,6 +333,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(200,self.server.client_script,'text/javascript; charset=utf-8')
             if path=='/blocked':
                 uri=self.headers.get('X-Guard-URI','/catalog')
+                if self.headers.get('X-Guard-Reason')=='geo_country_blocked':
+                    return self.send(403,b'Access denied','text/plain; charset=utf-8')
                 if self.headers.get('X-Guard-Reason')=='daily_clearance_budget':
                     if urllib.parse.unquote(urllib.parse.urlsplit(uri).path).startswith('/api/'):
                         return self.send(429,json.dumps({'error':'catalog_daily_budget','message':'Слишком большой объём просмотра. Попробуйте позже.'}).encode(),'application/json; charset=utf-8',{'Retry-After':'3600'})

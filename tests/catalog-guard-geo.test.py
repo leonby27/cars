@@ -18,9 +18,18 @@ def country_fixture(path, policy, now):
         if first < start:rows.append([first, start-1, 'outside'])
         rows.append([start, end, 'exempt']);first=end+1
     rows.append([first, 2**32-1, 'outside'])
-    path.write_text(json.dumps(dict(exempt_countries=policy['exempt_countries'],
+    # One Singapore fixture in each IP family.
+    blocked=ipaddress.ip_network('203.0.113.128/25')
+    result=[]
+    for a,b,tag in rows:
+        start,end=int(blocked.network_address),int(blocked.broadcast_address)
+        if b<start or a>end:result.append([a,b,tag]);continue
+        if a<start:result.append([a,start-1,tag])
+        result.append([max(a,start),min(b,end),'blocked'])
+        if b>end:result.append([end+1,b,tag])
+    path.write_text(json.dumps(dict(exempt_countries=policy['exempt_countries'],blocked_countries=policy['blocked_countries'],
         expires_utc=datetime.datetime.fromtimestamp(now+86400,datetime.timezone.utc).isoformat(),
-        ranges={'4':rows, '6':[[0,2**128-1,'outside']]}, ahrefs_networks=['202.8.40.0/24'])))
+        ranges={'4':result, '6':[[0,int(ipaddress.ip_address('2001:db8::ffff')),'outside'],[int(ipaddress.ip_address('2001:db8::1:0')),int(ipaddress.ip_address('2001:db8::1:ffff')),'blocked'],[int(ipaddress.ip_address('2001:db8::2:0')),2**128-1,'outside']]}, ahrefs_networks=['202.8.40.0/24'],service_networks={'gptbot':['8.8.4.0/24']})))
 
 class GeoChecks(unittest.TestCase):
     def setUp(self):
@@ -37,9 +46,31 @@ class GeoChecks(unittest.TestCase):
                 allowed,reason=self.read(uri,ip=ip)
                 self.assertFalse(allowed);self.assertEqual(reason['reason'],'geo_country_verification')
         self.assertTrue(self.read(ip='109.126.0.1')[0])
-        for uri in ['/api/auth/me','/api/analytics/events','/api/cars/summary','/api/image','/api/model-catalog?light=1','/contacts','/login','/api/pages/static?path=/contacts&path=/']:
-            self.assertTrue(self.read(uri)[0])
-        self.assertTrue(self.read(method='HEAD')[0]);self.assertTrue(self.read(method='POST')[0])
+        for uri in ['/api/auth/me','/api/analytics/events','/api/cars/summary','/api/image','/api/model-catalog?light=1','/contacts','/login','/blog/article','/assets/a.js','/photos/car.jpg','/documents/privacy-policy.pdf','/robots.txt','/sitemap-7c4f19b2.xml','/api/pages/static?path=/contacts&path=/']:
+            self.assertFalse(self.read(uri)[0]);self.assertTrue(self.read(uri,ip='109.126.0.1')[0])
+        self.assertFalse(self.read(method='HEAD')[0]);self.assertFalse(self.read(method='POST')[0])
+    def test_blocked_country_cannot_use_clearance_or_verified_service(self):
+        cookie=self.store.ensure_session('')[1].split(';')[0];sid=self.store.session(cookie)
+        clearance=self.store.clearance('203.0.113.130',sid)
+        self.store.geo.countries.ahrefs+=(ipaddress.ip_network('203.0.113.128/25'),)
+        for ip in ['203.0.113.130','2001:db8::1:1']:
+            for uri in ['/','/contacts','/api/cars','/assets/a.js','/_catalog-check']:
+                for method in ['GET','HEAD','POST']:
+                    allowed,reason=self.read(uri,ip=ip,cookie=cookie+'; '+guard.COOKIE+'='+clearance,method=method,ua='AhrefsBot/7.0')
+                    self.assertFalse(allowed);self.assertEqual(reason['reason'],'geo_country_blocked')
+    def test_training_crawler_requires_matching_official_ip_and_agent(self):
+        for uri in ['/contacts','/catalog','/assets/a.js']:
+            self.assertTrue(self.read(uri,ip='8.8.4.1',ua='GPTBot/1.4')[0])
+            self.assertFalse(self.read(uri,ip='203.0.113.90',ua='GPTBot/1.4')[0])
+            self.assertFalse(self.read(uri,ip='8.8.4.1',ua='Mozilla/5.0')[0])
+    def test_non_catalog_clearance_preserves_return_path_and_export_budgets(self):
+        cookie=self.store.ensure_session('')[1].split(';')[0];sid=self.store.session(cookie)
+        self.store.clearance('203.0.113.90',sid)
+        for uri in ['/contacts?from=home#phone','/login','/documents/privacy-policy.pdf','/blog/article']:
+            self.assertEqual(guard.safe_return(uri),uri)
+            self.assertTrue(self.read(uri,cookie=cookie)[0])
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM budgets').fetchone()[0],0)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM seen').fetchone()[0],0)
     def test_clearance_persists_one_hour_across_mobile_ip_change_without_renewing_it(self):
         cookie=self.store.ensure_session('')[1].split(';')[0];sid=self.store.session(cookie)
         clearance=self.store.clearance('203.0.113.90',sid)
@@ -88,7 +119,7 @@ class GeoChecks(unittest.TestCase):
         self.assertTrue(self.read(ip='109.126.0.1')[0])
     def test_geography_policy_rejects_stale_configuration_fields(self):
         path=self.path/'policy.json'
-        for value in [{'enabled':True,'exempt_countries':[]},{'enabled':True,'exempt_countries':['BY'],'min_pairs':64}]:
+        for value in [{'enabled':True,'exempt_countries':[]},{'enabled':True,'exempt_countries':['BY'],'min_pairs':64},{'enabled':True,'exempt_countries':['BY'],'blocked_countries':['BY']},{'enabled':True,'exempt_countries':['BY'],'blocked_countries':['bad']}]:
             path.write_text(json.dumps({'geography':value}))
             with self.assertRaises(ValueError):guard.geo_module.load_policy(path)
 
