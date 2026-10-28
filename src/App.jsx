@@ -3002,6 +3002,7 @@ const savedFilterDefaults = {
   sort: CATALOG_DEFAULT_SORT,
 };
 const savedSearchSortLabels = {
+  fresh: "свежие и разные",
   price_asc: "сначала дешёвые",
   price_desc: "сначала дорогие",
   newest: "новые объявления",
@@ -3129,6 +3130,7 @@ const heroApiParams = (parsed) => {
 
 // Те же варианты сортировки, что и в каталоге, — выдача поиска ведёт себя одинаково.
 const HERO_SORT_OPTIONS = [
+  { value: "fresh", label: "Свежие и разные" },
   { value: "newest", label: "Новые объявления" },
   { value: "price_asc", label: "Дешёвые" },
   { value: "price_desc", label: "Дорогие" },
@@ -6590,7 +6592,7 @@ let catalogRequest = null;
 // Каталог и страницы марок/типов открывают свой запрос с фильтрами, поэтому список
 // из шестидесяти карточек им не нужен: просим одну — её достаточно, чтобы узнать
 // размер каталога и что база отвечает.
-const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=newest&summary=defer" : "/api/cars?limit=60&sort=variety");
+const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=fresh&summary=defer" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
 const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
 // Загрузившись на /catalog, приложение знает одну машину — витрину главной и блок

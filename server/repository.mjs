@@ -24,6 +24,9 @@ import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearbox
 import { marketComparison } from "./market-compare-data.mjs";
 import { homeFeedQuery, homeMarketReferences } from "./home-feed.mjs";
 import { selectHomeFeed } from "../src/home-feed.js";
+import { CATALOG_DEFAULT_SORT } from "../src/catalog-url.js";
+import { FRESH_CANDIDATE_LIMIT } from "../src/catalog-fresh.js";
+import { freshCatalogQuery } from "./catalog-fresh.mjs";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 // Include imported quote inputs that are not all stored in vehicles. Run times
@@ -340,6 +343,10 @@ async function listCarsPage(searchParams, { summary = null, includeYears = false
   const { where, values } = buildCarFilters(searchParams);
   const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);
+  // One model cannot benefit from brand/model rounds; keep its indexed date read.
+  const singleModel = searchParams.get("brand") && searchParams.get("brand") !== "Все марки"
+    && multiParamValues(searchParams.getAll("model"), "Все модели").length === 1;
+  const fresh = (searchParams.get("sort") || CATALOG_DEFAULT_SORT) === "fresh" && offset < FRESH_CANDIDATE_LIMIT && !singleModel;
   const deferSummary = searchParams.get("summary") === "defer";
   const deferredCap = Math.min(maxOffset, CATALOG_PAGE_SIZE * CATALOG_MAX_PAGES);
   const queryLimit = deferSummary ? Math.min(limit + 1, Math.max(0, deferredCap - offset)) : limit;
@@ -359,13 +366,15 @@ async function listCarsPage(searchParams, { summary = null, includeYears = false
       // Сортируем только номера, строки целиком берём для выбранной страницы. Иначе база
       // перекладывает каждую машину вместе с source_payload: на 80 тыс. машин сортировка
       // «по умолчанию» не влезала в память и писала на диск ~48 МБ на каждый запрос.
-      // Порядок у всех сортировок завершается l.id, поэтому внешний ORDER BY его повторяет.
-      : cachedCatalogValue(pool, ["list-items", where, values, order, queryLimit, offset], async () => {
-        const result = await pool.query(`WITH picked AS (
+      // Обычные сортировки завершаются l.id; свежий пул сохраняет свою нумерацию.
+      : cachedCatalogValue(pool, ["list-items", where, values, fresh ? "fresh-v1" : order, queryLimit, offset], async () => {
+        const query = fresh ? freshCatalogQuery({where, values, limit:queryLimit, offset, carSelect,
+          poolWhere:buildCarFilters(new URLSearchParams()).where}) : {text:`WITH picked AS (
           SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
           ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}
         )
-        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,queryLimit,offset]);
+        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, values:[...values,queryLimit,offset]};
+        const result = await pool.query(query.text, query.values);
         return result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
       }),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.

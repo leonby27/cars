@@ -46,14 +46,28 @@ const waitFor=async predicate=>{const start=Date.now();while(!predicate()){if(Da
 const uniqueCards=page=>page.evaluate(()=>new Set([...document.querySelectorAll('main.catalog a[href^="/cars/"]')].map(n=>n.getAttribute('href'))).size);
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+ if(process.env.TEST_SLOW==='1'){
+  const cdp=await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');await cdp.send('Network.setCacheDisabled',{cacheDisabled:true});
+  await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:150,downloadThroughput:1600000/8,uploadThroughput:750000/8});
+  await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+ }
+ await page.addInitScript(()=>{
+  new MutationObserver(()=>{
+   if(!window.__cardsReadyAt&&document.querySelectorAll('main.catalog [data-car-id]').length===48)window.__cardsReadyAt=performance.now();
+  }).observe(document,{childList:true,subtree:true});
+ });
  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error'&&/Minified React|Hydration|hydration/.test(m.text()))errors.push(m.text())});
  await page.goto(base+'/catalog',{waitUntil:'domcontentloaded'});
  await waitFor(()=>waiting.some(w=>w.kind==='meta')&&waiting.some(w=>w.kind==='summary'));
  assert.equal(await uniqueCards(page),48);
  assert.equal(await page.locator('main.catalog .skeleton-card').count(),0);
  assert.equal(await page.locator('.result-summary [aria-label="Загружаем количество автомобилей"]').count(),1);
- assert.ok((await page.locator('.sort-custom-select .select-trigger').innerText()).includes('Новые объявления'));
+ assert.match(await page.locator('.sort-custom-select .select-trigger').innerText(),/Свежие\s+и\s+разные/);
  assert.equal(new URL(page.url()).search,'');
+ const timing=await page.evaluate(()=>({cardsReadyAt:window.__cardsReadyAt,appEntryEnd:performance.getEntriesByType('resource').find(r=>r.name.includes('/app-entry-'))?.responseEnd}));
+ assert.ok(timing.cardsReadyAt>0&&timing.cardsReadyAt<timing.appEntryEnd,'SSR cards must precede application download');
+ console.log(JSON.stringify({ssrCardTiming:timing,slow:process.env.TEST_SLOW==='1'}));
  waiting.filter(w=>w.kind==='summary').forEach(w=>w.send());
  await page.waitForFunction(()=>document.querySelector('.result-summary b')?.textContent==='240 шт.');
  assert.equal(await uniqueCards(page),48);
@@ -68,7 +82,7 @@ try{
  await page.getByRole('option',{name:'Дешёвые',exact:true}).click();
  await page.waitForURL('**/catalog?sort=price_asc');
  await page.locator('.sort-custom-select .select-trigger').click();
- await page.getByRole('option',{name:'Новые объявления',exact:true}).click();
+ await page.getByRole('option',{name:'Свежие и разные',exact:true}).click();
  await page.waitForURL('**/catalog');assert.equal(new URL(page.url()).search,'');
  assert.deepEqual(errors,[]);await page.close();
  const other=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),failed=await other.newPage();fail=true;

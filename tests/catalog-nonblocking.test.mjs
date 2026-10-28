@@ -82,11 +82,11 @@ test('exhausted exact matches do not switch later pages to a broader text fallba
  }finally{pool.query=old;clearCatalogCaches();}
 });
 
-test('initial newest order leaves addresses clean and keeps other chosen sorts explicit',()=>{
- assert.equal(catalogSort(new URLSearchParams()),'newest');
- assert.equal(catalogSort(new URLSearchParams('sort=default')),'newest');
- for(const search of ['', 'sort=default','sort=newest','sort=default&seed=s3'])assert.equal(catalogHref(search),'/catalog');
- assert.equal(catalogHref('brand=BMW&page=2&sort=newest'),'/catalog/bmw?page=2');
+test('initial fresh order leaves addresses clean and keeps other chosen sorts explicit',()=>{
+ assert.equal(catalogSort(new URLSearchParams()),'fresh');
+ assert.equal(catalogSort(new URLSearchParams('sort=default')),'fresh');
+ for(const search of ['', 'sort=default','sort=fresh','sort=default&seed=s3'])assert.equal(catalogHref(search),'/catalog');
+ assert.equal(catalogHref('brand=BMW&page=2&sort=fresh'),'/catalog/bmw?page=2');
  assert.equal(catalogHref('brand=BMW&page=2&sort=price_asc'),'/catalog/bmw?page=2&sort=price_asc');
  assert.equal(catalogHref('brand=BMW&page=2&sort=price_desc'),'/catalog/bmw?page=2&sort=price_desc');
 });

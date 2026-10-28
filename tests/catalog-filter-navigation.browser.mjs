@@ -10,7 +10,7 @@ import { catalogMetaBoot } from '../server/app-render.mjs';
 import { CATALOG_PAGE_SIZE, findCatalogLanding, landingApiParams, parseModelLandingPath } from '../src/catalog-landings.js';
 import { modelLandingObject } from '../src/model-landing.js';
 import { modelSlug } from '../src/model-slug.js';
-import { catalogShuffleSeed } from '../src/catalog-url.js';
+import { CATALOG_DEFAULT_SORT, catalogShuffleSeed } from '../src/catalog-url.js';
 import { sortCars } from '../src/car-filters.js';
 
 const build = pathToFileURL(resolve(process.env.TEST_BUILD_DIR || 'dist') + '/');
@@ -19,7 +19,7 @@ const { renderCatalogApp } = await import(new URL('ssr/entry-server.js', build))
 const shell = await readFile(new URL('index.html', client), 'utf8');
 const entry = shell.match(/<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/)[0] + '</script>';
 const styles = [...shell.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)].map(m => m[0]).join('');
-const cars = Array.from({ length: 240 }, (_, i) => {
+const cars = Array.from({ length: 1105 }, (_, i) => {
   const brand = i % 3 ? 'Zeekr' : 'Audi';
   const model = brand === 'Audi' ? (i % 2 ? 'A6' : 'A4') : (i % 2 ? '7X' : '001');
   const origin = i % 4 ? 'china' : 'korea';
@@ -40,7 +40,7 @@ const matching = p => cars.filter(c =>
   (!p.has('bodyType') || p.getAll('bodyType').includes(c.bodyType)) &&
   (!p.get('yearMin') || c.year >= Number(p.get('yearMin'))));
 const listing = p => {
-  const all = sortCars(matching(p), p.get('sort') || 'newest', p.get('seed') || catalogShuffleSeed());
+  const all = sortCars(matching(p), p.get('sort') || CATALOG_DEFAULT_SORT, p.get('seed') || catalogShuffleSeed());
   const offset = Number(p.get('offset') || 0), limit = Number(p.get('limit') || CATALOG_PAGE_SIZE);
   return { items: all.slice(offset, offset + limit), total: all.length, hasMore: offset + limit < all.length };
 };
@@ -139,12 +139,14 @@ try {
     const batchIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     const initialBatch = await batchIds();
     assert.equal(initialBatch.length, CATALOG_PAGE_SIZE);
-    assert.equal((await state(page)).sort,'newest');
+    assert.equal((await state(page)).sort,'fresh');
     assert.equal(new URL(page.url()).searchParams.has('sort'),false);
-    await page.evaluate(()=>history.replaceState({...history.state,catalog:{...history.state.catalog,sort:'price_asc',order:[...document.querySelectorAll('main.catalog [data-car-id]')].map(n=>n.dataset.carId).reverse()}},'',location.href));
-    await page.reload();
-    await page.waitForFunction(()=>history.state?.catalog?.sort==='newest'&&document.querySelectorAll('main.catalog [data-car-id]').length===48);
-    assert.deepEqual(await batchIds(),initialBatch,'an old cheap-default snapshot cannot reorder the new default');
+    for (const staleSort of ['price_asc','newest']) {
+      await page.evaluate(sort=>history.replaceState({...history.state,catalog:{...history.state.catalog,sort,order:[...document.querySelectorAll('main.catalog [data-car-id]')].map(n=>n.dataset.carId).reverse()}},'',location.href),staleSort);
+      await page.reload();
+      await page.waitForFunction(()=>history.state?.catalog?.sort==='fresh'&&document.querySelectorAll('main.catalog [data-car-id]').length===48);
+      assert.deepEqual(await batchIds(),initialBatch,`${staleSort}: old default history cannot reorder the fresh default`);
+    }
     const nextBatchResponse = page.waitForResponse(response => {
       const url = new URL(response.url());
       return url.pathname === '/api/cars' && url.searchParams.get('offset') === String(CATALOG_PAGE_SIZE);
@@ -155,6 +157,12 @@ try {
     const expandedBatch = await batchIds();
     assert.deepEqual(expandedBatch.slice(0, CATALOG_PAGE_SIZE), initialBatch);
     assert.equal(new Set(expandedBatch).size, CATALOG_PAGE_SIZE * 2, 'load more appends one batch without duplicates');
+    await ready('/catalog?page=21');
+    const boundaryOrder = sortCars(cars, 'fresh').map(car => car.id);
+    assert.deepEqual(await batchIds(), boundaryOrder.slice(960,1008), 'page 21 crosses the freshness window without gaps');
+    await page.locator('a.load-more').click();
+    await page.waitForFunction(()=>document.querySelectorAll('main.catalog [data-car-id]').length===96);
+    assert.deepEqual(await batchIds(), boundaryOrder.slice(960,1056), 'load more continues chronologically after the first thousand');
     await ready(); await chooseCountry(); await chooseType(); await settle();
     const forward = new URL(page.url()); forward.searchParams.delete('nocount');
     assert.equal(forward.pathname + forward.search, '/catalog/electric?country=china');
@@ -211,11 +219,11 @@ try {
 
     }
     await ready('/catalog/audi/a4');
-    assert.equal((await state(page)).sort, 'newest');
+    assert.equal((await state(page)).sort, 'fresh');
     assert.equal(new URL(page.url()).searchParams.has('sort'), false);
     const displayedIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     for (const [sort, label] of [
-      ['price_desc', 'Дорогие'], ['price_asc', 'Дешёвые'], ['newest', 'Новые объявления'],
+      ['price_desc', 'Дорогие'], ['price_asc', 'Дешёвые'], ['newest', 'Новые объявления'], ['fresh', 'Свежие и разные'],
       ['mileage_asc', 'С наименьшим пробегом'], ['range_desc', 'С наибольшим запасом хода'],
       ['year_desc', 'Новые по году'], ['year_asc', 'Старые по году'],
     ]) {
@@ -226,7 +234,7 @@ try {
           && url.searchParams.get('model') === 'A4' && url.searchParams.get('sort') === sort;
       });
       await page.getByRole('option', { name: label, exact: true }).click();
-      await page.waitForURL(url => sort === 'newest' ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
+      await page.waitForURL(url => sort === CATALOG_DEFAULT_SORT ? !url.searchParams.has('sort') : url.searchParams.get('sort') === sort);
       await listingResponse; await settle();
       const before = await displayedIds();
       assert.ok(before.length > 0, sort);
@@ -237,7 +245,7 @@ try {
       assert.deepEqual(await displayedIds(), before, `${sort}: reload preserves the vehicle order`);
     }
     assert.deepEqual(errors, []);
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: filters, pagination, model navigation, all 7 public sorts and vehicle order after reload${mobile ? "" : ", back/forward"}`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: filters, pagination, model navigation, all 8 public sorts and vehicle order after reload${mobile ? "" : ", back/forward"}`);
     await context.close();
   }
 } finally {

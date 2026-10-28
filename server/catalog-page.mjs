@@ -150,7 +150,7 @@ export async function renderCatalogIndex(searchParams) {
   // поисковику не нужны.
   if (params.get("page") !== null && number === 1) return { status: 301, location: pageLocation("/catalog", 1, params) };
 
-  // Без явной сортировки первая порция сразу выбирается по возрастанию цены.
+  // Начальный порядок чередует марки и модели среди 1000 свежих объявлений.
   const filters = new URLSearchParams();
   const [{ list, seed }, cheapest] = await Promise.all([
     firstListing(filters, params, number),

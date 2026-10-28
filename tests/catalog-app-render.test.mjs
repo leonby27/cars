@@ -10,10 +10,10 @@ import { createSeoRenderer } from "../server/seo-render.mjs";
 // разошлась со страницей посетителя (другие машины, другие блоки, другие заголовки).
 
 test("порядок первой выдачи — как решает каталог в браузере", () => {
-  assert.equal(catalogSortFor(new URLSearchParams()), "newest");
-  assert.equal(catalogSortFor(new URLSearchParams("page=3")), "newest");
+  assert.equal(catalogSortFor(new URLSearchParams()), "fresh");
+  assert.equal(catalogSortFor(new URLSearchParams("page=3")), "fresh");
   assert.equal(catalogSortFor(new URLSearchParams("sort=newest&page=2")), "newest");
-  assert.equal(catalogSortFor(new URLSearchParams("sort=что-то")), "newest");
+  assert.equal(catalogSortFor(new URLSearchParams("sort=что-то")), "fresh");
   assert.equal(catalogSortFor(new URLSearchParams("sort=price_asc&page=3")), "price_asc");
 });
 
@@ -27,6 +27,7 @@ test("ключ перемешивания один на минские сутк�
 
 test("готовый список встраивается только для адреса без своих фильтров", () => {
   assert.equal(plainCatalogSearch(new URLSearchParams("page=2&sort=newest")), true);
+  assert.equal(plainCatalogSearch(new URLSearchParams("page=2&sort=fresh")), true);
   assert.equal(plainCatalogSearch(new URLSearchParams("yearMin=2022")), false);
   assert.equal(catalogBootSearch(new URLSearchParams("utm_source=x&page=2&sort=newest")), "page=2&sort=newest");
 });

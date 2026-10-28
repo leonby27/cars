@@ -26,7 +26,7 @@ const timeoutMs = 30000;
 // каталога и справочник фильтров — общий и по каждому типу топлива, как в index.html.
 const fixedPaths = () => [
   "/api/cars?limit=60&sort=variety",
-  "/api/cars?limit=1&sort=newest",
+  "/api/cars?limit=1&sort=fresh&summary=defer",
   "/api/market/compare?quota=off",
   "/api/market/compare?quota=on",
   "/api/catalog/meta",

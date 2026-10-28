@@ -1,3 +1,4 @@
+import { freshCatalogOrder } from "./catalog-fresh.js";
 import { seededRandom, varietyOrder } from "./car-variety.js";
 
 // Границы приходят числами или null — ярлыки селектов остаются в UI.
@@ -30,5 +31,6 @@ export function sortCars(cars, sort = "newest", seed = "") {
   if (sort === "range_desc") return sorted.sort((a, b) => compareNullable(range(a), range(b), -1));
   if (sort === "year_desc") return sorted.sort((a, b) => compareNullable(year(a), year(b), -1));
   if (sort === "year_asc") return sorted.sort((a, b) => compareNullable(year(a), year(b)));
-  return sorted.sort((a, b) => compareNullable(listedAt(a), listedAt(b), -1));
+  const newest = sorted.sort((a, b) => compareNullable(listedAt(a), listedAt(b), -1));
+  return sort === "fresh" ? freshCatalogOrder(newest) : newest;
 }

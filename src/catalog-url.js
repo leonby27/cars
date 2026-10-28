@@ -2,8 +2,8 @@ import { CATALOG_LANDINGS, catalogLandingForFilters, catalogPlaceholderRedirect,
 import { originFromParam } from "./origin.js";
 import { isTrackingParam, withoutTrackingParams } from "./tracking-params.js";
 
-export const CATALOG_DEFAULT_SORT = "newest";
-export const CATALOG_SORTS = new Set(["default", "price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);
+export const CATALOG_DEFAULT_SORT = "fresh";
+export const CATALOG_SORTS = new Set(["default", "fresh", "price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);
 const BRAND_NAMES = new Map(CATALOG_LANDINGS.filter(landing => landing.kind === "brand").map(landing => [landing.brand.toLowerCase(), landing.brand]));
 const MULTI = new Set(["model", "body", "color", "brandNot", "modelNot", "bodyTypeNot", "typeNot", "driveNot", "colorNot"]);
 

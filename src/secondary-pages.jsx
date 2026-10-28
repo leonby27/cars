@@ -1756,6 +1756,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // retrigger the query this component already issued at mount.
   const useApi = apiMode !== false;
   const sortOptions = [
+    { value: "fresh", label: "Свежие и разные" },
     { value: "newest", label: "Новые объявления" },
     { value: "price_asc", label: "Дешёвые" },
     { value: "price_desc", label: "Дорогие" },
@@ -1835,7 +1836,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [detailsError, setDetailsError] = useState(false);
   const detailsRetry = useRef(null);
   // Filters and sort come from the URL; history restores only the loaded list and scroll.
-  // Без sort используем «Новые объявления»; другие порядки хранятся в адресе.
+  // Без sort используем «Свежие и разные»; другие порядки хранятся в адресе.
   const [sort, setSort] = useState(urlSort);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
