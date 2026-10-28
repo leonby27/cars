@@ -2267,6 +2267,9 @@ html[data-theme="dark"] .detail-faq.catalog-landing-faq .home-faq-item:not(.open
 }
 .brand-guide-model-row {
   position: relative;
+  /* Keep the stretched link inside its table row in older Safari. */
+  transform: translate(0);
+  clip-path: inset(0);
   transition: background-color var(--motion-fast) ease;
 }
 .brand-guide-model-row:hover {

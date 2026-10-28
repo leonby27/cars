@@ -30,6 +30,16 @@ const list=params=>{
   return {items:all.slice(offset,offset+limit),total:all.length,hasMore:offset+limit<all.length};
 };
 const meta=brand=>({brands:Object.entries(names).map(([brand,models])=>({brand,count:models.length})),models:(names[brand]||[]).map(model=>({model,count:model==='Cowboy'?24:1})),bodyTypes:[],drives:[],countries:[],availability:{}});
+const guide=brand=>({
+  brand,total:names[brand].length,pricedCount:names[brand].length,
+  yearMin:2024,yearMax:2024,priceMin:15000,priceMax:30000,priceMedian:22000,
+  calculatedAt:'2026-10-27T12:00:00Z',budgets:{},
+  // The last statistics row swallowed unrelated clicks in Safari. Keep the
+  // reported last model here, below a complete catalog rather than in isolation.
+  models:[...names[brand].filter(model=>model!=='Emgrand GS EV'),...(brand==='Geely'?['Emgrand GS EV']:[])].map(model=>({
+    model,count:1,yearMin:2024,yearMax:2024,priceMin:15000,priceMax:30000,priceMedian:22000,powertrains:['ДВС'],
+  })),
+});
 const server=createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,'http://fixture');
@@ -37,6 +47,7 @@ const server=createServer(async(req,res)=>{
       assert.equal(req.method,'GET');let data={};
       if(url.pathname==='/api/cars')data=list(url.searchParams);
       if(url.pathname==='/api/catalog/meta')data=meta(url.searchParams.get('brand'));
+      if(url.pathname==='/api/brand-guide')data=guide(url.searchParams.get('brand'));
       if(url.pathname==='/api/auth/me')data={user:null};
       if(url.pathname==='/api/model-catalog'){
         const brand=brandOf(url.searchParams.get('brand')),slug=url.searchParams.get('model');
@@ -48,7 +59,7 @@ const server=createServer(async(req,res)=>{
     if(url.pathname.startsWith('/catalog/')){
       const landing=findCatalogLanding(url.pathname);assert.ok(landing?.brand);
       const params=new URLSearchParams({brand:landing.brand});
-      const boot={catalogPath:url.pathname,catalogSearch:'',catalogValue:list(params),...catalogMetaBoot(params,meta(landing.brand))};
+      const boot={catalogPath:url.pathname,catalogSearch:'',catalogValue:list(params),...catalogMetaBoot(params,meta(landing.brand)),brandGuideBrand:landing.brand,brandGuideValue:guide(landing.brand)};
       res.setHeader('content-type','text/html');res.end(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}</head><body><div id="root" data-prerender="${url.pathname}">${renderCatalogApp(url.pathname,'',boot)}</div><script>window.__boot=${JSON.stringify(boot)}</script>${entry}</body></html>`);return;
     }
     if(url.pathname.startsWith('/assets/')||url.pathname.startsWith('/fonts/')){
@@ -70,6 +81,10 @@ try{
     const path=`/catalog/${brand.toLowerCase()}`;
     await page.goto(base+path,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>Object.keys(document.querySelector('.favorites-link')||{}).some(k=>k.startsWith('__reactProps')));
+    assert.equal(await page.locator('.brand-guide-model-row').count(),names[brand].length);
+    // Older Safari ignores position:relative on table rows. Exercise that
+    // behavior in current engines too, so a newer WebKit cannot mask the bug.
+    await page.addStyleTag({content:'@media(min-width:701px){.brand-guide-model-row{position:static!important}}'});
     await page.evaluate(()=>document.fonts.ready);
     for(const width of [1362,1100,820,1362]){
       await page.setViewportSize({width,height:1000});
@@ -81,7 +96,7 @@ try{
           for(const child of [item,item.querySelector('span'),item.querySelector('small')].filter(Boolean)){
             const box=child.getBoundingClientRect();
             const hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('.model-quick-chips a,.model-quick-chips button');
-            if(hit!==item)wrong.push({wanted:item.textContent,hit:hit?.textContent});
+            if(hit!==item)wrong.push({wanted:item.textContent,hit:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('a,button')?.getAttribute('href')});
           }
           for(let j=i+1;j<rects.length;j++){const b=rects[j];if(Math.min(r.right,b.right)-Math.max(r.left,b.left)>0.5&&Math.min(r.bottom,b.bottom)-Math.max(r.top,b.top)>0.5)wrong.push({overlap:[item.textContent,items[j].textContent]});}
         }
@@ -101,10 +116,27 @@ try{
     await page.waitForURL(url=>url.pathname===`${path}/${modelSlug(model)}`);
     await page.locator('.model-quick-chips a').filter({has:page.locator('span',{hasText:'Все модели',exact:true})}).click();
     await page.waitForURL(url=>url.pathname===path&&!url.searchParams.has('model'));
+    const rows=page.locator('.brand-guide-model-row');
+    for(const index of [0,Math.floor(names[brand].length/2),names[brand].length-1]){
+      const row=rows.nth(index);
+      await row.scrollIntoViewIfNeeded();
+      assert.equal(await row.locator('td').last().evaluate(cell=>{
+        const r=cell.getBoundingClientRect();
+        return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')?.getAttribute('href');
+      }),await row.locator('.brand-guide-model-link').getAttribute('href'),'each statistics row keeps its own whole-row link');
+    }
+    const firstRow=rows.first(),firstHref=await firstRow.locator('.brand-guide-model-link').getAttribute('href');
+    await firstRow.scrollIntoViewIfNeeded();
+    const rowPoint=await firstRow.locator('td').last().evaluate(cell=>{const r=cell.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};});
+    await page.mouse.click(rowPoint.x,rowPoint.y);
+    await page.waitForURL(url=>url.pathname===firstHref);
+    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.locator('.model-quick-chips a').filter({has:page.locator('span',{hasText:'Все модели',exact:true})}).click();
+    await page.waitForURL(url=>url.pathname===path);
     await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('.model-quick-chips').isVisible(),false);
     await page.setViewportSize({width:1362,height:1000});
   }
   assert.deepEqual(errors,[]);
-  console.log(`PASS ${browserType.name()}: Geely/BYD, all model hit boxes, hover and count clicks, model URL, All models, responsive columns`);
+  console.log(`PASS ${browserType.name()}: Geely/BYD with full brand statistics and legacy Safari row positioning, model hit boxes, hover and count clicks, model URL, All models, responsive columns`);
   await context.close();
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
