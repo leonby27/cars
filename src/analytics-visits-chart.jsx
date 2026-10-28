@@ -15,6 +15,10 @@ const METRICS = {
 export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits" }) {
   const labels = METRICS[metric] || METRICS.visits;
   const { points, ticks, single } = visitsChart(daily, period, now, metric);
+  const completedPoints = points.filter(point => !point.isToday);
+  const todayIndex = points.findIndex(point => point.isToday);
+  const todaySegment = todayIndex > 0 ? points.slice(todayIndex - 1, todayIndex + 1) : [];
+  const todaySelected = !single && todaySegment.length === 2 && todaySegment.every(point => point.selected);
   // Подписи под графиком стали длиннее на день недели, поэтому их и реже: восемь
   // штук с хвостом «, чт» налезали бы друг на друга.
   const labelStep = Math.max(1, Math.ceil(points.length / 6));
@@ -31,17 +35,19 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
       <div className="analytics-chart-plot">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {ticks.map(tick => <line key={tick.value} className="analytics-chart-grid" x1="0" x2="100" y1={tick.y} y2={tick.y} />)}
-          <polyline className="analytics-chart-line analytics-chart-visitors" points={points.map(point => `${point.x},${point.y}`).join(" ")} />
-          {sourceLines.map((source) => <polyline key={source.id} className={`analytics-chart-line analytics-chart-source is-${source.id}`} points={points.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
-          {!single && points.slice(1).map((point, index) => points[index].selected && point.selected ? <line key={point.day} className="analytics-chart-line analytics-chart-selected" x1={points[index].x} y1={points[index].y} x2={point.x} y2={point.y} /> : null)}
+          <polyline className="analytics-chart-line analytics-chart-visitors" points={completedPoints.map(point => `${point.x},${point.y}`).join(" ")} />
+          {sourceLines.map((source) => <polyline key={source.id} className={`analytics-chart-line analytics-chart-source is-${source.id}`} points={completedPoints.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
+          {!single && points.slice(1).map((point, index) => !point.isToday && points[index].selected && point.selected ? <line key={point.day} className="analytics-chart-line analytics-chart-selected" x1={points[index].x} y1={points[index].y} x2={point.x} y2={point.y} /> : null)}
+          {todaySegment.length === 2 && <polyline className={`analytics-chart-line analytics-chart-visitors is-today${todaySelected ? " analytics-chart-selected" : ""}`} points={todaySegment.map(point => `${point.x},${point.y}`).join(" ")} />}
+          {todaySegment.length === 2 && sourceLines.map((source) => <polyline key={`${source.id}-today`} className={`analytics-chart-line analytics-chart-source is-${source.id} is-today`} points={todaySegment.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
         </svg>
-        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: ${labels.point} — ${point.value}${point.valueToNow === null ? "" : `, к этому времени суток — ${point.valueToNow}`}`}>
+        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}${point.isToday ? " is-today" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: ${labels.point} — ${point.value}${point.valueToNow === null ? "" : `, к этому времени суток — ${point.valueToNow}`}`}>
           <span className="analytics-chart-marker" />
           <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{labels.tooltip}: {point.value}</strong>{point.valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {point.valueToNow}</span>}</span>
         </button>)}
         {sourceLines.flatMap((source) => points.map((point) => {
           const valueToNow = point[source.toNow] ?? null;
-          return <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}${valueToNow === null ? "" : `, к этому времени суток — ${valueToNow}`}`}>
+          return <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}${point.isToday ? " is-today" : ""}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}${valueToNow === null ? "" : `, к этому времени суток — ${valueToNow}`}`}>
           <span className="analytics-chart-marker" />
           <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{source.label}: {point[source.id]}</strong>{valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {valueToNow}</span>}</span>
         </button>;

@@ -25,6 +25,7 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
     const sameTimeValue = key => item.day === today || item[key] == null || !Number.isFinite(Number(item[key])) ? null : Number(item[key]);
     return {
       ...item, visits, yandex, google, chatgpt, views,
+      isToday: item.day === today,
       value: metric === "views" ? views : visits,
       valueToNow: sameTimeValue(metric === "views" ? "views_to_now" : "visits_to_now"),
       yandexToNow: sameTimeValue("yandex_to_now"),

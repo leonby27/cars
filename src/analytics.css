@@ -94,7 +94,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-chart-source-toggle input { width:16px; height:16px; margin:0; accent-color:var(--source-color); cursor:pointer; }
 .analytics-chart-source-toggle:has(input:checked) { color:var(--source-color); }
 .analytics-line-chart { margin-top:16px; }
-.analytics-line-chart svg { display:block; width:100%; height:180px; overflow:visible; }
+.analytics-line-chart svg { display:block; width:100%; height:270px; overflow:visible; }
 .analytics-chart-grid { stroke:var(--line); stroke-dasharray:3 7; }
 .analytics-chart-line { fill:none; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
 .analytics-chart-visitors { fill:var(--panel); stroke:var(--accent); }
@@ -533,12 +533,13 @@ html[data-theme="dark"] .analytics-trend { --chart-chatgpt:#19c37d; }
 html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-yandex:#f4d90e; }
 .analytics-chart-axis-title { margin-bottom:4px; color:var(--muted); font-size:12px; }
 .analytics-chart-body { display:grid; grid-template-columns:42px minmax(0,1fr); padding-right:12px; }
-.analytics-chart-axis, .analytics-chart-plot { position:relative; height:180px; }
+.analytics-chart-axis, .analytics-chart-plot { position:relative; height:270px; }
 .analytics-chart-axis span { position:absolute; right:10px; transform:translateY(-50%); font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .analytics-chart-plot svg { width:100%; height:100%; }
 .analytics-chart-plot .analytics-chart-grid { stroke-width:1; vector-effect:non-scaling-stroke; }
 .analytics-chart-plot .analytics-chart-line { fill:none; }
 .analytics-chart-selected { stroke:var(--chart-highlight); }
+.analytics-chart-line.is-today { stroke-dasharray:5 5; stroke-opacity:.45; }
 .analytics-chart-source { animation:analytics-chart-series-in .18s ease-out both; }
 .analytics-chart-source.is-yandex { stroke:var(--chart-yandex); }
 .analytics-chart-source.is-google { stroke:var(--chart-google); }
@@ -546,6 +547,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-point { position:absolute; width:24px; height:24px; min-width:0; min-height:0; margin:0; padding:0; display:grid; place-items:center; border:0; background:transparent; color:var(--accent); transform:translate(-50%,-50%); cursor:pointer; border-radius:50%; corner-shape:round; }
 .analytics-chart-point.is-highlighted { color:var(--chart-highlight); }
 .analytics-chart-marker { display:block; width:10px; height:10px; box-sizing:border-box; border:2px solid currentColor; border-radius:50%; corner-shape:round; background:var(--panel); }
+.analytics-chart-point.is-today .analytics-chart-marker { opacity:.45; }
 .analytics-chart-source-point { animation:analytics-chart-series-in .18s ease-out both; }
 .analytics-chart-source-point .analytics-chart-marker { width:8px; height:8px; }
 .analytics-chart-source-point.is-yandex { color:var(--chart-yandex); }
