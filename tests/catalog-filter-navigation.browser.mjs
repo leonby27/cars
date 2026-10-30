@@ -116,10 +116,34 @@ try {
       await settle();
     };
     const state = p => p.evaluate(() => ({ filters: history.state?.catalog?.filters, sort: history.state?.catalog?.sort }));
+    const assertMobileViewport = async () => {
+      if (!mobile) return;
+      const metrics = await page.evaluate(() => ({
+        width: document.documentElement.clientWidth,
+        layout: window.innerWidth,
+        scroll: document.documentElement.scrollWidth,
+      }));
+      assert.equal(metrics.layout, metrics.width, 'country selection must not widen the mobile viewport');
+      assert.equal(metrics.scroll, metrics.width, 'closed country menu must not overflow the page');
+      const controls = page.locator('.mobile-filter-sheet-header button, .sheet-submit, .sheet-option-check');
+      for (const bounds of await controls.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()))) {
+        assert.ok(bounds.left >= 0 && bounds.right <= metrics.width, 'sheet controls stay inside the mobile viewport');
+      }
+    };
     const chooseCountry = async () => {
       await page.locator('.heading-country-trigger').click();
       await page.getByRole('menuitemradio', { name: 'Китай', exact: true }).click();
       await page.waitForURL(url => url.searchParams.get('country') === 'china' || url.pathname === '/catalog/china');
+      await settle();
+      await assertMobileViewport();
+      if (mobile) {
+        for (const trigger of ['.brand-model-open', '.filter-chip--filters']) {
+          await page.locator(trigger).click();
+          await settle();
+          await assertMobileViewport();
+          await page.getByRole('button', { name: 'Закрыть фильтры' }).click();
+        }
+      }
     };
     const chooseType = async () => {
       if (mobile) await page.locator('.filter-chip--filters').click();
@@ -135,6 +159,14 @@ try {
       await fresh.waitForFunction(() => Boolean(history.state?.catalog));
       const result = await state(fresh); await fresh.close(); return result;
     };
+    if (mobile) {
+      for (const width of [320, 360, 390, 430]) {
+        await page.setViewportSize({ width, height: 844 });
+        await ready();
+        await chooseCountry();
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+    }
     await ready();
     const batchIds = () => page.locator('main.catalog [data-car-id]').evaluateAll(nodes => nodes.map(node => node.dataset.carId));
     const initialBatch = await batchIds();
@@ -182,6 +214,8 @@ try {
     const freshModel = await freshState(modelHref);
     if (mobile) {
       await page.locator('.brand-model-open').click();
+      await settle();
+      await assertMobileViewport();
       await page.locator('.sheet-option-main').filter({ hasText: '7X' }).click();
     } else await modelLink.click();
     await page.waitForURL(url => url.pathname === '/catalog/zeekr/7x'); await settle();

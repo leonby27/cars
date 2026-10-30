@@ -1836,6 +1836,11 @@ html[data-theme="dark"] .heading-country-root.open .heading-country-trigger {
      (считается в HeadingCountryMenu). Отдельным свойством, чтобы не мешать появлению. */
   translate: var(--heading-menu-dx, 0px) var(--heading-menu-dy, 0px);
 }
+.heading-country-root:not(.open) .heading-country-menu {
+  /* After the heading changes, a hidden menu can retain its old offset and
+     widen the mobile layout viewport, including every fixed filter sheet. */
+  display: none;
+}
 .heading-country-menu .select-options button {
   display: flex;
   align-items: center;
