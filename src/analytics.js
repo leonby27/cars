@@ -1,7 +1,9 @@
 import { isPartnerPath } from "./partner-model.js";
 import { analyticsAdvertisingSource } from "./analytics-acquisition.js";
-import { isKnownAnalyticsBotAgent } from "./analytics-bots.js";
+import { hasAnalyticsAutomation, isKnownAnalyticsBotAgent } from "./analytics-bots.js";
+import { HUMAN_SIGNALS, isHumanInteraction } from "./analytics-interaction.js";
 import { normalizeLeadAttribution } from "./lead-attribution.js";
+export { HUMAN_SIGNALS } from "./analytics-interaction.js";
 
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
@@ -138,18 +140,15 @@ const skipThisVisit = () => {
   return isSkippedVisit({
     hostname:window.location.hostname,
     nocount,
-    automated:window.navigator?.webdriver,
+    automated:hasAnalyticsAutomation(window.navigator),
     agent:window.navigator?.userAgent,
     path:window.location.pathname,
   });
 };
 
-// Робот и человек по-разному ведут себя на открытой странице. Человек шевелит мышью,
-// листает, нажимает; робот, которому нужно только содержимое, снимает страницу и
-// уходит через несколько секунд, ни к чему не притронувшись, — а подпись браузера
-// при этом подделывает под обычный Chrome, поэтому по ней его не отличить.
-// Вот эти признаки и отличают живого посетителя от такого робота.
-export const HUMAN_SIGNALS = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
+// Действие подтверждает браузерное событие ввода на видимой странице. Это отделяет
+// ввод от dispatchEvent/scrollTo, но не доказывает отсутствие скрытой автоматизации:
+// управление браузером на уровне протокола тоже умеет создавать доверенные события.
 // Время на странице тоже отмечаем, но отдельно и слабее: 26.08.2026 нашёлся обходчик,
 // который открывает страницу, ровно столько ждёт и уходит, ни к чему не притронувшись.
 // Поэтому одно лишь время не подтверждает действие: оно не переводит посетителя
@@ -210,7 +209,8 @@ const confirmHuman = (action) => {
 const watchForHuman = () => {
   if (watching) return;
   watching = true;
-  const signal = () => {
+  const signal = (event) => {
+    if (!isHumanInteraction(event, window.document?.visibilityState)) return;
     for (const name of HUMAN_SIGNALS) window.removeEventListener(name, signal, true);
     confirmHuman(true);
   };

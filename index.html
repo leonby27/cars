@@ -104,6 +104,7 @@
         } catch (error) {
         }
         if (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
+        try { if (navigator.userAgentData?.brands?.some((item) => /^HeadlessChrome$/i.test(item.brand))) return; } catch {}
         window.__ym = 111868764;
         window.ym = window.ym || function(){(window.ym.a = window.ym.a || []).push(arguments)};
         window.ym.l = 1 * new Date();
@@ -139,6 +140,7 @@
         } catch (error) {
         }
         if (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
+        try { if (navigator.userAgentData?.brands?.some((item) => /^HeadlessChrome$/i.test(item.brand))) return; } catch {}
         const id = 'G-964NJY891X';
         window.__ga = id;
         window.dataLayer = window.dataLayer || [];
@@ -178,6 +180,7 @@
         if (choice === '1') return;
         const installationCheck = /ahrefssiteaudit/i.test(navigator.userAgent);
         if (!installationCheck && (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent))) return;
+        try { if (!installationCheck && navigator.userAgentData?.brands?.some((item) => /^HeadlessChrome$/i.test(item.brand))) return; } catch {}
         const tag = document.createElement('script');
         tag.id = 'ahrefs-analytics-library';
         tag.async = true;

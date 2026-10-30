@@ -179,7 +179,7 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       // Отвечаем как обычно и молчим о причине: незачем подсказывать, как
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
-      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
+      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"], request.headers["sec-ch-ua"])) return json(response, 202, { ok:true, recorded:false });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
       // Сообщение от того, кто сайт не открывал, — подделка: страница, которая его
       // шлёт, сама приходит с нашего сервера.
@@ -196,7 +196,7 @@ export async function handleApiRequest(request, response) {
       const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
       if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
-      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0, retry:false });
+      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"], request.headers["sec-ch-ua"])) return json(response, 202, { ok:true, confirmed:0, retry:false });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0, retry:false });
       // The first catalog request may still be in flight; this exclusion can change.
       if (!hasRecentSiteRequest(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });

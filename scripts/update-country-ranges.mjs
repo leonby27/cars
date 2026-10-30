@@ -1,22 +1,27 @@
-// Обновляет таблицу country_ranges: какие адреса выданы сетям Беларуси и России.
+// Обновляет таблицу country_ranges по статистике всех пяти регистраторов адресов.
 // Запуск: node scripts/update-country-ranges.mjs (или npm run countries).
 //
 // Зачем: в разделе «Заходы» у каждого захода стоит флаг страны. Страну определяем по
 // адресу посетителя в момент записи события, а сам адрес не храним.
 //
-// Источник — сводный файл RIPE (регистратор адресов Европы и СНГ): в нём каждая выданная
-// сеть с кодом страны организации, которой её выдали. Для домашних и мобильных
-// операторов это и есть страна посетителя. Кто сидит через VPN, окажется в «Другой».
-// Нужны только две страны, поэтому остальной мир в таблицу не кладём: не нашли адрес
-// среди этих двух — значит, другая страна.
+// Это страна регистрации сети, а не гарантированное местоположение человека.
+// Для VPN/прокси будет показана страна выходной сети. Незнакомые адреса остаются other.
 import { pool } from "../server/db.mjs";
+import { isIP } from "node:net";
+import { VISIT_COUNTRY_CODES } from "../src/analytics-countries.js";
 
-const SOURCE_URL = "https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-extended-latest";
-const COUNTRIES = new Set(["BY", "RU"]);
+export const COUNTRY_SOURCES = [
+  { registry:"ripencc", url:"https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-extended-latest", minimum:10000 },
+  { registry:"arin", url:"https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest", minimum:10000 },
+  { registry:"apnic", url:"https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest", minimum:10000 },
+  { registry:"afrinic", url:"https://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-extended-latest", minimum:1000 },
+  { registry:"lacnic", url:"https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest", minimum:1000 },
+];
+const REGISTRIES = new Set(COUNTRY_SOURCES.map(({ registry }) => registry));
 // Страховка от сломанного или урезанного файла: пустой список молча превратил бы всех
 // посетителей в «других», и заметили бы это не сразу. Сейчас у России ~13 тыс. сетей,
 // у Беларуси ~140.
-const MINIMUM_RANGES = { BY: 50, RU: 5000 };
+const MINIMUM_RANGES = { BY:50, RU:5000, US:5000, CA:500, DE:1000, PL:500 };
 const MINIMUM_SHARE_OF_PREVIOUS = 0.6;
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -26,6 +31,8 @@ const ipv4ToNumber = (address) => address.split(".").reduce((total, part) => tot
 const numberToIpv4 = (value) => [24, 16, 8, 0].map((shift) => Math.floor(value / 2 ** shift) % 256).join(".");
 
 export function ipv4RangeToCidrs(start, count) {
+  if (isIP(start) !== 4 || !Number.isSafeInteger(Number(count)) || Number(count) <= 0
+      || ipv4ToNumber(start) + Number(count) > 2 ** 32) throw new Error("Invalid IPv4 allocation");
   const blocks = [];
   let from = ipv4ToNumber(start);
   let left = Number(count);
@@ -40,35 +47,52 @@ export function ipv4RangeToCidrs(start, count) {
   return blocks;
 }
 
-export function parseDelegatedStats(text) {
+export function parseDelegatedStats(text, expectedRegistry = null) {
   const rows = [];
   for (const line of text.split("\n")) {
     const [registry, country, type, start, value, , status] = line.split("|");
-    if (registry !== "ripencc" || !COUNTRIES.has(country)) continue;
+    if (!REGISTRIES.has(registry) || (expectedRegistry && registry !== expectedRegistry) || !VISIT_COUNTRY_CODES.has(country)) continue;
     if (status !== "allocated" && status !== "assigned") continue;
     if (type === "ipv4") for (const network of ipv4RangeToCidrs(start, value)) rows.push([network, country]);
-    else if (type === "ipv6") rows.push([`${start}/${value}`, country]);
+    else if (type === "ipv6") {
+      if (isIP(start) !== 6 || !/^\d+$/.test(value) || Number(value) > 128) throw new Error("Invalid IPv6 allocation");
+      rows.push([`${start}/${Number(value)}`, country]);
+    }
   }
   return rows;
 }
 
-async function main() {
-  const response = await fetch(SOURCE_URL, {
-    headers: { "user-agent": "abcars-countries/1.0" },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`RIPE ответил HTTP ${response.status}`);
-  const rows = [...new Map(parseDelegatedStats(await response.text())).entries()];
-  const byCountry = Object.fromEntries([...COUNTRIES].map((code) => [code, rows.filter(([, country]) => country === code).length]));
-  console.log(`Сетей: Беларусь ${byCountry.BY}, Россия ${byCountry.RU}`);
+export async function loadCountryRanges({ fetchImpl = fetch, sources = COUNTRY_SOURCES } = {}) {
+  const results = await Promise.allSettled(sources.map(async ({ registry, url, minimum }) => {
+    const response = await fetchImpl(url, {
+      headers: { "user-agent": "abcars-countries/2.0" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`${registry}: HTTP ${response.status}`);
+    const rows = parseDelegatedStats(await response.text(), registry);
+    if (rows.length < minimum) throw new Error(`${registry}: неполный список сетей (${rows.length})`);
+    return rows;
+  }));
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "Не все источники стран готовы — таблица оставлена прежней");
+  return [...new Map(results.flatMap(({ value }) => value)).entries()];
+}
 
-  const previous = (await pool.query("SELECT count(*)::int AS n FROM country_ranges")).rows[0].n;
-  const tooFew = Object.entries(MINIMUM_RANGES).some(([code, minimum]) => byCountry[code] < minimum);
+export function validateCountryRanges(rows, previous = 0) {
+  const byCountry = {};
+  for (const [, country] of rows) byCountry[country] = (byCountry[country] || 0) + 1;
+  const tooFew = Object.entries(MINIMUM_RANGES).some(([code, minimum]) => (byCountry[code] || 0) < minimum);
   if (tooFew || (previous && rows.length < previous * MINIMUM_SHARE_OF_PREVIOUS)) {
-    console.error(`Сетей слишком мало (${rows.length}, в базе было ${previous}) — таблица оставлена прежней.`);
-    process.exitCode = 1;
-    return;
+    throw new Error(`Сетей слишком мало (${rows.length}, в базе было ${previous}) — таблица оставлена прежней.`);
   }
+  return byCountry;
+}
+
+async function main() {
+  const rows = await loadCountryRanges();
+  const previous = (await pool.query("SELECT count(*)::int AS n FROM country_ranges")).rows[0].n;
+  const byCountry = validateCountryRanges(rows, previous);
+  console.log(`Сетей: ${rows.length}; стран: ${Object.keys(byCountry).length}`);
 
   // Переписываем целиком и одной транзакцией, чтобы на время подмены страна не пропадала.
   const client = await pool.connect();

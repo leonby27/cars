@@ -1,6 +1,6 @@
 {
   "sourceUrl": "https://en.guazi.com/os/product/filter/queryBrandList?language=en",
-  "observedAt": "2026-09-26",
+  "observedAt": "2026-10-29T04:32:20.757Z",
   "brands": [
     {
       "id": "103885",
@@ -65,6 +65,10 @@
     {
       "id": "103969",
       "name": "Avatr"
+    },
+    {
+      "id": "103950",
+      "name": "AITO/LUXEED/MAEXTRO/SAIC/STELATO"
     },
     {
       "id": "104030",
@@ -501,10 +505,6 @@
     {
       "id": "103898",
       "name": "Hunkt"
-    },
-    {
-      "id": "103950",
-      "name": "Hima"
     },
     {
       "id": "104050",
@@ -1223,6 +1223,10 @@
       "name": "Skyworth"
     },
     {
+      "id": "104069",
+      "name": "SAIC"
+    },
+    {
       "id": "102715",
       "name": "Tesla"
     },
@@ -1421,6 +1425,52 @@
     {
       "id": "103884",
       "name": "ZEDRIV"
+    },
+    {
+      "id": "104071",
+      "name": "AITO"
+    },
+    {
+      "id": "104015",
+      "name": "LUXEED"
+    },
+    {
+      "id": "104070",
+      "name": "STELATO"
+    },
+    {
+      "id": "104068",
+      "name": "MAEXTRO"
+    }
+  ],
+  "supplementalSources": [
+    {
+      "id": "104071",
+      "name": "AITO",
+      "sourceUrl": "https://en.guazi.com/products/hima-aito-m5-2022-00l-blue-83100km-at-2wd-5-seats-25zrqwbnwu.html",
+      "observedAt": "2026-10-29T04:32:21.895Z",
+      "reason": "Observed makeId/makeNameEn in public product rawData; absent from queryBrandList"
+    },
+    {
+      "id": "104015",
+      "name": "LUXEED",
+      "sourceUrl": "https://en.guazi.com/products/hima-luxeed-r7-2026-00l-blue-16400km-at-2wd-5-seats-lmc2r8x3hq.html",
+      "observedAt": "2026-10-29T04:32:24.267Z",
+      "reason": "Observed makeId/makeNameEn in public product rawData; absent from queryBrandList"
+    },
+    {
+      "id": "104070",
+      "name": "STELATO",
+      "sourceUrl": "https://en.guazi.com/products/hima-stelato-s9-2025-15l-black-16700km-at-2wd-5-seats-33cayzwk5k.html",
+      "observedAt": "2026-10-29T04:39:06.223Z",
+      "reason": "Observed makeId/makeNameEn in public product rawData; absent from queryBrandList"
+    },
+    {
+      "id": "104068",
+      "name": "MAEXTRO",
+      "sourceUrl": "https://en.guazi.com/products/hima-s800-2025-00l-purple-8300km-at-4wd-5-seats-2bqy3pgq3h.html",
+      "observedAt": "2026-10-29T04:40:11.648Z",
+      "reason": "Observed makeId/makeNameEn in public product rawData; absent from queryBrandList"
     }
   ]
 }

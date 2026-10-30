@@ -2,7 +2,15 @@ import { canonicalImportBrand, canonicalImportName, IMPORT_BRANDS, importPolicyV
 import { PRICING, estimateLandedCost } from '../../src/pricing.js';
 import { normalizeCard, productId, sourceUrl } from './guazi-pilot-data.mjs';
 
-export function coreBrand(name, config) { return config.sourceBrandAliases[name] || canonicalImportBrand(name); }
+export const GUAZI_HUAWEI_BRANDS = ['AITO', 'Luxeed', 'Stelato', 'Shangjie', 'Maextro'];
+export function guaziBrandName(name, config, sourceId) {
+  // The public filter still uses the alliance ID, while product pages expose
+  // individual makes. SAIC here is Guazi's observed Shangjie make, not MAXUS.
+  if (String(name).trim().toUpperCase() === 'AITO/LUXEED/MAEXTRO/SAIC/STELATO') return 'Hima';
+  if (String(sourceId) === '104069' && String(name).trim().toUpperCase() === 'SAIC') return 'Shangjie';
+  return config.sourceBrandAliases[name] || name;
+}
+export function coreBrand(name, config, sourceId) { return canonicalImportBrand(guaziBrandName(name, config, sourceId)); }
 export const publicFuel = fuel => ({BEV:'Электромобиль',PHEV:'Гибрид',REEV:'Гибрид',EREV:'Гибрид',HEV:'Гибрид',Gasoline:'ДВС'})[fuel] || null;
 export function registrationYear(value) {
   const match = String(value || '').match(/^(20\d{2})(?:[.-]?(0[1-9]|1[0-2]))(?:[.-]?\d{2})?$/);
@@ -19,7 +27,7 @@ export function brandFilters(brand, filters) { return filters.chineseBrands.incl
 export function makeSegments(brands, filters, config) {
   const segments = [];
   for (const source of brands) {
-    const brand = coreBrand(source.name, config);
+    const brand = coreBrand(source.name, config, source.id);
     if (!IMPORT_BRANDS.includes(brand)) continue;
     if (!/^\d+$/.test(String(source.id))) throw new Error('Invalid observed brand ID');
     const own = brandFilters(brand, filters);
@@ -50,9 +58,15 @@ export function listCandidate(item, segment) {
 }
 export function normalizeCoreCard(capture, config) {
   const card = normalizeCard(capture.rawData, capture.url, capture.observedAt);
-  const sourceBrand = coreBrand(capture.rawData.makeNameEn, config);
+  const sourceBrand = coreBrand(capture.rawData.makeNameEn, config, capture.rawData.makeId);
   const type = publicFuel(card.fuel);
-  const name = canonicalImportName(config.sourceBrandAliases[capture.rawData.makeNameEn] || capture.rawData.makeNameEn, card.model, type, {...card.catalogFields, rawModel:card.title, source:'Guazi'});
+  let namingBrand = guaziBrandName(capture.rawData.makeNameEn, config, capture.rawData.makeId);
+  if (sourceBrand === 'AITO') {
+    const prefix = String(card.model || '').match(/^(AITO|Luxeed|Stelato|Maextro|Shangjie)\s+/i)?.[1];
+    if (prefix) namingBrand = canonicalImportBrand(prefix);
+    else if (/^S800$/i.test(String(card.model || ''))) namingBrand = 'Maextro';
+  }
+  const name = canonicalImportName(namingBrand, card.model, type, {...card.catalogFields, rawModel:card.title, source:'Guazi'});
   const provisional = {brand:name.brand,model:name.model,year:card.modelYear,type};
   const violation = importPolicyViolation(provisional);
   // Pilot selection was BEV-only; core policy is explicit and covers all four feeds.
@@ -65,7 +79,7 @@ export function evaluateCoreCard(card, segment, config, rate = (PRICING.cnyBynPe
   const pending = reason => ({status:'needs_review',reason});
   if (!card.selection.eligible) return reject(card.selection.violations.join('; '));
   if (!segment.sourceFuelNames.includes(card.fuel)) return pending('detail_fuel_mismatch');
-  if (card.catalogIdentity.sourceBrand !== segment.brand) return pending('detail_brand_mismatch');
+  if (card.catalogIdentity.sourceBrand !== segment.brand && !segment.covers?.includes(card.catalogIdentity.sourceBrand)) return pending('detail_brand_mismatch');
   const year = registrationYear(card.firstRegistration);
   if (year === null) return pending('registration_unknown');
   if (year < segment.minRegistrationYear) return reject('registration_year');

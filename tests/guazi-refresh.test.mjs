@@ -362,3 +362,18 @@ test('unfinished legacy review journals are automatically rechecked using their 
   assert.equal(resumed.counts.review,0);assert.equal(resumed.counts.skipped,0);assert.equal(resumed.counts.updated,1);
   assert.equal(f.rows.get(a).status,'active');
 });
+
+test('an unfinished round keeps its pinned policy when the global source dictionary is updated', async t => {
+  const f = await fixture(t);
+  f.detail = async id => { if (id === b) throw blocked(); return capture(id); };
+  await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
+  const before = await f.state();
+  await fs.mkdir(path.join(f.root, 'config'), { recursive: true });
+  await fs.writeFile(path.join(f.root, 'config/guazi-core.json'), JSON.stringify({ priceBasis: 'changed-policy' }));
+  delete f.deps.policy;
+  f.detail = async id => capture(id);
+  const after = await f.run(false);
+  assert.equal(after.status, 'complete');
+  assert.equal(after.run, before.run); assert.equal(after.signature, before.signature);
+  assert.equal(f.snapshots, 1); assert.equal(f.reads.filter(id => id === a).length, 1);
+});

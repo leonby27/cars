@@ -1033,13 +1033,13 @@ test("у заявки видно, с какого устройства её ос
   assert.match(page, /`с \$\{lead\.device === "mobile" \? "телефона" : "компьютера"\}/);
 });
 
-// Флаг страны в «Заходах»: Беларусь, Россия или другая страна. Страну ставит сервер
+// Флаг страны в «Заходах». Страну ставит сервер
 // по адресу, сам адрес в событие не попадает.
 test("в таблице заходов есть колонка страны с флагом", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /<th>Страница входа<\/th><th>Страна<\/th><th>Просмотров<\/th>/);
   assert.match(source, /<td><VisitCountry country=\{visit\.country\} \/><\/td>\s*<td>\{formatNumber\(visit\.pageViews\)\}/);
-  assert.match(source, /BY:"Беларусь", RU:"Россия", other:"Другая страна"/);
+  assert.match(source, /visitCountryPresentation\(country\)/);
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(server, /properties->>'country'/);
   assert.match(server, /country:row\.country \|\| ""/);
@@ -1048,13 +1048,16 @@ test("в таблице заходов есть колонка страны с �
 });
 
 test("страна посетителя определяется по таблице сетей", async () => {
-  const table = { "37.215.1.174":"BY", "95.24.1.1":"RU" };
+  const table = { "37.215.1.174":"BY", "95.24.1.1":"RU", "8.8.4.4":"US", "1.1.1.1":"AU", "9.9.9.9":"PL" };
   const answer = (address, ready = true) => ({ rows:[{ country:table[address] || null, ready, internal:address.startsWith("192.168.") }] });
   const db = { query: async (sql, [address]) => answer(address) };
   const now = Date.now();
   assert.equal(await visitorCountry("37.215.1.174", { db, now }), "BY");
   assert.equal(await visitorCountry("::ffff:95.24.1.1", { db, now }), "RU");
-  assert.equal(await visitorCountry("8.8.4.4", { db, now }), "other");
+  assert.equal(await visitorCountry("8.8.4.4", { db, now }), "US");
+  assert.equal(await visitorCountry("1.1.1.1", { db, now }), "AU");
+  assert.equal(await visitorCountry("9.9.9.9", { db, now }), "PL");
+  assert.equal(await visitorCountry("7.7.7.7", { db, now }), "other");
   assert.equal(await visitorCountry("192.168.1.5", { db, now }), "", "внутренняя сеть — страна неизвестна");
   assert.equal(await visitorCountry("", { db, now }), "");
   // Пустая таблица не делает всех «другими»: пока сетей нет, страну не пишем.
@@ -1074,9 +1077,15 @@ test("страна пишется в событие сервером, а не и
   assert.equal(JSON.parse(writes[1][7]).country, "BY");
   await recordAnalyticsEvent({ ...event, eventId:"c3" }, { db, country:"XX" });
   assert.equal(JSON.parse(writes[2][7]).country, undefined);
+  await recordAnalyticsEvent({ ...event, eventId:"c4" }, { db, country:"CA" });
+  assert.equal(JSON.parse(writes[3][7]).country, "CA");
+  await recordAnalyticsEvent({ ...event, eventId:"c5" }, { db, country:"JP" });
+  assert.equal(JSON.parse(writes[4][7]).country, "JP", "страна без флага сохраняется для подсказки");
+  await recordAnalyticsEvent({ ...event, eventId:"c6" }, { db, country:"other" });
+  assert.equal(JSON.parse(writes[5][7]).country, "other");
 });
 
-test("сети RIPE режутся на блоки и отбираются только BY и RU", () => {
+test("сети регистраторов режутся на блоки с сохранением страны", () => {
   assert.deepEqual(ipv4RangeToCidrs("37.212.0.0", 262144), ["37.212.0.0/14"]);
   assert.deepEqual(ipv4RangeToCidrs("10.0.0.0", 768), ["10.0.0.0/23", "10.0.2.0/24"]);
   assert.deepEqual(ipv4RangeToCidrs("10.0.1.0", 512), ["10.0.1.0/24", "10.0.2.0/24"]);
@@ -1084,8 +1093,12 @@ test("сети RIPE режутся на блоки и отбираются то�
     "ripencc|BY|ipv4|37.212.0.0|262144|20110101|allocated|x",
     "ripencc|RU|ipv6|2a00:1fa0::|29|20120101|allocated|y",
     "ripencc|PL|ipv4|5.5.0.0|256|20120101|allocated|z",
+    "arin|US|ipv4|8.8.4.0|256|20120101|assigned|z",
+    "arin|CA|ipv6|2001:db8::|32|20120101|allocated|z",
+    "apnic|JP|ipv4|1.1.1.0|256|20120101|allocated|z",
     "ripencc|BY|ipv4|1.1.1.0|256|20120101|available|",
     "ripencc|*|ipv4|*|100851|summary",
   ].join("\n"));
-  assert.deepEqual(rows, [["37.212.0.0/14", "BY"], ["2a00:1fa0::/29", "RU"]]);
+  assert.deepEqual(rows, [["37.212.0.0/14", "BY"], ["2a00:1fa0::/29", "RU"], ["5.5.0.0/24", "PL"],
+    ["8.8.4.0/24", "US"], ["2001:db8::/32", "CA"], ["1.1.1.0/24", "JP"]]);
 });

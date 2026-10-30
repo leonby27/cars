@@ -14,6 +14,13 @@ export async function checkGuaziJob(job, { brand, active, segments, config, read
   };
   if (candidate.violations.length && !active.has(id)) return { ...base, outcome: 'rejected', reason: candidate.violations.join(',') };
   let capture = await retry(() => reader.card(candidate.url, { allowMissing: true }));
+  const sourceIdentity = () => {
+    if (capture.rawData) base.sourceIdentity = {
+      makeId: capture.rawData.makeId, makeNameEn: capture.rawData.makeNameEn,
+      modelName: capture.rawData.modelName,
+    };
+  };
+  sourceIdentity();
   if (capture.unavailable) {
     if (listed || !segments.some(s => s.covers.includes(row.brand))) return skip('detail_missing_unconfirmed', capture.observedAt);
     const second = await retry(() => reader.card(candidate.url, { allowMissing: true }));
@@ -22,6 +29,7 @@ export async function checkGuaziJob(job, { brand, active, segments, config, read
       return { ...base, outcome: 'unavailable' };
     }
     capture = second;
+    sourceIdentity();
   }
   if (isGuaziSoldCard(capture, id)) {
     if (active.has(id)) await store.markUnavailable(row, { run, observations: [{ url: capture.url, observedAt: capture.observedAt,
@@ -34,7 +42,8 @@ export async function checkGuaziJob(job, { brand, active, segments, config, read
   const card = normalizeCoreCard(capture, config);
   if (!card.catalogIdentity.model) return skip('model_unknown', capture.observedAt);
   if (!Number.isFinite(card.mileageKm) || card.mileageKm < 0) return skip('mileage_unknown', capture.observedAt);
-  const segment = job.segment || segments.find(s => s.brand === card.catalogIdentity.sourceBrand && s.sourceFuelNames.includes(card.fuel));
+  const segment = job.segment || segments.find(s => s.brand === card.catalogIdentity.sourceBrand && s.sourceFuelNames.includes(card.fuel))
+    || segments.find(s => s.covers.includes(card.catalogIdentity.sourceBrand) && s.sourceFuelNames.includes(card.fuel));
   const evaluation = segment ? evaluateCoreCard(card, segment, config) : { status: 'needs_review', reason: 'source_segment_unknown' };
   if (!evaluation.car) {
     if (active.has(id) || evaluation.status === 'needs_review') return skip(evaluation.reason, capture.observedAt);

@@ -33,11 +33,11 @@ test("приём событий исключает ботов в обоих ре
   };
   const previousSite = process.env.SITE_URL;
   process.env.SITE_URL = "https://abcars.by";
-  const request = async (agent, endpoint, activity, address = "203.0.113.239") => {
+  const request = async (agent, endpoint, activity, address = "203.0.113.239", hints = "") => {
     noteSiteRequest(address);
     let status, body;
     const response = { req:{ headers:{} }, writeHead:(code) => { status = code; }, end:(value) => { body = JSON.parse(value.toString()); } };
-    await handleApiRequest({ method:"POST", url:`/api/analytics/${endpoint}?activity=${activity}`, headers:{ host:"abcars.by", origin:"https://abcars.by", "user-agent":agent, "x-real-ip":address }, body:{ eventId:"ad-event", visitorId:"ad-visitor", sessionId:"ad-session", eventName:"page_view", path:"/catalog?yclid=ad", human:false, humanAction:false, action:true } }, response);
+    await handleApiRequest({ method:"POST", url:`/api/analytics/${endpoint}?activity=${activity}`, headers:{ host:"abcars.by", origin:"https://abcars.by", "user-agent":agent, "sec-ch-ua":hints, "x-real-ip":address }, body:{ eventId:"ad-event", visitorId:"ad-visitor", sessionId:"ad-session", eventName:"page_view", path:"/catalog?yclid=ad", human:false, humanAction:false, action:true } }, response);
     assert.equal(status, 202);
     return body;
   };
@@ -49,6 +49,8 @@ test("приём событий исключает ботов в обоих ре
       }
       assert.equal((await request(chrome, "events", activity, "203.0.113.240")).recorded, false);
       assert.equal((await request(chrome, "human", activity, "203.0.113.240")).confirmed, 0);
+      assert.equal((await request(chrome, "events", activity, "203.0.113.239", '"HeadlessChrome";v="145"')).recorded, false);
+      assert.equal((await request(chrome, "human", activity, "203.0.113.239", '"HeadlessChrome";v="145"')).confirmed, 0);
       assert.equal(writes.length, 0, "даже рекламная метка и присланное действие не пропускают бота");
     }
     assert.equal((await request(chrome, "events", "all")).recorded, true);
@@ -56,6 +58,7 @@ test("приём событий исключает ботов в обоих ре
     assert.equal(JSON.parse(writes[0].params[7]).acquisition, "paid");
     assert.equal(writes[0].params[8], false);
     assert.equal(writes[0].params[9], false);
+    assert.equal((await request(chrome, "events", "all", "203.0.113.239", '"Chromium";v="145", "Google Chrome";v="145"')).recorded, true);
   } finally {
     pool.query = original;
     if (previousSite === undefined) delete process.env.SITE_URL;

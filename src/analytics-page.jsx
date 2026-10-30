@@ -1,5 +1,6 @@
 import { PartnerAccessControl, PartnerAssignmentControl, PartnerRegistrationRequests, usePartnerDirectory } from "./partner-owner-controls.jsx";
 import { analyticsActivityKind } from "./analytics-activity.js";
+import { visitCountryPresentation } from "./analytics-countries.js";
 import { analyticsAdvertisingSource, analyticsAcquisition, analyticsAcquisitionKind } from "./analytics-acquisition.js";
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { AnalyticsPlanSection } from "./analytics-plan-section.jsx";
@@ -802,22 +803,9 @@ function VisitDevice({ device, platform }) {
   </>;
 }
 
-// Страна захода — только флагом, название в подсказке. Флаги нарисованы здесь же:
-// значки-эмодзи флагов на Windows показываются буквами «BY», «RU».
-const visitCountryNames = { BY:"Беларусь", RU:"Россия", other:"Другая страна" };
-
-function CountryGlyph({ country }) {
-  if (country === "BY") return <svg viewBox="0 0 18 12" width="20" height="14" aria-hidden="true">
-    <rect width="18" height="8" fill="#c8313e" />
-    <rect y="8" width="18" height="4" fill="#4aa657" />
-    <rect width="3" height="12" fill="#fff" />
-    <path d="M1.5 1 2.5 2.5 1.5 4 .5 2.5ZM1.5 5 2.5 6.5 1.5 8 .5 6.5ZM1.5 9 2.5 10.5 1.5 12 .5 10.5Z" fill="#c8313e" />
-  </svg>;
-  if (country === "RU") return <svg viewBox="0 0 18 12" width="20" height="14" aria-hidden="true">
-    <rect width="18" height="4" fill="#fff" />
-    <rect y="4" width="18" height="4" fill="#0039a6" />
-    <rect y="8" width="18" height="4" fill="#d52b1e" />
-  </svg>;
+// SVG assets keep flags consistent across systems, including Windows.
+function CountryGlyph({ flag }) {
+  if (flag) return <img src={flag} width="20" height="14" alt="" aria-hidden="true" />;
   return <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
     <circle cx="10" cy="10" r="8" />
     <ellipse cx="10" cy="10" rx="3.4" ry="8" />
@@ -826,12 +814,12 @@ function CountryGlyph({ country }) {
 }
 
 function VisitCountry({ country }) {
-  const known = Boolean(visitCountryNames[country]);
-  const label = known ? visitCountryNames[country] : "Страна не записана";
+  const { code, label, flag } = visitCountryPresentation(country);
+  const known = Boolean(code);
   const { anchor, handlers, node } = useHoverTooltip(label);
   return <>
-    <button ref={anchor} type="button" className={`analytics-visit-country is-${known ? country.toLowerCase() : "unknown"}`} aria-label={label} {...handlers}>
-      {known ? <CountryGlyph country={country} /> : "—"}
+    <button ref={anchor} type="button" className={`analytics-visit-country${flag ? " has-flag" : ""} is-${known ? code.toLowerCase() : "unknown"}`} aria-label={label} {...handlers}>
+      {known ? <CountryGlyph flag={flag} /> : "—"}
     </button>
     {node}
   </>;

@@ -18,7 +18,7 @@ export const refreshPaths = root => ({
   lock: path.join(root, 'runtime', 'guazi-refresh', 'worker.lock'),
   log: path.join(root, 'runtime', 'guazi-refresh', 'worker.log'),
 });
-const emptyCounts = () => ({ checked: 0, updated: 0, added: 0, unavailable: 0, review: 0, skipped: 0, rejected: 0 });
+export const emptyCounts = () => ({ checked: 0, updated: 0, added: 0, unavailable: 0, review: 0, skipped: 0, rejected: 0 });
 const stopError = () => Object.assign(new Error('Guazi refresh paused'), { code: 'GUAZI_PAUSED' });
 const minutes = ms => Math.round(ms / 6000) / 10;
 const discoveryPages = node => node.children?.length
@@ -59,7 +59,14 @@ export function formatGuaziRoundReport({ brands, checked, priceChanged, added, u
   ].join('\n');
 }
 
-export async function loadRefreshPolicy(root) {
+export async function loadRefreshPolicy(root, state = null) {
+  if (state && /^\d{4}-\d{2}-\d{2}T[\d-]+Z-[a-f0-9]{8}$/.test(state.run || '')) {
+    const pinned = await readJson(path.join(refreshPaths(root).base, state.run, 'policy.json'));
+    if (pinned) {
+      if (!pinned.config || !Array.isArray(pinned.segments)) throw Error('Invalid pinned Guazi policy');
+      return pinned;
+    }
+  }
   const config = { ...await readJson(path.join(root, 'config/guazi-core.json')), priceBasis: 'FOB' };
   const { filters } = await readJson(path.join(root, config.sharedFilterFile));
   const { brands } = await readJson(path.join(root, 'config/guazi-core-brands.json'));
@@ -69,7 +76,7 @@ export async function loadRefreshPolicy(root) {
 // Replay the small result journal, never old captures or accepted JSON. A result
 // is appended only AFTER its DB transaction committed. A crash in between may
 // repeat one check; it cannot skip an unchecked car.
-async function readResults(file) {
+export async function readResults(file) {
   let text;
   try { text = await fs.readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return new Map(); throw error; }
   const end = text.lastIndexOf('\n') + 1;
@@ -103,9 +110,9 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
   try {
     checkStop();
     releaseStore = await store.acquire();
-    const { config, segments } = policy || await loadRefreshPolicy(root);
-    const signature = createHash('sha256').update(JSON.stringify({ config, segments, target: store.target })).digest('hex');
     state = await readJson(paths.state);
+    const { config, segments } = policy || await loadRefreshPolicy(root, newCircle ? null : state);
+    const signature = createHash('sha256').update(JSON.stringify({ config, segments, target: store.target })).digest('hex');
     if (newCircle) {
       if (state && state.status !== 'complete') throw Error('Прошлый Круг 2 не завершён. Используйте «Продолжить 2».');
       const snapshot = await store.snapshot();
@@ -115,6 +122,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         unique.add(row.externalId);
       }
       const run = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
+      await writeJson(path.join(paths.base, run, 'policy.json'), { config, segments });
       await writeJson(path.join(paths.base, run, 'snapshot.json'), snapshot);
       state = { version: 1, run, signature, status: 'starting', startedAt: new Date().toISOString(), snapshotTotal: snapshot.length, brandsDone: [], counts: emptyCounts() };
     } else {

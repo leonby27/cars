@@ -80,6 +80,27 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
         WHERE id=$1 AND source='Guazi' AND status IN ('active','skipped')`,
       [row.id, JSON.stringify(details), details.observedAt]));
     },
+    async auditSelected({ run, results }) {
+      const { rows } = await pool.query(`WITH expected AS (
+        SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(id text, outcome text)
+      ) SELECT count(*)::int AS checked, count(*) FILTER (WHERE
+        (r.outcome IN ('updated','added') AND (l.id IS NULL OR l.status<>'active'
+          OR l.source_payload->>'refreshRun' IS DISTINCT FROM $2
+          OR l.source_payload->>'priceBasis' IS DISTINCT FROM 'FOB'
+          OR l.source_payload->>'fobPort' IS DISTINCT FROM 'Horgos'
+          OR COALESCE((l.source_payload->>'fobPriceUsd')::numeric,0)<=0
+          OR l.source_payload->>'fobPriceUsd' IS DISTINCT FROM l.source_payload->>'usdPrice'
+          OR NOT EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id=l.id)))
+        OR (r.outcome='unavailable' AND (l.id IS NULL OR l.status<>'unavailable'
+          OR l.source_payload->'guaziUnavailabilityEvidence'->>'run' IS DISTINCT FROM $2))
+        OR (r.outcome='skipped' AND (l.status='active' OR (l.status='skipped'
+          AND l.source_payload->'guaziSkip'->>'run' IS DISTINCT FROM $2)))
+        OR (r.outcome='rejected' AND l.status='active')
+      )::int AS mismatches FROM expected r LEFT JOIN listings l ON l.source='Guazi' AND l.external_id=r.id`,
+      [JSON.stringify(results.map(({ id, outcome }) => ({ id, outcome }))), run]);
+      if (rows[0].checked !== results.length || rows[0].mismatches) throw Object.assign(Error('Guazi selected-result integrity check failed'), { code: 'GUAZI_INTEGRITY_FAILED' });
+      return rows[0];
+    },
     async audit({ run, results, expectedRemaining }) {
       const { rows } = await pool.query(`WITH expected AS (
         SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(id text, outcome text)

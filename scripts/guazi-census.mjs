@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {makeSegments,searchBody} from './lib/guazi-core.mjs';
+import {makeSegments,searchBody,GUAZI_HUAWEI_BRANDS} from './lib/guazi-core.mjs';
 import {readJson,writeJson} from './lib/guazi-pilot-io.mjs';
 import {openGuaziBrowser} from './lib/guazi-pilot-browser.mjs';
 export function orderGuaziBrands(segments,counts) {
  const brands=new Map();
- for(const s of segments){const row=brands.get(s.brand)||{brand:s.brand,total:0,segments:[]};row.segments.push(s);for(const partition of [1,0]){const n=counts[`${s.id}:${partition}`];if(!Number.isInteger(n)||n<0)throw Error(`Missing count: ${s.id}:${partition}`);row.total+=n;}brands.set(s.brand,row);}
+ // Complete the alliance and all individual lists before checking any of its
+ // saved cars: a transfer between these feeds must not look like an absence.
+ for(const s of segments){const brand=GUAZI_HUAWEI_BRANDS.includes(s.brand)?'AITO':s.brand;const row=brands.get(brand)||{brand,total:0,segments:[]};row.segments.push(s);for(const partition of [1,0]){const n=counts[`${s.id}:${partition}`];if(!Number.isInteger(n)||n<0)throw Error(`Missing count: ${s.id}:${partition}`);row.total+=n;}brands.set(brand,row);}
  return [...brands.values()].sort((a,b)=>a.total-b.total||a.brand.localeCompare(b.brand));
 }
 export async function census(out,{browserFactory=openGuaziBrowser,log=console.log}={}){

@@ -1,7 +1,9 @@
+import { VISIT_COUNTRY_CODES, normalizeVisitCountry } from "../src/analytics-countries.js";
 import { isPartnerPath } from "../src/partner-model.js";
 import crypto from "node:crypto";
 import { analyticsActivityKind } from "../src/analytics-activity.js";
-import { isKnownAnalyticsBotAgent } from "../src/analytics-bots.js";
+import { isKnownAnalyticsBotAgent, isKnownAnalyticsBotHints } from "../src/analytics-bots.js";
+import { REVIEWED_AUTOMATION_SQL } from "./analytics-reviewed-automation.mjs";
 import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics-acquisition.js";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
@@ -224,11 +226,11 @@ export const fromOwnPage = (headers = {}, host = siteHost()) => {
 // Метка «не считать» живёт в localStorage конкретного браузера, а этот запускается
 // каждый раз заново и метки не помнит, поэтому 26.08.2026 мои проверки оказались
 // в разделе как живые посетители. Здесь он отсекается по подписи и навсегда.
-export const isBotAgent = (agent = "") => {
+export const isBotAgent = (agent = "", hints = "") => {
   const value = String(agent || "").trim();
   // Браузер всегда представляется. Пустая подпись — это не человек.
   if (!value) return true;
-  return isKnownAnalyticsBotAgent(value);
+  return isKnownAnalyticsBotAgent(value) || isKnownAnalyticsBotHints(hints);
 };
 
 // Адрес арендованного сервера в дата-центре. Робота, который подделал подпись
@@ -367,14 +369,14 @@ export async function isDatacenterAddress(address, { db = pool, now = Date.now()
   }
 }
 
-// Страна посетителя для флага в «Заходах»: BY, RU или other. Пустая строка — не
+// Страна посетителя для флага в «Заходах»: ISO-код или other. Пустая строка — не
 // знаем: адрес не пришёл, он из внутренней сети или таблица стран ещё не заполнена
 // (тогда «другая страна» была бы неправдой у каждого захода). Сам адрес не храним,
 // в событие ложится только этот код.
 const COUNTRY_CACHE_TTL_MS = 60 * 60 * 1000;
 const COUNTRY_CACHE_LIMIT = 5000;
 const countryCache = new Map();
-export const VISIT_COUNTRIES = new Set(["BY", "RU", "other"]);
+export const VISIT_COUNTRIES = new Set([...VISIT_COUNTRY_CODES, "other"]);
 
 export async function visitorCountry(address, { db = pool, now = Date.now() } = {}) {
   const value = String(address || "").trim().replace(/^::ffff:/i, "");
@@ -383,12 +385,12 @@ export async function visitorCountry(address, { db = pool, now = Date.now() } = 
   if (cached && now - cached.at < COUNTRY_CACHE_TTL_MS) return cached.country;
   try {
     const result = await db.query(`SELECT
-        (SELECT country FROM country_ranges WHERE network >>= $1::inet LIMIT 1) AS country,
+        (SELECT country FROM country_ranges WHERE network >>= $1::inet ORDER BY masklen(network) DESC LIMIT 1) AS country,
         EXISTS (SELECT 1 FROM country_ranges) AS ready,
         ($1::inet << '10.0.0.0/8' OR $1::inet << '172.16.0.0/12' OR $1::inet << '192.168.0.0/16'
           OR $1::inet << '127.0.0.0/8' OR $1::inet <<= '::1/128' OR $1::inet << 'fc00::/7') AS internal`, [value]);
     const row = result.rows[0] || {};
-    const country = row.internal || !row.ready ? "" : VISIT_COUNTRIES.has(row.country) ? row.country : "other";
+    const country = row.internal || !row.ready ? "" : normalizeVisitCountry(row.country) || "other";
     if (countryCache.size >= COUNTRY_CACHE_LIMIT) countryCache.clear();
     countryCache.set(value, { at:now, country });
     return country;
@@ -431,6 +433,7 @@ export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
        WHERE visitor_id = $1 AND session_id = $2 AND NOT (human AND (human_action OR NOT $3))
          AND path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'
          AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%'
+         AND ${REVIEWED_AUTOMATION_SQL}
          AND created_at > now() - interval '12 hours'`,
     [visitorId, sessionId, action],
   );
@@ -515,7 +518,7 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
   return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
+const PUBLIC_EVENT = `path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%' AND path !~* '(^|[?&])nocount=1(&|$)' AND ${REVIEWED_AUTOMATION_SQL}`;
 // Режим «Только с действиями» сохраняет прежнее правило: достаточно одного
 // подтверждённого действия посетителя за всю историю. Период, источник,
 // страница входа и устройство не ограничивают поиск подтверждения. Отсутствие
@@ -884,14 +887,15 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
         (array_agg(nullif(properties->>'entrySource','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'entrySource','') IS NOT NULL))[1] AS entry_source,
         (array_agg(nullif(properties->>'device','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'device','') IS NOT NULL))[1] AS device,
         (array_agg(nullif(properties->>'platform','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'platform','') IS NOT NULL))[1] AS platform,
-        (array_agg(nullif(properties->>'country','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'country','') IS NOT NULL))[1] AS country,
+        (array_agg(nullif(properties->>'country','') ORDER BY (properties->>'country'='other'), created_at) FILTER (WHERE nullif(properties->>'country','') IS NOT NULL))[1] AS country,
         count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
         min(created_at) AS created_at,
         -- Не в первый раз: у посетителя были события до начала этого захода, за любой
         -- срок. По этому признаку кабинет собирает вкладку «Вернулись».
         EXISTS (SELECT 1 FROM analytics_events first_seen
           WHERE first_seen.visitor_id = numbered.visitor_id AND first_seen.created_at < min(numbered.created_at)
-            AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path <> '/partner' AND first_seen.path NOT LIKE '/partner/%' AND first_seen.path NOT LIKE '/partner?%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)') AS came_back
+            AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path <> '/partner' AND first_seen.path NOT LIKE '/partner/%' AND first_seen.path NOT LIKE '/partner?%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)'
+            AND ${REVIEWED_AUTOMATION_SQL.replace(/\bevent_id\b/g, "first_seen.event_id")}) AS came_back
       FROM numbered
       GROUP BY visitor_id, visit_number
       ORDER BY min(created_at) DESC`, [from, to]),

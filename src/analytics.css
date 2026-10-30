@@ -152,7 +152,7 @@ html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
 .analytics-visit-device:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-visit-device.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-country { display:grid; place-items:center; width:22px; height:1lh; padding:0; border:0; background:transparent; color:var(--muted); font:inherit; cursor:help; }
-.analytics-visit-country:is(.is-by, .is-ru) svg { border-radius:2px; box-shadow:0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); }
+.analytics-visit-country.has-flag img { display:block; object-fit:cover; border-radius:2px; box-shadow:0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); }
 .analytics-visit-country:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-visit-country.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }

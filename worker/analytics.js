@@ -1,4 +1,5 @@
-import { isKnownAnalyticsBotAgent } from "../src/analytics-bots.js";
+import { isKnownAnalyticsBotAgent, isKnownAnalyticsBotHints } from "../src/analytics-bots.js";
+import { REVIEWED_AUTOMATION_SQL } from "../server/analytics-reviewed-automation.mjs";
 
 const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "availability_request_click", "registration_completed", "favorite_added", "search_saved", "custom_search_submitted", "search_query", "article_promo_shown", "article_promo_click", "contact_phone_reveal", "contact_telegram_click", "contact_viber_click", "contact_instagram_click", "app_download_qr_click", "app_download_app_store_click", "app_download_google_play_click", "app_download_qr_modal_open", "app_download_qr_deeplink_modal_open", "app_download_app_store_modal_open", "app_download_google_play_modal_open", "newsletter_subscribe_click", "newsletter_subscribe_modal_open"]);
 const COOKIE_NAME = "abcars_analytics";
@@ -18,7 +19,7 @@ const workerFromAnalyticsPage = (request) => {
   if (!referer) return false;
   try { return workerInternalAnalyticsPath(new URL(referer).pathname); } catch { return false; }
 };
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND instr(lower(path), '?nocount=1') = 0 AND instr(lower(path), '&nocount=1') = 0";
+const PUBLIC_EVENT = `path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND instr(lower(path), '?nocount=1') = 0 AND instr(lower(path), '&nocount=1') = 0 AND ${REVIEWED_AUTOMATION_SQL}`;
 
 const json = (payload, status = 200, headers = {}) => Response.json(payload, { status, headers:{ "cache-control":"no-store", ...headers } });
 const base64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -29,7 +30,7 @@ const cookieValue = (header, name) => String(header || "").split(";").map((item)
 // принимаем только со страницы настоящего адреса сайта и только от браузера, который
 // не называет себя роботом. Запрос мимо браузера и заход по числовому адресу сервера
 // в статистику не идут.
-export const workerBotAgent = (agent) => { const value = String(agent || "").trim(); return !value || isKnownAnalyticsBotAgent(value); };
+export const workerBotAgent = (agent, hints = "") => { const value = String(agent || "").trim(); return !value || isKnownAnalyticsBotAgent(value) || isKnownAnalyticsBotHints(hints); };
 export const workerOwnPage = (request, env) => {
   let site = "";
   try { site = new URL(String(env?.SITE_URL || "https://abcars.by")).hostname.toLowerCase().replace(/^www\./, ""); } catch { site = ""; }
@@ -248,7 +249,7 @@ export async function handleAnalyticsRequest(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/analytics/events") {
     // Отвечаем как обычно и молчим о причине: незачем подсказывать, как подделать
     // событие. Страница сайта ответ всё равно не читает.
-    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, recorded:false }, 202);
+    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"), request.headers.get("sec-ch-ua"))) return json({ ok:true, recorded:false }, 202);
     const event = normalizeWorkerEvent(await request.json().catch(() => ({})));
     if (event.ignored) return json({ ok:true, recorded:false }, 202);
     if (event.error) return json(event, 400);
@@ -260,7 +261,7 @@ export async function handleAnalyticsRequest(request, env, url) {
   // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
   // коснулся экрана, прокрутил или нажал клавишу.
   if (request.method === "POST" && url.pathname === "/api/analytics/human") {
-    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, confirmed:0 }, 202);
+    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"), request.headers.get("sec-ch-ua"))) return json({ ok:true, confirmed:0, retry:false }, 202);
     const body = await request.json().catch(() => ({}));
     const visitorId = clean(body.visitorId, 80);
     const sessionId = clean(body.sessionId, 80);
