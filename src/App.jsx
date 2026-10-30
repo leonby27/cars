@@ -794,11 +794,11 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
   return <a href={appHref(href)} onClick={handleClick} onPointerEnter={prefetch} onTouchStart={prefetch} onFocus={prefetch} {...props}>{children}</a>;
 }
 
-// Внешние ссылки по умолчанию не передают поисковый вес. `follow` разрешён только
-// для редкого явного исключения, согласованного владельцем сайта.
+// Все внешние ссылки получают nofollow. Исключение для конкретной ссылки можно
+// добавить только по прямому запросу владельца; сейчас исключений нет.
 const EXTERNAL_LINK_REL = "nofollow noopener noreferrer";
-function ExternalLink({ href, follow = false, children, ...props }) {
-  return <a {...props} href={href} target="_blank" rel={follow ? "noopener noreferrer" : EXTERNAL_LINK_REL}>{children}</a>;
+function ExternalLink({ href, children, ...props }) {
+  return <a {...props} href={href} target="_blank" rel={EXTERNAL_LINK_REL}>{children}</a>;
 }
 
 // Абзацы обзоров изредка ссылаются со середины текста на соседний раздел каталога —
