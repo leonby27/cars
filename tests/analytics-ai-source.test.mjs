@@ -22,7 +22,7 @@ test('AI needs an identifiable source; ordinary search and ysclid remain unattri
 });
 
 test('historical assistant hosts move into exclusive AI buckets without changing totals or paid attribution', async () => {
-  const vite = await createTestServer({ configFile:false, plugins:[react()], server:{ middlewareMode:true }, appType:'custom' });
+  const vite = await createTestServer({ configFile:false, plugins:[react()], optimizeDeps:{ noDiscovery:true, include:[] }, server:{ middlewareMode:true }, appType:'custom' });
   try {
     const { visitBucket, VisitsSection } = await vite.ssrLoadModule('/src/analytics-page.jsx');
     const visits = ['google.com','gemini.google.com','google-ai','yandex.by','alice.yandex.ru','yandex-ai'].map((source,i) => ({ source, landingPath:'/catalog', pageViews:1, createdAt:`2026-11-02T03:0${i}:00Z` }));
@@ -31,8 +31,14 @@ test('historical assistant hosts move into exclusive AI buckets without changing
     const html = renderToStaticMarkup(createElement(VisitsSection, { visits:[...visits,ad], total:7, unread:0 }));
     for (const [label,count] of [['Все',7],['Google',1],['Google AI',2],['Яндекс',1],['Яндекс AI',2],['Реклама',1]]) assert.ok(html.includes(`>${label}<b>${count}</b>`), label);
     assert.match(html,/Часть AI-переходов остаётся в Google\/Яндексе/);
-    const noAi = renderToStaticMarkup(createElement(VisitsSection, { visits:[visits[0]], total:1, unread:0 }));
-    assert.ok(noAi.includes('>Google AI<b>0</b>'));
+    const noAi = renderToStaticMarkup(createElement(VisitsSection, { visits:[visits[0], visits[3]], total:2, unread:0 }));
+    assert.ok(!noAi.includes('>Google AI<b>'));
+    assert.ok(!noAi.includes('>Яндекс AI<b>'));
+    assert.ok(noAi.includes('>Google<b>1</b>'));
+    assert.ok(noAi.includes('>Яндекс<b>1</b>'));
+    const googleAiOnly = renderToStaticMarkup(createElement(VisitsSection, { visits:[visits[1], visits[3]], total:2, unread:0 }));
+    assert.ok(googleAiOnly.includes('>Google AI<b>1</b>'));
+    assert.ok(!googleAiOnly.includes('>Яндекс AI<b>'));
   } finally { await vite.close(); }
 });
 

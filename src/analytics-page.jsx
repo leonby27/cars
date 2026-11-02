@@ -461,7 +461,9 @@ export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "a
   const [showGoogleAi, setShowGoogleAi] = usePersistedChoice(`${storagePrefix}-google-ai`, ["0", "1"], "0");
   const [showChatgpt, setShowChatgpt] = usePersistedChoice(`${storagePrefix}-chatgpt`, ["0", "1"], "0");
   const daily = trendData?.daily || [];
-  const enabledSources = [showYandex === "1" ? "yandex" : "", showYandexAi === "1" ? "yandex_ai" : "", showGoogle === "1" ? "google" : "", showGoogleAi === "1" ? "google_ai" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
+  const hasYandexAi = daily.some((day) => Number(day.yandex_ai) > 0);
+  const hasGoogleAi = daily.some((day) => Number(day.google_ai) > 0);
+  const enabledSources = [showYandex === "1" ? "yandex" : "", hasYandexAi && showYandexAi === "1" ? "yandex_ai" : "", showGoogle === "1" ? "google" : "", hasGoogleAi && showGoogleAi === "1" ? "google_ai" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
   // Кроме смены периода график перезапрашивается и на каждом круге самообновления
   // страницы: `generatedAt` у свежего среза другой. Пока летит новый ответ, на экране
   // остаётся прежний график — мигания нет.
@@ -495,9 +497,9 @@ export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "a
           </div>}
           {trendMetric === "visits" && <div className="analytics-trend-controls">
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
-              <label className="analytics-chart-source-toggle is-yandex_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>
+              {hasYandexAi && <label className="analytics-chart-source-toggle is-yandex_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>}
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
-              <label className="analytics-chart-source-toggle is-google_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>
+              {hasGoogleAi && <label className="analytics-chart-source-toggle is-google_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>}
               <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
           </div>}
         </div>
@@ -987,9 +989,7 @@ export function VisitsSection({ visits, total, unread }) {
   // чужие сайты) собирается в «Остальное».
   //
   // Порядок задан списком, а не числом заходов: иначе кнопки переставлялись бы местами
-  // при каждой смене периода и нужную приходилось бы искать глазами заново. А вот
-  // AI-вкладку сохраняем и при нуле, если есть обычные переходы этого поисковика:
-  // рядом пояснено, что это ноль распознанных, а не всех AI-переходов.
+  // при каждой смене периода и нужную приходилось бы искать глазами заново.
   //
   // «Вернулись» — прямые заходы людей, которые у нас уже были: набрали адрес или открыли
   // закладку. Это половина всех прямых заходов и самые глубокие сеансы; без отдельной
@@ -1002,7 +1002,7 @@ export function VisitsSection({ visits, total, unread }) {
     }
     const present = [...NAMED_SOURCES, "rest"]
       .map((key) => [key, BUCKET_LABELS[key] || sourceKeyLabel(key), counts.get(key) || 0])
-      .filter(([key, , count]) => count > 0 || (key.endsWith("-ai") && counts.has(key.replace(/-ai$/, ""))));
+      .filter(([, , count]) => count > 0);
     // Один-единственный источник — выбирать не из чего, «Все» и он же дадут одну и ту
     // же таблицу. Тогда переключателя не показываем вовсе.
     return present.length > 1 ? [["all", "Все", visits.length], ...present] : [];
