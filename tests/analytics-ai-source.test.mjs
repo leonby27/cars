@@ -30,7 +30,6 @@ test('historical assistant hosts move into exclusive AI buckets without changing
     assert.deepEqual([...visits,ad].map(visitBucket), ['google','google-ai','google-ai','yandex','yandex-ai','yandex-ai','paid']);
     const html = renderToStaticMarkup(createElement(VisitsSection, { visits:[...visits,ad], total:7, unread:0 }));
     for (const [label,count] of [['Все',7],['Google',1],['Google AI',2],['Яндекс',1],['Яндекс AI',2],['Реклама',1]]) assert.ok(html.includes(`>${label}<b>${count}</b>`), label);
-    assert.match(html,/Часть AI-переходов остаётся в Google\/Яндексе/);
     const noAi = renderToStaticMarkup(createElement(VisitsSection, { visits:[visits[0], visits[3]], total:2, unread:0 }));
     assert.ok(!noAi.includes('>Google AI<b>'));
     assert.ok(!noAi.includes('>Яндекс AI<b>'));

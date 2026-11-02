@@ -12,7 +12,7 @@ import { CalendarBlank, CarProfile, ChartLineUp, ChatCircleText, Desktop, Device
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
-import { analyticsAiSource, ANALYTICS_AI_SOURCE_NOTE } from "./analytics-ai-source.js";
+import { analyticsAiSource } from "./analytics-ai-source.js";
 import { quotaVisitSplit } from "./analytics-quota-pages.js";
 import { analyticsUpdatesUrl, clearAnalyticsUpdates, navigationViewedSections, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
@@ -497,9 +497,9 @@ export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "a
           </div>}
           {trendMetric === "visits" && <div className="analytics-trend-controls">
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
-              {hasYandexAi && <label className="analytics-chart-source-toggle is-yandex_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>}
+              {hasYandexAi && <label className="analytics-chart-source-toggle is-yandex_ai"><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>}
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
-              {hasGoogleAi && <label className="analytics-chart-source-toggle is-google_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>}
+              {hasGoogleAi && <label className="analytics-chart-source-toggle is-google_ai"><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>}
               <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
           </div>}
         </div>
@@ -1030,7 +1030,6 @@ export function VisitsSection({ visits, total, unread }) {
           <QuotaSplit visits={filteredVisits.map(({ visit }) => visit)} />
         </div>
       </div>
-      <p className="analytics-source-note">{ANALYTICS_AI_SOURCE_NOTE}</p>
       {mobile ? <div className="analytics-visit-cards">
         {filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitCard key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <p className="analytics-empty">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</p>}
       </div> : <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Страна</th><th>Просмотров</th><th>Дата</th></tr></thead>

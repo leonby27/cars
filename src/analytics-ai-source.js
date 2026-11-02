@@ -25,5 +25,3 @@ export function analyticsAiSource(value = "", landingPath = "") {
   source = source.replace(/^www\./, "");
   return googleAi.test(source) ? "google-ai" : yandexAi.test(source) ? "yandex-ai" : "";
 }
-
-export const ANALYTICS_AI_SOURCE_NOTE = "AI-вкладки — распознанные переходы из Gemini, Алисы и по явным меткам. Часть AI-переходов остаётся в Google/Яндексе. Ноль во вкладке не означает отсутствие AI-трафика.";
