@@ -108,6 +108,30 @@ const SERVICE_PROOF_ARTWORK = Object.freeze([
   { src: "/services/customs-documents.png", className: "customs", width: 512, height: 341 },
 ]);
 
+function ServiceProofCards() {
+  return (
+    <div className="info-proof">
+      {SERVICE_PROOF.map(({ title, text }, index) => {
+        const artwork = SERVICE_PROOF_ARTWORK[index] || SERVICE_PROOF_ARTWORK[0];
+        return (
+          <article key={title}>
+            <span className={`info-proof-icon info-proof-icon-art info-proof-icon-${artwork.className}`} aria-hidden="true">
+              <Illustration
+                src={artwork.src}
+                alt=""
+                width={artwork.width}
+                height={artwork.height}
+              />
+            </span>
+            <h3>{title}</h3>
+            <p>{text}</p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
 
 const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABILITY;
@@ -2354,31 +2378,34 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           {detailsError && <p className="catalog-message" role="status">Не удалось обновить данные фильтров или количество. <button type="button" className="text-button" onClick={() => detailsRetry.current?.()}>Повторить</button></p>}
           {showSkeletons && loadingMore.current && loadingSkeletons}
           {showSkeletons && <span className="visually-hidden" role="status">Загружаем объявления…</span>}
-          {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает
-              и получает продолжение на месте, робот идёт по адресу. Номеров страниц
-              нет (решение Сергея 25.09.2026): по цепочке «дальше» поисковик доходит до
-              любой страницы, а сами машины перечислены в карте сайта. */}
-          {hasMore && !remoteLoading && !remoteError && (
-            <a
-              className="load-more"
-              href={appHref(pageHref(nextPage))}
-              onClick={(event) => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                loadMore();
-              }}
-            >
-              Подгрузить ещё
-            </a>
-          )}
-          {useApi && hasMore && !remoteLoading && remoteError && (
-            <button className="load-more" onClick={loadMore}>
-              Повторить загрузку
-            </button>
-          )}
-          {displayed.length > 0 && !hasMore && !remoteLoading && (
-            <CustomSearchCta variant="end" navigate={navigate} />
-          )}
+
+          <div className="catalog-results-footer">
+            {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает
+                и получает продолжение на месте, робот идёт по адресу. Номеров страниц
+                нет (решение Сергея 25.09.2026): по цепочке «дальше» поисковик доходит до
+                любой страницы, а сами машины перечислены в карте сайта. */}
+            {hasMore && !remoteLoading && !remoteError && (
+              <a
+                className="load-more"
+                href={appHref(pageHref(nextPage))}
+                onClick={(event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  loadMore();
+                }}
+              >
+                Подгрузить ещё
+              </a>
+            )}
+            {useApi && hasMore && !remoteLoading && remoteError && (
+              <button className="load-more" onClick={loadMore}>
+                Повторить загрузку
+              </button>
+            )}
+            {displayed.length > 0 && !hasMore && !remoteLoading && (
+              <CustomSearchCta variant="end" navigate={navigate} />
+            )}
+          </div>
         </section>
         <aside className="side-card">
           <Illustration
@@ -2410,6 +2437,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           </button>
         </aside>
       </div>
+      <hr className="catalog-features-divider" />
+      <section className="catalog-service-features" aria-label="Возможности сервиса">
+        <ServiceProofCards />
+      </section>
       {/* Информация занимает всю ширину под выдачей и её ограниченным сайдбаром. */}
       {landing?.kind === "model" ? (
         <ModelLandingNotes landing={landing} page={currentPage} navigate={navigate} />
@@ -5425,25 +5456,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
       <div className="service-dark-intro" ref={darkIntroRef}>
         <ServiceScrollVideo navigate={navigate} total={total} updatedAt={updatedAt} />
         <section className="info-proof-section page-width" aria-label="Возможности сервиса">
-          <div className="info-proof">
-            {SERVICE_PROOF.map(({ title, text }, index) => {
-              const artwork = SERVICE_PROOF_ARTWORK[index] || SERVICE_PROOF_ARTWORK[0];
-              return (
-                <article key={title}>
-                  <span className={`info-proof-icon info-proof-icon-art info-proof-icon-${artwork.className}`} aria-hidden="true">
-                    <Illustration
-                      src={artwork.src}
-                      alt=""
-                      width={artwork.width}
-                      height={artwork.height}
-                    />
-                  </span>
-                  <h3>{title}</h3>
-                  <p>{text}</p>
-                </article>
-              );
-            })}
-          </div>
+          <ServiceProofCards />
         </section>
       </div>
       <div className="service-light-region">
