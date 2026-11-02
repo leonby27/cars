@@ -166,8 +166,13 @@ test("adds import VAT to an electric car older than five years without quota", (
 });
 
 test("counts the age from the manufacturing date, not the model year", () => {
-  const byModelYear = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль" }, { quotaOver:true });
-  const byPlate = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2020-01-01" }, { quotaOver:true });
+  // Даты относительно курса: фиксированный январь при переходе месяца и сроке
+  // доставки превращал шестилетнюю машину в семилетнюю и ломал проверку.
+  const [, rateMonth, rateYear] = PRICING.rateDate.split(".").map(Number);
+  const car = { chinaPrice:100000, year:rateYear - 2, type:"Электромобиль" };
+  const manufactureDate = `${rateYear - 6}-${String(rateMonth).padStart(2, "0")}-01`;
+  const byModelYear = estimateLandedCost(car, { quotaOver:true });
+  const byPlate = estimateLandedCost({ ...car, manufactureDate }, { quotaOver:true });
   assert.equal(byModelYear.vatUsd, 0);
   assert.match(byPlate.customsNote, /старше 5 лет/);
   assert.ok(byPlate.ageYears > 6 && byPlate.ageYears < 7);
