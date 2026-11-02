@@ -3,7 +3,7 @@
    в тёмной теме белая плашка с тёмной цифрой, в светлой наоборот. Красный оставлен
    только заявкам, чтобы они выделялись среди остального нового. */
 :root { --fresh-bg:var(--ink); --fresh-ink:var(--panel); }
-.analytics-page { width:min(1240px,calc(100% - 48px)); margin-inline:auto; min-height:680px; padding-block:20px 72px; font-size:14px; }
+.analytics-page { width:min(calc(var(--site-content-width) - 40px),calc(100% - 48px)); margin-inline:auto; min-height:680px; padding-block:20px 72px; font-size:14px; }
 .analytics-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:20px; }
 .analytics-heading > div:first-child > span, .analytics-login-card > span { color:var(--accent); font-weight:800; }
 .analytics-heading h1, .analytics-login-card h1 { margin:6px 0 4px; font-size:clamp(30px,3.5vw,42px); letter-spacing:-1.3px; }

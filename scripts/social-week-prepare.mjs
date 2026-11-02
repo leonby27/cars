@@ -1,9 +1,5 @@
-// Готовит недельный пакет для генерации в Codex: пять исходников, тексты для трёх
-// сетей и два разрешённых текстовых поста Threads из ../threads.txt.
-//
-// Этот скрипт ничего не публикует и не вызывает API генерации изображений. После
-// него Codex обрабатывает каждый source.file указанным prompt.file, кладёт результат
-// в generated.file и запускает social-week-finalize.mjs.
+// Готовит недельный пакет из пяти оформленных исходников и текстов для трёх сетей.
+// Финализация переводит исходники в JPEG без AI-обработки.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
@@ -38,14 +34,13 @@ import {
   preparationMonday,
   nextThreadPosts,
   parseThreadsFile,
-  promptNumbers,
   weekKey,
 } from "./lib/social-week.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const RUNTIME = process.env.SOCIAL_WEEK_RUNTIME_ROOT || path.join(ROOT, "runtime", "social-week");
 const STATE_FILE = process.env.SOCIAL_WEEK_STATE_FILE || path.join(ROOT, "runtime", "social-week-state.json");
-const THREADS_FILE = path.resolve(ROOT, "..", "threads.txt");
+const THREADS_FILE = process.env.SOCIAL_THREADS_FILE || path.join(ROOT, "data", "social-threads.txt");
 const NETWORKS = ["instagram", "threads", "telegram"];
 const force = process.argv.includes("--force");
 const weekOption = process.argv.find((arg) => arg.startsWith("--week="))?.slice(7);
@@ -58,7 +53,6 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || Number.isNaN(monday.getTime())) throw n
 
 const packageDir = path.join(RUNTIME, week);
 const sourceDir = path.join(packageDir, "source");
-const generatedDir = path.join(packageDir, "generated");
 const manifestFile = path.join(packageDir, "manifest.json");
 
 try {
@@ -189,7 +183,6 @@ for (const { dayIndex, post:article } of journalSlotsForWeek(BLOG_POSTS, BLOG_SO
 }
 const places = coverPlaces(week, planned.length);
 
-const promptIds = promptNumbers(week, planned.length);
 for (const item of planned) {
   if (item.draft.texts.threads.length > 500) throw new Error(`Текст Threads для ${item.draft.block} длиннее 500 знаков`);
   if (item.draft.texts.telegram.length > 1024) throw new Error(`Подпись Telegram для ${item.draft.block} длиннее 1024 знаков`);
@@ -226,8 +219,7 @@ const headlineHtml = (headline) => {
   return `<b>${escapeHtml(first)}</b>${escapeHtml(rest)}`;
 };
 await fs.mkdir(sourceDir, { recursive:true });
-await fs.mkdir(generatedDir, { recursive:true });
-const browser = await chromium.launch({ headless:true });
+const browser = await chromium.launch({ headless:true, ...(process.env.SOCIAL_CHROMIUM_EXECUTABLE ? { executablePath:process.env.SOCIAL_CHROMIUM_EXECUTABLE } : {}) });
 const posts = [];
 try {
   const page = await browser.newPage({ viewport:{ width:1080, height:1350 }, deviceScaleFactor:1 });
@@ -235,7 +227,6 @@ try {
     const number = String(index + 1).padStart(2, "0");
     const id = `${week}-${number}`;
     const sourceFile = path.join(sourceDir, `${number}.png`);
-    const generatedFile = path.join(generatedDir, `${number}.png`);
     const photos = coverSourcePhotos(item.draft);
     if (!photos.length) throw new Error(`У записи ${id} нет фотографии для исходника`);
     const place = places[index];
@@ -251,7 +242,6 @@ try {
       })));
     });
     await page.locator(".card").screenshot({ path:sourceFile, type:"png" });
-    const prompt = promptIds[index];
     posts.push({
       id,
       kind:"visual",
@@ -261,13 +251,11 @@ try {
       publishAt:minskIso(monday, index, VISUAL_TIMES[index]),
       cars:item.draft.cars.map((car) => ({ externalId:car.externalId, source:car.source, brand:car.brand, model:car.model })),
       coverCarIds:item.draft.coverCarIds,
-      // AI-обложка идёт первой. Сырой кадр, из которого она сделана, сразу за
-      // ней не повторяем; остальные фотографии серии сохраняют исходный порядок.
+      // Оформленный исходник идёт первым. Сырой кадр, из которого он сделан, сразу за
+      // ним не повторяем; остальные фотографии серии сохраняют исходный порядок.
       photos:galleryPhotosAfterCover(item.draft),
       texts:item.draft.texts,
-      prompt:{ number:prompt, file:`scripts/social-generation-prompt-${prompt}.txt` },
       source:{ file:path.relative(ROOT, sourceFile) },
-      generated:{ file:path.relative(ROOT, generatedFile) },
     });
   }
 } finally {
@@ -291,7 +279,8 @@ const manifest = {
   week,
   timezone:"Europe/Minsk",
   preparedAt:new Date().toISOString(),
-  status:"awaiting-generation",
+  imageMode:"source",
+  status:"awaiting-finalization",
   posts,
   threadPosts,
 };
@@ -304,5 +293,5 @@ await fs.writeFile(STATE_FILE, `${JSON.stringify({
 }, null, 2)}\n`);
 
 process.stdout.write(`Недельный пакет: ${manifestFile}\n`);
-for (const post of posts) process.stdout.write(`${post.id}: ${post.rubric}, промпт ${post.prompt.number}, ${post.source.file}\n`);
+for (const post of posts) process.stdout.write(`${post.id}: ${post.rubric}, ${post.source.file}\n`);
 for (const post of threadPosts) process.stdout.write(`${post.id}: Threads, строка ${post.sourceLine}\n`);

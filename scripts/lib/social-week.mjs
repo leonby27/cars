@@ -1,8 +1,6 @@
 // Общие, не зависящие от базы правила недельного пакета соцсетей.
 //
-// Codex готовит пакет на ноутбуке, а сервер публикует его позже. Поэтому даты,
-// имена файлов и проверка обязательной обложки должны считаться одинаково в обоих
-// местах и не зависеть от часового пояса сервера.
+// Сервер сам готовит пакет и публикует его по расписанию Europe/Minsk.
 
 export const SOCIAL_TIMEZONE = "Europe/Minsk";
 export const VISUAL_TIMES = Object.freeze(["13:00", "13:00", "13:00", "13:00", "13:00"]);
@@ -46,14 +44,6 @@ export function minskIso(monday, dayOffset, time) {
   return `${dateKey(day)}T${time}:00+03:00`;
 }
 
-// Любые четыре соседних назначения дают точную долю 50/25/25. Пятая карточка
-// начинает следующий цикл; на длинной дистанции пропорция остаётся той же.
-export function promptNumbers(week, count = 5) {
-  const pool = [1, 1, 2, 3];
-  const seed = [...String(week)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % pool.length;
-  return Array.from({ length:count }, (_, index) => pool[(seed + index) % pool.length]);
-}
-
 const stableNumber = (value) => [...String(value)].reduce(
   (result, char) => Math.imul(result ^ char.charCodeAt(0), 16_777_619) >>> 0,
   2_166_136_261,
@@ -72,7 +62,7 @@ const shuffledPlaces = (seed) => {
   return places;
 };
 
-// Позиция задаётся в исходнике до генерации. Внутри каждого полного цикла все
+// Позиция задаётся при подготовке исходника. Внутри каждого полного цикла все
 // четыре зоны используются по одному разу; неделя служит стабильным seed, поэтому
 // повторный запуск не меняет уже подготовленную композицию.
 export function coverPlaces(week, count = 5) {
@@ -183,15 +173,11 @@ export function nextThreadPosts(entries, lastLine = 0, count = 2) {
   return Array.from({ length:Math.min(count, entries.length) }, (_, index) => entries[(start + index) % entries.length]);
 }
 
-export const weeklyManifestUrl = (week, {
-  repository = process.env.GITHUB_MEDIA_REPO || "leonby27/cars",
-  tag = process.env.GITHUB_WEEKLY_TAG || "social-weekly",
-} = {}) => `https://github.com/${repository}/releases/download/${tag}/abcars-week-${week}.json`;
-
 export function hasRequiredVisual(post) {
   return post?.kind === "visual"
-    && typeof post?.cover?.url === "string"
-    && /^https:\/\//.test(post.cover.url)
+    && post?.cover?.origin === "source"
+    && typeof post?.cover?.file === "string"
+    && /\.jpe?g$/i.test(post.cover.file)
     && typeof post?.cover?.asset === "string"
     && /\.jpe?g$/i.test(post.cover.asset);
 }
@@ -204,7 +190,7 @@ export function publicationActuallyPublished(record) {
   return record?.status === "published";
 }
 
-// Снимки, из которых собрана AI-обложка. Их не повторяем сразу следом в сыром
+// Снимки, из которых собрана оформленная обложка. Их не повторяем сразу следом в сыром
 // виде: обложка уже является первым кадром карусели.
 export function coverSourcePhotos(draft) {
   if (draft?.coverPhoto) return [draft.coverPhoto];

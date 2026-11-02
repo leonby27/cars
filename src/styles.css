@@ -2,6 +2,8 @@
    отдельного запроса не появляется. */
 @import "./fonts.css";
 :root {
+  --site-content-width: 1360px;
+  --site-wide-width: 1400px;
   font-family:
     "Manrope",
     -apple-system,
@@ -171,7 +173,7 @@ button {
   cursor: pointer;
 }
 .page-width {
-  width: min(1280px, calc(100% - 48px));
+  width: min(var(--site-content-width), calc(100% - 48px));
   margin-inline: auto;
 }
 .site-header {
@@ -184,7 +186,7 @@ button {
   backdrop-filter: none;
 }
 .header-inner {
-  width: min(1320px, calc(100% - 48px));
+  width: min(var(--site-wide-width), calc(100% - 48px));
   height: 100%;
   margin: auto;
   display: flex;
@@ -1883,6 +1885,16 @@ html[data-theme="dark"] .heading-country-root.open .heading-country-trigger {
   border-radius: calc(20px * var(--corner-scale));
   background: var(--header-control-bg);
 }
+/* Переопределяется на конкретном разделе; 100% позволяет раскрыть лендинг. */
+.catalog-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  width: 100%;
+  max-width: var(--catalog-info-content-width, 880px);
+  min-width: 0;
+  margin-inline: auto;
+}
 .catalog-landing-notes h2 {
   max-width: 34em;
   margin: 0 0 4px;
@@ -1938,9 +1950,8 @@ html[data-theme="dark"] .heading-country-root.open .heading-country-trigger {
   background: var(--model-chip-hover-bg);
   color: var(--ink);
 }
-/* Текст страницы марки, типа двигателя или кузова набран как статья про модель:
-   тот же засечный шрифт и кегль. Строку не сужаем — ширину задаёт сам блок, а он
-   стоит в колонке выдачи. */
+/* Статья использует общий контейнер содержимого: ширина текста настраивается
+   отдельно от фоновой плашки через --catalog-info-content-width. */
 .catalog-landing-article h2 {
   max-width: none;
   font-size: 27px;
@@ -1955,11 +1966,9 @@ html[data-theme="dark"] .heading-country-root.open .heading-country-trigger {
   line-height: 30px;
   letter-spacing: 0;
 }
-/* Блок живёт в первой колонке каталога — под выдачей, а карточка сервиса остаётся
-   справа от него. Верхний отступ меньше прежнего: часть зазора даёт сама сетка. */
-.catalog-layout > .catalog-landing-notes {
-  grid-column: 1;
-  margin-top: 0;
+/* Информация под выдачей занимает всю ширину и не продлевает липкий сайдбар. */
+.catalog-layout + .catalog-landing-notes {
+  margin-top: 24px;
 }
 /* Вопросы раздела стоят последним блоком в том же тексте: заголовок мельче, чем у
    самого блока, плашки — на светлой подложке, как ссылки рядом. Рамки нет: блок
@@ -5653,7 +5662,7 @@ html[data-theme="dark"] #root .load-more {
 @media (max-width: 700px) {
   .page-width,
   .header-inner {
-    width: min(100% - 28px, 1280px);
+    width: min(100% - 28px, var(--site-content-width));
   }
   .site-header {
     height: 58px;
@@ -6145,8 +6154,8 @@ html[data-theme="dark"] #root .load-more {
   .brand-guide-budget-models {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .catalog-layout > .catalog-landing-notes {
-    margin-top: 8px;
+  .catalog-layout + .catalog-landing-notes {
+    margin-top: 32px;
   }
   .catalog-heading h1 {
     font-size: 27px;
@@ -7788,7 +7797,7 @@ a.load-more:visited {
   box-shadow: var(--raised-surface-shadow);
 }
 .custom-search-cta.is-empty {
-  min-height: 220px;
+  min-height: 340px;
   grid-template-columns: 1fr;
   align-content: center;
   justify-items: center;
@@ -7797,6 +7806,30 @@ a.load-more:visited {
   background: transparent;
   box-shadow: none;
   text-align: center;
+}
+.empty-catalog-reset {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.empty-catalog-reset .secondary {
+  min-height: 38px;
+  padding: 9px 18px;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+}
+.empty-catalog-reset .secondary:hover {
+  background: color-mix(in srgb, var(--ink) 12%, var(--surface));
+}
+.empty-catalog-reset p {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 .custom-search-icon {
   display: grid;
@@ -7881,8 +7914,13 @@ html[data-theme="dark"] #root .custom-search-cta.is-empty {
     padding: 24px 20px;
     text-align: left;
   }
+  .custom-search-cta.is-empty {
+    min-height: 360px;
+    justify-items: center;
+    text-align: center;
+  }
   .custom-search-cta.is-empty .custom-search-copy p {
-    margin-inline: 0;
+    margin-inline: auto;
   }
   .custom-search-copy h2 {
     font-size: 23px;
@@ -10708,7 +10746,7 @@ html[data-theme="dark"] #root .spec-search,
   .side-card {
     display: flex;
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     flex-direction: column;
     padding: 18px;
     border-color: #e3e5e8;
@@ -12008,7 +12046,7 @@ html[data-theme="dark"] #root .spec-search,
   opacity: 0.65;
 }
 .account-page {
-  width: min(1320px, calc(100% - 48px));
+  width: min(var(--site-wide-width), calc(100% - 48px));
   margin-inline: auto;
   min-height: 680px;
   padding-top: 26px;
@@ -13216,7 +13254,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
        stretch would hand that space to the rows as extra gaps — so the blocks
        sat lower on the short tab than on the tall one. */
     align-content: start;
-    width: min(100% - 28px, 1320px);
+    width: min(100% - 28px, var(--site-wide-width));
     /* Отбивка от шапки равна отступам между блоками кабинета: у шапки нет
        границы, поэтому её собственный нижний воздух читается как часть
        промежутка, и восемнадцати точек сверху было ощутимо много. */
@@ -14157,7 +14195,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     max-height: calc(100dvh - 90px);
   }
   .header-inner {
-    width: min(1320px, calc(100% - 28px));
+    width: min(var(--site-wide-width), calc(100% - 28px));
     gap: 8px;
   }
   .wordmark {
@@ -21790,7 +21828,7 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   overflow: clip;
 }
 .service-video-page .page-width {
-  width: min(1320px, calc(100% - 48px));
+  width: min(var(--site-wide-width), calc(100% - 48px));
 }
 .service-dark-intro {
   --ink: #f3f4f6;
@@ -23881,7 +23919,7 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
 }
 .service-video-copy-inner {
   position: relative;
-  width: min(1320px, calc(100% - 48px));
+  width: min(var(--site-wide-width), calc(100% - 48px));
   height: 100%;
   margin-inline: auto;
 }
@@ -24109,10 +24147,10 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
     mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
   }
   .service-video-copy-inner {
-    width: min(100% - 28px, 1320px);
+    width: min(100% - 28px, var(--site-wide-width));
   }
   .service-video-page .page-width {
-    width: min(100% - 28px, 1320px);
+    width: min(100% - 28px, var(--site-wide-width));
   }
   .service-video-copy-panel::before {
     inset: -22px -18px;

@@ -1,12 +1,13 @@
 [Unit]
-Description=Публикация готового недельного пакета в соцсети
+Description=Подготовка исходников и публикация в соцсети
 After=network-online.target postgresql.service
 
 [Service]
 Type=oneshot
 WorkingDirectory=/srv/abcars
 EnvironmentFile=/srv/abcars/.env.local
-ExecStart=/usr/bin/npm run social:week:publish
+Environment=TZ=Europe/Minsk
+ExecStart=/usr/bin/npm run social:week:run
 TimeoutStartSec=1800
 Nice=10
 CPUWeight=30

@@ -1,8 +1,7 @@
-// Серверная половина недельного конвейера. Запускается таймером, берёт готовый
-// пакет из служебного релиза и публикует только наступившие слоты.
+// Публикует наступившие слоты из локального недельного пакета на сервере.
 //
 // Жёсткое правило: визуальная запись никогда не превращается в текстовую. Если
-// готовой AI-обложки нет или она не скачалась, вся запись получает «пропущена».
+// готовой обложки нет или она не скачалась, вся запись получает «пропущена».
 // Единственный разрешённый вызов Threads без картинки — kind=threads-file.
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,7 +14,6 @@ import {
   publicationFinished,
   threadsTimeline,
   weekKey,
-  weeklyManifestUrl,
 } from "./lib/social-week.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -49,33 +47,29 @@ async function saveState() {
   await fs.rename(temporary, stateFile);
 }
 
-async function fetchJson(url) {
-  const response = await fetch(`${url}?v=${Date.now()}`, { signal:AbortSignal.timeout(20_000) });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Недельный пакет ответил ${response.status}`);
-  return response.json();
-}
-
-async function downloadImage(url, file) {
-  const response = await fetch(`${url}?v=${Date.now()}`, { redirect:"follow", signal:AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`обложка ответила ${response.status}`);
-  const type = response.headers.get("content-type") || "";
-  const data = Buffer.from(await response.arrayBuffer());
-  const jpeg = data[0] === 0xff && data[1] === 0xd8;
-  if (!type.startsWith("image/") && type !== "application/octet-stream" && !jpeg) throw new Error(`вместо обложки пришёл ${type || "неизвестный файл"}`);
-  if (!jpeg) throw new Error("готовая обложка не является JPEG");
+async function copyCover(source, file) {
+  const data = await fs.readFile(path.resolve(ROOT, source)).catch((error) => {
+    if (error.code === "ENOENT") throw new Error("нет файла обложки");
+    throw error;
+  });
+  if (data[0] !== 0xff || data[1] !== 0xd8) throw new Error("готовая обложка не является JPEG");
   if (data.length < 10_000) throw new Error("файл обложки подозрительно мал");
   await fs.writeFile(file, data);
   return file;
 }
 
 const due = (item) => publishAllNow || Date.parse(item.publishAt) <= Date.now();
-const manifest = await fetchJson(process.env.SOCIAL_WEEK_MANIFEST_URL || weeklyManifestUrl(week));
-if (!manifest) {
+const runtimeRoot = process.env.SOCIAL_WEEK_RUNTIME_ROOT || path.join(ROOT, "runtime", "social-week");
+const manifestFile = process.env.SOCIAL_WEEK_MANIFEST_FILE || path.join(runtimeRoot, week, "manifest.json");
+let manifest;
+try {
+  manifest = JSON.parse(await fs.readFile(manifestFile, "utf8"));
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
   console.log(`Готового недельного пакета ${week} ещё нет.`);
   process.exit(0);
 }
-if (manifest.status !== "ready" || manifest.week !== week) throw new Error("Недельный пакет не готов или относится к другой неделе");
+if (manifest.status !== "ready" || manifest.imageMode !== "source" || manifest.week !== week) throw new Error("Недельный пакет не готов или относится к другой неделе");
 
 const config = dryRun ? null : await refreshSocialTokens({ log:console.log });
 
@@ -87,13 +81,13 @@ async function publishVisual(post, targetNetworks) {
     return targetNetworks.includes("threads") && existing?.networks?.threads?.status === "published";
   }
   if (!hasRequiredVisual(post)) {
-    state.visual[post.id] = { status:"skipped", reason:"missing_generated_cover", at:new Date().toISOString() };
+    state.visual[post.id] = { status:"skipped", reason:"missing_cover", at:new Date().toISOString() };
     await saveState();
-    console.log(`${post.id}: пропущена — нет готовой сгенерированной обложки`);
+    console.log(`${post.id}: пропущена — нет готовой обложки`);
     return false;
   }
   if (dryRun) {
-    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}), обложка ${post.cover.url}`);
+    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}), обложка ${post.cover.file}`);
     return targetNetworks.includes("threads");
   }
 
@@ -105,11 +99,11 @@ async function publishVisual(post, targetNetworks) {
   try {
     // Отсутствующая обложка пропускает запись целиком. Обычная фотография машины
     // никогда не занимает её место.
-    await downloadImage(post.cover.url, cover);
+    await copyCover(post.cover.file, cover);
     frames = await prepareFrames(post.photos || [], { dir, prefix:"gallery", mode:"crop", shape:"vertical", log:console.log });
     const files = [cover, ...frames].slice(0, 10);
     const coverStage = await stageBuffers([{ name:path.basename(cover), data:await fs.readFile(cover) }], { carNumber:`${post.id}-cover`, log:console.log });
-    if (coverStage.links.length !== 1) throw new Error("сгенерированная обложка не попала в хранилище Meta");
+    if (coverStage.links.length !== 1) throw new Error("обложка не попала в хранилище Meta");
     staged.push(...coverStage.assets);
     const galleryStage = frames.length
       ? await stageBuffers(await Promise.all(frames.slice(0, 9).map(async (file) => ({ name:path.basename(file), data:await fs.readFile(file) }))), { carNumber:`${post.id}-gallery`, log:console.log })
@@ -144,8 +138,8 @@ async function publishVisual(post, targetNetworks) {
   } catch (error) {
     // Только отсутствие самой обложки означает окончательный пропуск. Временный
     // сбой API или хранилища остаётся на повтор следующего запуска таймера.
-    if (/обложк/.test(error.message) && /ответила|вместо|подозрительно мал|не является JPEG/.test(error.message)) {
-      state.visual[post.id] = { status:"skipped", reason:"missing_generated_cover", error:error.message, at:new Date().toISOString() };
+    if (/обложк/.test(error.message) && /нет файла|подозрительно мал|не является JPEG/.test(error.message)) {
+      state.visual[post.id] = { status:"skipped", reason:"missing_cover", error:error.message, at:new Date().toISOString() };
       await saveState();
       console.log(`${post.id}: пропущена — ${error.message}`);
     } else {
@@ -213,4 +207,4 @@ if (networks.includes("threads")) {
   }
 }
 
-await cleanupStalePhotos({ log:console.log }).catch(() => {});
+if (!dryRun) await cleanupStalePhotos({ log:console.log }).catch(() => {});

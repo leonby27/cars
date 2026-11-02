@@ -40,6 +40,7 @@
     "social:blog": "node scripts/social-blog.mjs",
     "social:week:prepare": "node scripts/social-week-prepare.mjs",
     "social:week:finalize": "node scripts/social-week-finalize.mjs",
+    "social:week:run": "node scripts/social-week-run.mjs",
     "social:week:publish": "node scripts/social-week-publish.mjs",
     "social:week:cleanup-test": "node scripts/social-week-cleanup-test.mjs",
     "build": "node scripts/build.mjs",

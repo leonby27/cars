@@ -18,7 +18,6 @@ import {
   preparationMonday,
   publicationActuallyPublished,
   publicationFinished,
-  promptNumbers,
   threadsTimeline,
   weekKey,
 } from "../scripts/lib/social-week.mjs";
@@ -57,13 +56,6 @@ test("в воскресенье готовится следующая недел
   assert.equal(weekKey(preparationMonday(new Date("2026-09-22T09:00:00+03:00"))), "2026-09-21");
 });
 
-test("промпты распределяются в пропорции 50/25/25 на каждом полном цикле", () => {
-  const prompts = promptNumbers("2026-09-21", 40);
-  assert.equal(prompts.filter((value) => value === 1).length, 20);
-  assert.equal(prompts.filter((value) => value === 2).length, 10);
-  assert.equal(prompts.filter((value) => value === 3).length, 10);
-});
-
 test("вопросы Threads идут по порядку и после конца начинают новый круг", () => {
   const entries = parseThreadsFile("1. Первый\n2. Второй\n3. Третий\n");
   assert.deepEqual(nextThreadPosts(entries, 1, 2), [
@@ -88,11 +80,12 @@ test("текстовые Threads-посты стоят между визуаль
   assert.deepEqual(kinds, ["visual", "visual", "threads-file", "visual", "visual", "visual", "threads-file"]);
 });
 
-test("визуальная запись без сгенерированной JPEG-обложки не готова", () => {
+test("визуальная запись требует локальную JPEG-обложку из исходника", () => {
   assert.equal(hasRequiredVisual({ kind:"visual" }), false);
-  assert.equal(hasRequiredVisual({ kind:"visual", cover:{ asset:"cover.png", url:"https://example.com/cover.png" } }), false);
+  assert.equal(hasRequiredVisual({ kind:"visual", cover:{ asset:"cover.jpg", url:"https://example.com/cover.jpg" } }), false);
+  assert.equal(hasRequiredVisual({ kind:"visual", cover:{ origin:"source", asset:"cover.png", file:"cover.png" } }), false);
   assert.equal(hasRequiredVisual({ kind:"threads-file" }), false);
-  assert.equal(hasRequiredVisual({ kind:"visual", cover:{ asset:"cover.jpg", url:"https://example.com/cover.jpg" } }), true);
+  assert.equal(hasRequiredVisual({ kind:"visual", cover:{ origin:"source", asset:"cover.jpg", file:"runtime/cover.jpg" } }), true);
 });
 
 test("пропущенный Threads-пост не считается реально опубликованным", () => {

@@ -1122,7 +1122,7 @@ function ModelsIndexPage({ navigate }) {
           по 24 карточки за раз; до 26.09.2026 полный перечень видел только робот в
           отдельной копии страницы, теперь он общий для всех. */}
       <div className="model-page-body page-width">
-        <section className="catalog-landing-notes" aria-labelledby="models-index-all-title">
+        <CatalogInfo aria-labelledby="models-index-all-title">
           <h2 id="models-index-all-title">Все модели по маркам</h2>
           {MODELS_INDEX_BRANDS.filter((name) => name !== MODELS_INDEX_ALL_BRANDS).map((name) => (
             <div className="catalog-landing-links" key={name}>
@@ -1134,7 +1134,7 @@ function ModelsIndexPage({ navigate }) {
               </div>
             </div>
           ))}
-        </section>
+        </CatalogInfo>
       </div>
       </div>
       <ModelPagePromo navigate={navigate} />
@@ -1176,7 +1176,7 @@ function ModelLandingNotes({ landing, page, navigate }) {
   const faq = modelFaq({ name, facts, review: text ? { faq: text.faq } : null });
   const sections = text?.sections || [];
   return (
-    <section className="catalog-landing-notes catalog-landing-article model-landing-notes" aria-labelledby="model-landing-notes-title">
+    <CatalogInfo className="catalog-landing-article model-landing-notes" aria-labelledby="model-landing-notes-title">
       <div className="model-page-article">
         <div className="model-page-intro model-page-summary">
           <h2 id="model-landing-notes-title">{name} в каталоге: что есть и почём</h2>
@@ -1240,7 +1240,7 @@ function ModelLandingNotes({ landing, page, navigate }) {
       )}
       <ModelPageWays model={landing} links={links} navigate={navigate} className="model-page-ways" />
       {text?.disclaimer && <p className="model-page-disclaimer">{text.disclaimer}</p>}
-    </section>
+    </CatalogInfo>
   );
 }
 
@@ -1838,6 +1838,17 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // Filters and sort come from the URL; history restores only the loaded list and scroll.
   // Без sort используем «Свежие и разные»; другие порядки хранятся в адресе.
   const [sort, setSort] = useState(urlSort);
+  const [showLoadingSkeletons, setShowLoadingSkeletons] = useState(false);
+  // Быстрый ответ меняет карточки сразу; заметное ожидание показываем через 200 мс.
+  // При смене отбора таймер отменяется, а уже видимые скелетоны остаются до ответа.
+  useEffect(() => {
+    if (!remoteLoading) {
+      setShowLoadingSkeletons(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowLoadingSkeletons(true), 200);
+    return () => window.clearTimeout(timer);
+  }, [remoteLoading, filters, sort]);
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
@@ -2160,6 +2171,13 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     loadMore();
   }, [useApi, remoteLoading, remoteError, remoteHasMore, remoteCars.length]);
   const displayed = useApi ? remoteCars : filtered.slice(startOffset, startOffset + loadedLimit);
+  const showSkeletons = remoteLoading && showLoadingSkeletons;
+  const replacingResults = showSkeletons && !loadingMore.current;
+  const loadingSkeletons = view === "grid" ? (
+    <div className="featured-grid catalog-card-grid mobile-cards-grid" aria-hidden="true">
+      {skeletonCards.map((key) => <CardSkeleton key={key} />)}
+    </div>
+  ) : skeletonCards.map((key) => <CardSkeleton key={key} row />);
   const resultCount = useApi ? remoteTotal : filtered.length;
   // Until the first page answers there is no count yet, and "0" reads as an empty result.
   const knownResultCount = useApi && remoteTotal == null ? null : resultCount;
@@ -2298,7 +2316,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         </div>
       )}
       <div className="catalog-layout">
-        <section className="results-list" aria-busy={remoteLoading && !displayed.length ? "true" : undefined}>
+        <section className="results-list" aria-busy={remoteLoading ? "true" : undefined}>
           <div className="result-tools">
             <div className="result-summary">
               <b>{knownResultCount == null ? <span className="catalog-data-skeleton" role="status" aria-label="Загружаем количество автомобилей" /> : `${knownResultCount} шт.`}</b>
@@ -2318,7 +2336,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             </div>
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
-          {displayed.length ? (
+          {replacingResults ? loadingSkeletons : displayed.length ? (
             view === "grid" ? (
               <div className="featured-grid catalog-card-grid mobile-cards-grid">
                 {displayed.map((car, index) => (
@@ -2328,19 +2346,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             ) : (
               displayed.map((car, index) => <CarRow key={car.id} car={car} priority={index === 0} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
             )
-          ) : remoteLoading ? (
-            view === "grid" ? (
-              <div className="featured-grid catalog-card-grid mobile-cards-grid">
-                {skeletonCards.map((key) => <CardSkeleton key={key} />)}
-              </div>
-            ) : (
-              skeletonCards.map((key) => <CardSkeleton key={key} row />)
-            )
-          ) : (
-            <CustomSearchCta variant="empty" />
+          ) : remoteLoading ? null : (
+            <CustomSearchCta variant="empty" resetAction={
+              <EmptyCatalogReset filters={filters} cars={cars} useApi={useApi} onReset={() => updateFilters((old) => ({ ...emptyCatalogFilters(), brand: old.brand, model: old.model }))} />
+            } />
           )}
           {detailsError && <p className="catalog-message" role="status">Не удалось обновить данные фильтров или количество. <button type="button" className="text-button" onClick={() => detailsRetry.current?.()}>Повторить</button></p>}
-          {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
+          {showSkeletons && loadingMore.current && loadingSkeletons}
+          {showSkeletons && <span className="visually-hidden" role="status">Загружаем объявления…</span>}
           {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает
               и получает продолжение на месте, робот идёт по адресу. Номеров страниц
               нет (решение Сергея 25.09.2026): по цепочке «дальше» поисковик доходит до
@@ -2396,16 +2409,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             О сервисе
           </button>
         </aside>
-        {/* Текстовый блок стоит в той же колонке, что выдача: справа от него —
-            карточка сервиса, и правый край блока совпадает с правым краем выдачи. */}
-        {landing?.kind === "model" ? (
-          <ModelLandingNotes landing={landing} page={currentPage} navigate={navigate} />
-        ) : landing ? (
-          <CatalogLandingNotes landing={landing} navigate={navigate} total={knownResultCount} modelHrefFor={(model) => selectionHref({ ...filters, model: [model] })} />
-        ) : (
-          <CatalogSectionLinks navigate={navigate} />
-        )}
       </div>
+      {/* Информация занимает всю ширину под выдачей и её ограниченным сайдбаром. */}
+      {landing?.kind === "model" ? (
+        <ModelLandingNotes landing={landing} page={currentPage} navigate={navigate} />
+      ) : landing ? (
+        <CatalogLandingNotes landing={landing} navigate={navigate} total={knownResultCount} modelHrefFor={(model) => selectionHref({ ...filters, model: [model] })} />
+      ) : (
+        <CatalogSectionLinks navigate={navigate} />
+      )}
       <ScrollToTopButton />
       {Boolean(toast) && <Toast text={toast} onClose={() => setToast(null)} />}
       {quickViewModal}
@@ -2434,6 +2446,16 @@ function PriceBandLinks({ landing, navigate, heading = "По цене до Ми�
 /* Ссылки на разделы каталога под выдачей общего каталога. Раньше попасть в раздел можно
    было только с главной, где плитку марок рисует скрипт, — то есть для поисковика
    разделы были островом. Здесь те же ссылки видит и человек, и робот. */
+// Фон и ширина содержимого независимы: раздел может переопределить
+// --catalog-info-content-width, в том числе значением 100% для лендинга.
+function CatalogInfo({ children, className = "", ...props }) {
+  return (
+    <section {...props} className={`catalog-landing-notes ${className}`.trim()}>
+      <div className="catalog-info-content">{children}</div>
+    </section>
+  );
+}
+
 function CatalogSectionLinks({ navigate }) {
   // Марки, типы двигателя и кузова отсюда убраны 25.09.2026: они ссылками стоят в самом
   // фильтре над выдачей (optionHrefs в FilterPanel). Здесь остаётся то, чего фильтр
@@ -2454,7 +2476,7 @@ function CatalogSectionLinks({ navigate }) {
     </div>
   );
   return (
-    <section className="catalog-landing-notes" aria-labelledby="catalog-sections-title">
+    <CatalogInfo aria-labelledby="catalog-sections-title">
       <h2 id="catalog-sections-title">Автомобили {siteFromPhrase()} по цене и кузову</h2>
       <div className="catalog-landing-links">
         <b>По цене до Минска</b>
@@ -2469,7 +2491,7 @@ function CatalogSectionLinks({ navigate }) {
           </div>
         ))}
       </details>
-    </section>
+    </CatalogInfo>
   );
 }
 
@@ -2507,7 +2529,7 @@ function CatalogLandingNotes({ landing, navigate, total = null, modelHrefFor }) 
     <BrandCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} modelHrefFor={modelHrefFor} />
   );
   return (
-    <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
+    <CatalogInfo className="catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
       <h2 id="catalog-landing-notes-title">{landing.kind === "origin" ? landing.name : `${landing.name} ${siteFromPhrase()}`}: что важно знать</h2>
       {landing.notes.map((text) => (
         <p key={text.slice(0, 40)}>{text}</p>
@@ -2524,7 +2546,7 @@ function CatalogLandingNotes({ landing, navigate, total = null, modelHrefFor }) 
       )}
       <PriceBandLinks landing={landing} navigate={navigate} />
       <CatalogLandingFaq landing={landing} total={total} navigate={navigate} />
-    </section>
+    </CatalogInfo>
   );
 }
 
@@ -2555,7 +2577,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total, modelH
   const modelHref = (model) => modelHrefFor ? modelHrefFor(model) : modelLandingPath(landing.brand, model) || `${landing.path}?model=${encodeURIComponent(model)}`;
   const alternatives = config.alternatives.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
   return (
-    <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
+    <CatalogInfo className="catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
       <h2 id="catalog-landing-notes-title">{brand} {siteFromPhrase()}: цены и выбор по данным каталога</h2>
       <p>{config.intro}</p>
       {!complete ? (
@@ -2669,7 +2691,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total, modelH
         </section>
       )}
       <CatalogLandingFaq landing={landing} total={complete ? guide.total : total} guide={guide} navigate={navigate} />
-    </section>
+    </CatalogInfo>
   );
 }
 
@@ -3706,7 +3728,35 @@ function PriceLabel({ label, description }) {
   );
 }
 
-function CustomSearchCta({ variant, navigate }) {
+function EmptyCatalogReset({ filters, cars, useApi, onReset }) {
+  const models = multiValues(filters.model, ANY_MODEL);
+  const query = new URLSearchParams({ summary: "only" });
+  if (filters.brand !== "Все марки") query.set("brand", filters.brand);
+  models.forEach((model) => query.append("model", model));
+  const countQuery = query.toString();
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    if (!useApi) return;
+    const controller = new AbortController();
+    fetchCarsJson(`/api/cars?${countQuery}`, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted && Number.isFinite(value.total)) setResult({ query: countQuery, total: value.total });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [useApi, countQuery]);
+  const total = useApi
+    ? (result?.query === countQuery ? result.total : null)
+    : cars.filter((car) => (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL)).length;
+  return (
+    <div className="empty-catalog-reset">
+      <button type="button" className="secondary" onClick={onReset}>Сбросить фильтры</button>
+      <p aria-live="polite">{total == null ? "" : `После сброса будет показано ${guideNumber(total)} ${guidePlural(total, "автомобиль", "автомобиля", "автомобилей")}.`}</p>
+    </div>
+  );
+}
+
+function CustomSearchCta({ variant, navigate, resetAction }) {
   const isEmpty = variant === "empty";
   return (
     <section className={`custom-search-cta ${isEmpty ? "is-empty" : "is-end"}`} aria-labelledby={`custom-search-${variant}-title`}>
@@ -3717,6 +3767,7 @@ function CustomSearchCta({ variant, navigate }) {
         <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Объявления не найдены" : "Не нашли подходящий автомобиль?"}</h2>
         <p>{isEmpty ? "По данным фильтрам ни одного объявления не найдено. Попробуйте изменить параметры фильтра." : "Напишите, что ищете — подберём подходящий вариант."}</p>
       </div>
+      {isEmpty && resetAction}
       {!isEmpty && (
         <AppLink className="primary" href="/contacts" navigate={navigate}>
           Свяжитесь с нами <ArrowRight size={18} />
