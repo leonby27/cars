@@ -57,7 +57,9 @@ test('changed units trigger one reload for all timers',()=>{
  const d=deploy({unitsChanged:true});try{
   assert.equal(d.result.status,0,d.result.stderr);
   assert.equal((d.calls.match(/systemctl daemon-reload/g)||[]).length,1);
-  assert.equal((d.calls.match(/install /g)||[]).length,10);
+  assert.equal((d.calls.match(/install /g)||[]).length,12);
+  assert.match(d.calls,/install -m644 deploy\/abcars-social-week\.service/);
+  assert.match(d.calls,/install -m644 deploy\/abcars-social-week\.timer/);
  }finally{d.cleanup();}
 });
 test('concurrent deployment is rejected before build or service mutations',()=>{
