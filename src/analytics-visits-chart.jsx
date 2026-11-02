@@ -1,4 +1,5 @@
 import { visitsChart } from "./analytics-chart.js";
+import { useEffect, useRef, useState } from "react";
 
 const dateLabel = day => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "Europe/Minsk" }).format(new Date(day));
 // К дате везде добавляется день недели: по будням и выходным заходы ведут себя
@@ -13,8 +14,15 @@ const METRICS = {
 };
 
 export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits" }) {
+  const plotRef = useRef(null);
+  const [height, setHeight] = useState(270);
+  useEffect(() => {
+    const observer = new ResizeObserver(([entry]) => setHeight(entry.contentRect.height));
+    observer.observe(plotRef.current);
+    return () => observer.disconnect();
+  }, []);
   const labels = METRICS[metric] || METRICS.visits;
-  const { points, ticks, single } = visitsChart(daily, period, now, metric);
+  const { points, ticks, single } = visitsChart(daily, period, now, metric, height);
   const completedPoints = points.filter(point => !point.isToday);
   const todayIndex = points.findIndex(point => point.isToday);
   const todaySegment = todayIndex > 0 ? points.slice(todayIndex - 1, todayIndex + 1) : [];
@@ -34,7 +42,7 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
     <div className="analytics-chart-axis-title">{labels.axis}</div>
     <div className="analytics-chart-body">
       <div className="analytics-chart-axis" aria-hidden="true">{ticks.map(tick => <span key={tick.value} style={{ top: `${tick.y}%` }}>{tick.value}</span>)}</div>
-      <div className="analytics-chart-plot">
+      <div className="analytics-chart-plot" ref={plotRef}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {ticks.map(tick => <line key={tick.value} className="analytics-chart-grid" x1="0" x2="100" y1={tick.y} y2={tick.y} />)}
           <polyline className="analytics-chart-line analytics-chart-visitors" points={completedPoints.map(point => `${point.x},${point.y}`).join(" ")} />

@@ -1,7 +1,7 @@
 // График рисует либо заходы, либо просмотры страниц. Линии источников (Яндекс,
 // Google, ChatGPT) относятся только к заходам: у просмотра нет своего источника — он достаётся
 // ему от захода, внутри которого случился.
-export function visitsChart(daily, period, now = new Date(), metric = "visits") {
+export function visitsChart(daily, period, now = new Date(), metric = "visits", height = 270) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Minsk", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now));
   const dayNumber = value => Math.floor(Date.parse(String(value).slice(0, 10)) / 86400000);
   const end = dayNumber(today) - (period === "yesterday" ? 1 : 0);
@@ -44,6 +44,10 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
       selected: dayNumber(item.day) >= end - count + 1 && dayNumber(item.day) <= end,
     };
   });
-  const ticks = Array.from({ length: Math.round(ceiling / step) + 1 }, (_, i) => ({ value: i * step, y: 90 - i * step / ceiling * 80 }));
+  // Уплотняем только сетку: масштаб и положение точек при растягивании не меняются.
+  const plotHeight = Number.isFinite(height) && height > 0 ? height : 270;
+  const divisions = [1, 2, 5, 10].filter(part => Number.isInteger(step / part) && step / part >= 1 && plotHeight * .8 / (ceiling / step * part) >= 42);
+  const tickStep = step / (divisions.at(-1) || 1);
+  const ticks = Array.from({ length: Math.round(ceiling / tickStep) + 1 }, (_, i) => ({ value: i * tickStep, y: 90 - i * tickStep / ceiling * 80 }));
   return { points, ticks, single };
 }

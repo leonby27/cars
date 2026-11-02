@@ -4,6 +4,23 @@ import { visitsChart } from "../src/analytics-chart.js";
 
 const daily = Array.from({ length: 100 }, (_, i) => ({ day: new Date(Date.UTC(2026, 5, 1 + i)).toISOString().slice(0,10), visits: i }));
 const now = "2026-09-08T12:00:00Z";
+test("высокий график добавляет целые деления без изменения масштаба и точек", () => {
+  for (const metric of ["visits", "views"]) {
+    const days = [{ day:"2026-09-08", visits:124, views:124 }];
+    const normal = visitsChart(days, "7", now, metric, 270);
+    const tall = visitsChart(days, "7", now, metric, 540);
+    assert.deepEqual(normal.ticks.map(tick => tick.value), [0, 50, 100, 150]);
+    assert.deepEqual(tall.ticks.map(tick => tick.value), [0, 25, 50, 75, 100, 125, 150]);
+    assert.deepEqual(tall.points, normal.points);
+    assert.equal(tall.ticks.at(-1).y, normal.ticks.at(-1).y);
+  }
+  for (const count of [0, 1, 3, 19, 103, 999]) {
+    const chart = visitsChart([{day:"2026-09-08", visits:count}], "7", now, "visits", 900);
+    assert.ok(chart.ticks.every(tick => Number.isInteger(tick.value)));
+    assert.ok(chart.ticks.every((tick, index) => !index || tick.value > chart.ticks[index - 1].value));
+    assert.ok(chart.ticks.length <= 19);
+  }
+});
 test("подсветка последних 7/30/90 дней не меняет диапазон самого графика", () => {
   for (const count of [7,30,90]) {
     const chart = visitsChart(daily, String(count), now);
