@@ -56,7 +56,7 @@ test("в переключателе заходов только источник
   assert.match(source, /const BUCKET_LABELS = \{ paid:"Реклама", returning:"Вернулись", rest:"Остальное" \}/);
   // Пустые источники в переключателе не показываем, а при единственном источнике
   // переключателя нет вовсе: выбирать не из чего.
-  assert.match(source, /count > 0 \|\| \(key\.endsWith\("-ai"\)/);
+  assert.match(source, /\.filter\(\(\[, , count\]\) => count > 0\)/);
   assert.match(source, /present\.length > 1 \? \[\["all", "Все", visits\.length\], \.\.\.present\] : \[\]/);
   // Число стоит на самой кнопке.
   assert.match(source, /\{label\}<b>\{formatNumber\(count\)\}<\/b>/);
