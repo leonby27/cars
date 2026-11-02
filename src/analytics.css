@@ -531,7 +531,15 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
 
 .analytics-search-tables { display: grid; gap: 16px; }
 
-.analytics-trend { --chart-chatgpt:#0e8f6f; --analytics-chart-height:270px; }
+.analytics-trend { position:relative; --chart-chatgpt:#0e8f6f; --analytics-chart-height:270px; }
+.analytics-chart-resize { display:none; }
+@media (min-width:981px) {
+  .analytics-trend { --analytics-chart-height:var(--analytics-desktop-chart-height,270px); }
+  .analytics-trend.is-resizing { user-select:none; }
+  .analytics-chart-resize { position:absolute; right:3px; bottom:3px; display:grid; place-items:center; width:30px; height:30px; border-radius:6px; color:var(--muted); cursor:ns-resize; touch-action:none; }
+  .analytics-chart-resize:hover, .analytics-chart-resize:focus-visible, .analytics-trend.is-resizing .analytics-chart-resize { color:var(--accent); }
+  .analytics-chart-resize:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+}
 html[data-theme="dark"] .analytics-trend { --chart-chatgpt:#19c37d; }
 .analytics-line-chart { --chart-highlight:var(--ink); --chart-yandex:#b98500; --chart-google:#4285f4; }
 html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-yandex:#f4d90e; }

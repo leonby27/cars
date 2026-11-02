@@ -396,7 +396,58 @@ export function AnalyticsActivitySelect({ value, onChange }) {
   return <AnalyticsFilterSelect value={value} onChange={onChange} options={analyticsActivities} label="Активность посетителей" className="analytics-activity-select" />;
 }
 
-function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", storagePrefix = "analytics:trend", visitsOnly = false }) {
+const TREND_HEIGHT = { initial:270, min:180, max:900 };
+const boundedTrendHeight = (height) => Math.max(TREND_HEIGHT.min, Math.min(TREND_HEIGHT.max, Math.round(height)));
+
+function useTrendHeight(storageKey) {
+  const [height, setHeight] = useState(() => {
+    if (typeof window === "undefined") return TREND_HEIGHT.initial;
+    try {
+      const saved = Number(window.localStorage.getItem(storageKey));
+      return Number.isFinite(saved) && saved >= TREND_HEIGHT.min && saved <= TREND_HEIGHT.max ? Math.round(saved) : TREND_HEIGHT.initial;
+    } catch { return TREND_HEIGHT.initial; }
+  });
+  const [resizing, setResizing] = useState(false);
+  const drag = useRef(null);
+  useEffect(() => {
+    if (resizing) return;
+    try { window.localStorage.setItem(storageKey, String(height)); } catch { /* размер работает и без доступа к хранилищу */ }
+  }, [storageKey, height, resizing]);
+
+  const finishResize = (event) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
+    setResizing(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  return { height, resizing, handleProps:{
+    onPointerDown(event) {
+      if (event.button !== 0 || drag.current) return;
+      event.preventDefault();
+      event.currentTarget.focus({ preventScroll:true });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current = { pointerId:event.pointerId, y:event.clientY, height };
+      setResizing(true);
+    },
+    onPointerMove(event) {
+      const start = drag.current;
+      if (start?.pointerId === event.pointerId) setHeight(boundedTrendHeight(start.height + event.clientY - start.y));
+    },
+    onPointerUp:finishResize,
+    onPointerCancel:finishResize,
+    onLostPointerCapture:finishResize,
+    onKeyDown(event) {
+      const step = event.shiftKey ? 50 : 10;
+      const change = { ArrowUp:-step, ArrowDown:step }[event.key];
+      if (change === undefined && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      setHeight((current) => boundedTrendHeight(event.key === "Home" ? TREND_HEIGHT.min : event.key === "End" ? TREND_HEIGHT.max : current + change));
+    },
+  } };
+}
+
+export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", storagePrefix = "analytics:trend", visitsOnly = false }) {
+  const { height:chartHeight, resizing, handleProps } = useTrendHeight(`${storagePrefix}-height`);
   const [trendPeriod, setTrendPeriod] = usePersistedChoice(`${storagePrefix}-period`, trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
   const [trendLoading, setTrendLoading] = useState(true);
@@ -434,10 +485,9 @@ function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", ac
     return () => controller.abort();
   }, [trendPeriod, device, traffic, acquisition, activity, data.generatedAt]);
   return (
-      <section className="analytics-panel analytics-trend">
+      <section className={`analytics-panel analytics-trend${resizing ? " is-resizing" : ""}`} style={{ "--analytics-desktop-chart-height":`${chartHeight}px` }} aria-label="График посещений и просмотров">
         <div className="analytics-trend-heading">
           <div className="analytics-trend-title">
-            <h2>{visitsOnly ? "График посещений" : "График"}</h2>
             <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
           </div>
           {!visitsOnly && <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
@@ -452,6 +502,9 @@ function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", ac
           </div>}
         </div>
         {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+        <div className="analytics-chart-resize" role="separator" tabIndex={0} aria-label="Высота графика" aria-orientation="horizontal" aria-valuemin={TREND_HEIGHT.min} aria-valuemax={TREND_HEIGHT.max} aria-valuenow={chartHeight} aria-valuetext={`${chartHeight} пикселей`} title="Изменить высоту графика: потяните вверх или вниз" {...handleProps}>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m5 19 14-14M13 19l6-6" /></svg>
+        </div>
       </section>
   );
 }
