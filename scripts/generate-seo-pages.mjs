@@ -1066,7 +1066,7 @@ const toolSourceModified = ["src/tool-pages.js", "src/tool-page-texts.js", "src/
   .sort()
   .pop();
 const toolLastmod = (tool) =>
-  (tool.kind === "quota" ? isoDate(EV_QUOTA.reports.at(-1)?.[0]) : null) || isoDate(toolSourceModified);
+  (tool.kind === "quota" ? [isoDate(EV_QUOTA.reports.at(-1)?.[0]), TOOL_PAGE_TEXTS[tool.path]?.reviewedOn].filter(Boolean).sort().at(-1) : null) || isoDate(toolSourceModified);
 
 for (const page of publicPages) {
   // Хлебные крошки: у материала журнала и у страницы расчёта их три ступени —
@@ -1576,9 +1576,7 @@ writeFileSync(path.join(clientDir, "robots.txt"), robots);
 // какое число цифры. Без них модель берёт числа из своей памяти, а память у неё
 // годовой давности: там квота ещё действует и пошлины у электромобиля нет.
 //
-// Файл собирается вместе с сайтом, поэтому цифры в нём те же, что в каталоге, и
-// устареть отдельно от сайта не могут. Ничего, чего нет на самих страницах, здесь
-// не появляется: это оглавление к фактам, а не второй источник правды.
+// Снимок при сборке; живой каталог может измениться до следующей пересборки.
 const llmsFull = () => {
   const quota = evQuotaState({ audience: "personal" });
   const stock = (path) => live.stock.get(path) || 0;
@@ -1599,11 +1597,11 @@ const llmsFull = () => {
     "платежи, утилизационный сбор, подбор и сопровождение. Ввоз организуют компании-импортёры, с которыми",
     "работает сервис. Сайт на русском языке.",
     "",
-    `Файл собран ${day(new Date().toISOString())}. Цифры пересобираются вместе с сайтом каждую ночь.`,
+    `Снимок собран ${day(new Date().toISOString())}. Цифры относятся к этому снимку; наличие и цены в веб-каталоге могут измениться позднее.`,
     "",
     "## Каталог",
     "",
-    line("Активных объявлений", live.activeCars ? number(live.activeCars) : null),
+    line("Активных объявлений в снимке", live.activeCars ? number(live.activeCars) : null),
     line("Каталог последний раз проверялся", day(live.catalogRefreshedAt)),
     line("Электромобили", stock("/catalog/electric") ? number(stock("/catalog/electric")) : null),
     line("Гибриды", stock("/catalog/hybrid") ? number(stock("/catalog/hybrid")) : null),
@@ -1634,7 +1632,7 @@ const llmsFull = () => {
     "",
     "## Доставка",
     "",
-    "- Обычный срок от подписания договора до Минска — 30–55 дней.",
+    "- Обычный срок от подписания договора до Минска: из Китая — 30–55 дней, из Кореи — 40–65 дней.",
     "- Этапы: выкуп у продавца, экспортные документы, доставка до границы, таможенное оформление, путь до Минска.",
     "- Стоимость доставки зависит от страны и города отправления; разбор по этапам есть на странице стоимости доставки.",
     "",

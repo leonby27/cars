@@ -151,6 +151,7 @@ test("дата обновления не бывает раньше дня вып
   assert.equal(label(post, "2026-09-14T03:00:00Z"), "14 сентября 2026");
   assert.equal(label(post, null), "27 августа 2026");
   assert.equal(label(post, "не дата"), "27 августа 2026");
+  assert.equal(label({ ...post, reviewedOn:"2026-11-02" }, "2026-10-29T00:00:00Z"), "2 ноября 2026");
   assert.equal(label({}, null), null);
 });
 

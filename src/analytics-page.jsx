@@ -12,6 +12,7 @@ import { CalendarBlank, CarProfile, ChartLineUp, ChatCircleText, Desktop, Device
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
+import { analyticsAiSource, ANALYTICS_AI_SOURCE_NOTE } from "./analytics-ai-source.js";
 import { quotaVisitSplit } from "./analytics-quota-pages.js";
 import { analyticsUpdatesUrl, clearAnalyticsUpdates, navigationViewedSections, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
@@ -405,9 +406,11 @@ function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", ac
   const trendMetric = visitsOnly ? "visits" : selectedMetric;
   const [showYandex, setShowYandex] = usePersistedChoice(`${storagePrefix}-yandex`, ["0", "1"], "0");
   const [showGoogle, setShowGoogle] = usePersistedChoice(`${storagePrefix}-google`, ["0", "1"], "0");
+  const [showYandexAi, setShowYandexAi] = usePersistedChoice(`${storagePrefix}-yandex-ai`, ["0", "1"], "0");
+  const [showGoogleAi, setShowGoogleAi] = usePersistedChoice(`${storagePrefix}-google-ai`, ["0", "1"], "0");
   const [showChatgpt, setShowChatgpt] = usePersistedChoice(`${storagePrefix}-chatgpt`, ["0", "1"], "0");
   const daily = trendData?.daily || [];
-  const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
+  const enabledSources = [showYandex === "1" ? "yandex" : "", showYandexAi === "1" ? "yandex_ai" : "", showGoogle === "1" ? "google" : "", showGoogleAi === "1" ? "google_ai" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
   // Кроме смены периода график перезапрашивается и на каждом круге самообновления
   // страницы: `generatedAt` у свежего среза другой. Пока летит новый ответ, на экране
   // остаётся прежний график — мигания нет.
@@ -442,7 +445,9 @@ function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", ac
           </div>}
           {trendMetric === "visits" && <div className="analytics-trend-controls">
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
+              <label className="analytics-chart-source-toggle is-yandex_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
+              <label className="analytics-chart-source-toggle is-google_ai" title={ANALYTICS_AI_SOURCE_NOTE}><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>
               <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
           </div>}
         </div>
@@ -489,7 +494,9 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
 const SOURCE_RULES = [
   ["rsya", "РСЯ", /^(rsya|rsy|yan|рся)$/],
   ["yandex-direct", "Яндекс.Директ", /^(yandex-direct|yandex_direct)$/],
+  ["yandex-ai", "Яндекс AI", /^yandex-ai$/],
   ["yandex", "Яндекс", /(^|\.)yandex\.|^ya\.ru$/],
+  ["google-ai", "Google AI", /^google-ai$/],
   ["google", "Google", /(^|\.)google\./],
   // ChatGPT приходит либо реферером chatgpt.com, либо меткой utm_source в адресе —
   // её подставляет сам чат-бот, и она же попадает в источник захода.
@@ -515,6 +522,8 @@ const visitSourceKey = (value, landingPath = "") => {
   const advertising = analyticsAdvertisingSource(landingPath);
   if (advertising) return advertising;
   if (value === "rsya") return "rsya";
+  const ai = analyticsAiSource(value, landingPath);
+  if (ai) return ai;
   if (hasYandexClickId(landingPath)) return "yandex";
   const source = String(value || "").toLowerCase();
   if (!source) return "unknown";
@@ -544,14 +553,15 @@ const CHATGPT_MARK = "m297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4
 export function VisitSource({ visit }) {
   const sourceKey = visitSourceKey(visit.source, visit.landingPath);
   const genericAdvertising = visitIsAdvertising(visit) && ["direct", "internal", "unknown"].includes(sourceKey);
-  const logo = sourceKey === "google" ? "G" : sourceKey === "yandex" ? "Я" : null;
+  const logoKey = sourceKey.replace(/-ai$/, "");
+  const logo = logoKey === "google" ? "G" : logoKey === "yandex" ? "Я" : null;
   return <span className="analytics-visit-source">
     {sourceKey === "chatgpt" && (
       <i className="analytics-source-logo is-chatgpt" aria-hidden="true">
         <svg viewBox="0 0 320 320" width="17" height="17" fill="currentColor"><path d={CHATGPT_MARK} /></svg>
       </i>
     )}
-    {logo && <i className={`analytics-source-logo is-${sourceKey}`} aria-hidden="true">{logo}</i>}
+    {logo && <i className={`analytics-source-logo is-${logoKey}`} aria-hidden="true">{logo}</i>}
     <span>{genericAdvertising ? "Реклама" : visitSourceLabel(visit.source, visit.landingPath)}</span>
   </span>;
 }
@@ -890,7 +900,7 @@ export function VisitCard({ visit, number, unread }) {
   </article>;
 }
 
-const NAMED_SOURCES = ["paid", "yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"];
+const NAMED_SOURCES = ["paid", "yandex", "yandex-ai", "google", "google-ai", "chatgpt", "threads", "instagram", "telegram", "returning"];
 const BUCKET_LABELS = { paid:"Реклама", returning:"Вернулись", rest:"Остальное" };
 
 export const visitBucket = (visit) => {
@@ -925,8 +935,8 @@ export function VisitsSection({ visits, total, unread }) {
   //
   // Порядок задан списком, а не числом заходов: иначе кнопки переставлялись бы местами
   // при каждой смене периода и нужную приходилось бы искать глазами заново. А вот
-  // пустые каналы не показываем совсем — ряд кнопок с нулями занимал всю ширину
-  // панели и не давал ничего, кроме шума.
+  // AI-вкладку сохраняем и при нуле, если есть обычные переходы этого поисковика:
+  // рядом пояснено, что это ноль распознанных, а не всех AI-переходов.
   //
   // «Вернулись» — прямые заходы людей, которые у нас уже были: набрали адрес или открыли
   // закладку. Это половина всех прямых заходов и самые глубокие сеансы; без отдельной
@@ -939,7 +949,7 @@ export function VisitsSection({ visits, total, unread }) {
     }
     const present = [...NAMED_SOURCES, "rest"]
       .map((key) => [key, BUCKET_LABELS[key] || sourceKeyLabel(key), counts.get(key) || 0])
-      .filter(([, , count]) => count > 0);
+      .filter(([key, , count]) => count > 0 || (key.endsWith("-ai") && counts.has(key.replace(/-ai$/, ""))));
     // Один-единственный источник — выбирать не из чего, «Все» и он же дадут одну и ту
     // же таблицу. Тогда переключателя не показываем вовсе.
     return present.length > 1 ? [["all", "Все", visits.length], ...present] : [];
@@ -967,6 +977,7 @@ export function VisitsSection({ visits, total, unread }) {
           <QuotaSplit visits={filteredVisits.map(({ visit }) => visit)} />
         </div>
       </div>
+      <p className="analytics-source-note">{ANALYTICS_AI_SOURCE_NOTE}</p>
       {mobile ? <div className="analytics-visit-cards">
         {filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitCard key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <p className="analytics-empty">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</p>}
       </div> : <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Страна</th><th>Просмотров</th><th>Дата</th></tr></thead>

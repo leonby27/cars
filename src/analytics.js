@@ -1,5 +1,6 @@
 import { isPartnerPath } from "./partner-model.js";
 import { analyticsAdvertisingSource } from "./analytics-acquisition.js";
+import { analyticsAiSource } from "./analytics-ai-source.js";
 import { hasAnalyticsAutomation, isKnownAnalyticsBotAgent } from "./analytics-bots.js";
 import { HUMAN_SIGNALS, isHumanInteraction } from "./analytics-interaction.js";
 import { normalizeLeadAttribution } from "./lead-attribution.js";
@@ -85,6 +86,8 @@ const utmSource = (landingPath = "") => {
 export const analyticsEntrySource = (referrer = "", ownHostname = "", landingPath = "") => {
   const advertising = analyticsAdvertisingSource(landingPath);
   if (advertising) return advertising;
+  const ai = analyticsAiSource(referrer, landingPath);
+  if (ai) return ai;
   // Яндекс добавляет ysclid к части органических переходов. Он надёжнее Referer,
   // который браузер или настройка приватности могут вовсе не прислать.
   if (hasYandexClickId(landingPath)) return "yandex.ru";

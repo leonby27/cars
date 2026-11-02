@@ -25,7 +25,9 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
   // Разбивка по поисковикам есть только у заходов: просмотр наследует источник захода.
   const sourceLines = metric === "visits" ? [
     { id:"yandex", y:"yandexY", label:"Яндекс", toNow:"yandexToNow" },
+    { id:"yandex_ai", y:"yandexAiY", label:"Яндекс AI", toNow:"yandexAiToNow" },
     { id:"google", y:"googleY", label:"Google", toNow:"googleToNow" },
+    { id:"google_ai", y:"googleAiY", label:"Google AI", toNow:"googleAiToNow" },
     { id:"chatgpt", y:"chatgptY", label:"ChatGPT" },
   ].filter((item) => sources.includes(item.id)) : [];
   return <div className="analytics-line-chart" aria-label={labels.chart}>

@@ -89,6 +89,8 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-chart-source-toggle { --source-color:var(--ink); min-height:34px; display:inline-flex; align-items:center; gap:7px; color:var(--muted); font-weight:700; cursor:pointer; white-space:nowrap; }
 .analytics-chart-source-toggle.is-yandex { --source-color:#b98500; }
 .analytics-chart-source-toggle.is-google { --source-color:#4285f4; }
+.analytics-chart-source-toggle.is-google_ai { --source-color:#8b5cf6; }
+.analytics-chart-source-toggle.is-yandex_ai { --source-color:#ef6b31; }
 /* ChatGPT — его фирменный зелёный; в тёмной теме светлее, как и жёлтый Яндекса. */
 .analytics-chart-source-toggle.is-chatgpt { --source-color:var(--chart-chatgpt); }
 .analytics-chart-source-toggle input { width:16px; height:16px; margin:0; accent-color:var(--source-color); cursor:pointer; }
@@ -545,6 +547,8 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-source { animation:analytics-chart-series-in .18s ease-out both; }
 .analytics-chart-source.is-yandex { stroke:var(--chart-yandex); }
 .analytics-chart-source.is-google { stroke:var(--chart-google); }
+.analytics-chart-source.is-google_ai { stroke:#8b5cf6; }
+.analytics-chart-source.is-yandex_ai { stroke:#ef6b31; }
 .analytics-chart-source.is-chatgpt { stroke:var(--chart-chatgpt); }
 .analytics-chart-point { position:absolute; width:24px; height:24px; min-width:0; min-height:0; margin:0; padding:0; display:grid; place-items:center; border:0; background:transparent; color:var(--accent); transform:translate(-50%,-50%); cursor:pointer; border-radius:50%; corner-shape:round; }
 .analytics-chart-point.is-highlighted { color:var(--chart-highlight); }
@@ -554,6 +558,8 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-source-point .analytics-chart-marker { width:8px; height:8px; }
 .analytics-chart-source-point.is-yandex { color:var(--chart-yandex); }
 .analytics-chart-source-point.is-google { color:var(--chart-google); }
+.analytics-chart-source-point.is-google_ai { color:#8b5cf6; }
+.analytics-chart-source-point.is-yandex_ai { color:#ef6b31; }
 .analytics-chart-source-point.is-chatgpt { color:var(--chart-chatgpt); }
 .analytics-chart-point:hover, .analytics-chart-point:focus-visible { z-index:3; }
 .analytics-chart-point:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
@@ -722,3 +728,4 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-partnership-card > a { justify-self:start; color:var(--ink); font-size:20px; font-weight:700; text-decoration:none; }
 .analytics-partnership-loading { min-height:160px; display:grid; place-items:center; }
 @media(max-width:620px) { .analytics-partnership-card { padding:16px; } .analytics-partnership-card time { margin-left:0; } }
+.analytics-source-note { margin: 0 0 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }

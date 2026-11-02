@@ -13,7 +13,7 @@ import { analyticsTrafficSource } from '../server/analytics-traffic.mjs';
 import { deploymentPlan } from '../scripts/lib/deploy-plan.mjs';
 
 test('платный срез и селект периода не требуют подготовки каталога и пересчёта цен', () => {
-  const plan = deploymentPlan(['src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics.js', 'src/analytics-page.jsx',
+  const plan = deploymentPlan(['src/analytics-acquisition.js', 'src/analytics-ai-source.js', 'src/analytics-activity.js', 'src/analytics.js', 'src/analytics-page.jsx',
     'src/analytics.css', 'server/analytics-traffic.mjs', 'server/analytics.mjs', 'server/handler.mjs', 'scripts/lib/deploy-impact.mjs']);
   assert.equal(plan.reuseCatalog, true);
   assert.equal(plan.reuseFeed, true);

@@ -197,16 +197,16 @@ http {{
             'Mozilla/5.0 PerplexityBot/1.0', address=f'127.0.0.{16+n%4}',
             host='a.test' if n%2 else 'b.test', url=crawl_paths[n%len(crawl_paths)],
         ) for n in range(12)]
-        assert collections.Counter(status for status, _ in perplexity_replies) == {200:3, 429:9}, perplexity_replies
-        assert Backend.calls-before == 3, 'Rejected Perplexity reads reached the backend'
+        assert collections.Counter(status for status, _ in perplexity_replies) == {200:5, 429:7}, perplexity_replies
+        assert Backend.calls-before == 5, 'Rejected Perplexity reads reached the backend'
         assert all(retry == '10' for status, retry in perplexity_replies if status == 429)
-        assert 'by zone "car_perplexity_v1"' in (path/'error.log').read_text(), 'Rejecting zone missing at production log threshold'
+        assert 'by zone "car_perplexity_v2"' in (path/'error.log').read_text(), 'Rejecting zone missing at production log threshold'
         for url in ['/photo/perplexity.jpg', '/assets/fixture.js', '/robots.txt', '/api/auth/me']:
             assert request('PerplexityBot/1.0', address='127.0.0.16', url=url)[0] == 200, url
         assert request('PerplexityBot/1.0', address='127.0.0.16', url='/api/cars', method='POST')[0] == 200
-        # 20/minute recovers one admission every three seconds, still shared
+        # 30/minute recovers one admission every two seconds, still shared
         # when both the source address and destination domain change.
-        time.sleep(3.15)
+        time.sleep(2.15)
         assert request('PerplexityBot/1.0', address='127.0.0.19', host='b.test', url='/catalog/petrol')[0] == 200
         assert request('PerplexityBot/1.0', address='127.0.0.18', host='a.test', url='/api/cars') == (429, '10')
 

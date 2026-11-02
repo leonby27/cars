@@ -10,7 +10,7 @@ const renderOnly = new Set([
   'src/search-dictionary.js',
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   // Traffic attribution and CRM request URLs never prepare catalog or prices.
-  'src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics-updates.js', 'src/analytics-plan.js',
+  'src/analytics-acquisition.js', 'src/analytics-ai-source.js', 'src/analytics-activity.js', 'src/analytics-updates.js', 'src/analytics-plan.js',
   'src/analytics-bots.js', 'src/analytics-interaction.js',
   'src/partner-model.js', 'src/lead-attribution.js', 'src/analytics-lead-people.js',
   'src/phone-mask.js', 'src/modal-viewport.js', 'src/auth-route.js',

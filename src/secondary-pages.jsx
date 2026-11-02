@@ -26,7 +26,7 @@ import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { seededRandom, varietyOrder } from "./car-variety.js";
 import { carAgeYears, customsPayment, estimateLandedCost, PRICING, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
-import { evQuotaState } from "./ev-quota.js";
+import { EV_QUOTA, evQuotaState } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES } from "./body-types.js";
 import { ANY_DRIVE, orderDrives } from "./drive-types.js";
@@ -256,7 +256,7 @@ function CrumbLink({ href, onOpen, children }) {
 const QUOTA_AUDIENCES = [["personal", "Физ. лица"], ["business", "Юр. лица"]];
 
 const quotaForecast = (quota) => quota.exhausted
-  ? `Квота исчерпана${quota.exhaustedOnLabel ? ` ${quota.exhaustedOnLabel}` : ""}. Льготное оформление по ставке 0% больше недоступно: при ввозе электромобиля применяется пошлина 15%. Остаток за выбранный месяц — историческое значение из официальной сводки, а не доступная квота на сегодня.`
+  ? `Квота исчерпана${quota.exhaustedOnLabel ? ` ${quota.exhaustedOnLabel} ${EV_QUOTA.year} года` : ""}. Льготное оформление по ставке 0% больше недоступно: при ввозе электромобиля применяется пошлина 15%. Остаток за выбранный месяц — историческое значение из официальной сводки, а не доступная квота на сегодня.`
   : quota.stale || quota.overdue
     ? "Сводка устарела — свежий остаток смотрите у таможни."
     : `Расход держится около ${number(quota.perWeek)} машин в неделю. При таком темпе квота закончится примерно ${quota.runsOutLabel}, а дальше к цене добавится пошлина 15%.`;
@@ -5405,7 +5405,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
               <Illustration src="/services/fast-convenient-car-rear.png" width="1254" height="1254" alt="Автомобиль с включёнными задними фонарями" loading="lazy" decoding="async" />
             </article>
             <article className="service-opportunity-card">
-              <strong>Еженедельно</strong>
+              <strong>Регулярно</strong>
               <p>Обновляем наличие и цены в каталоге</p>
               <button className="primary service-opportunity-cta" type="button" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
             </article>

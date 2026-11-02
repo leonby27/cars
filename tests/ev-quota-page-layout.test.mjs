@@ -109,8 +109,11 @@ test("SEO-текст квоты оставляет только основные
   ]);
   assert.equal(texts.faq.length, 4);
   assert.equal(texts.disclaimer, "");
-  assert.match(texts.sections[0].paragraphs.join(" "), /неподтверждённым отраслевым оценкам/);
-  assert.match(texts.sections[0].paragraphs.join(" "), /мнение участников рынка, а не решение ЕЭК/);
+  assert.match(texts.sections[0].paragraphs.join(" "), /2 ноября 2026/);
+  assert.doesNotMatch(JSON.stringify(texts), /80%/);
+  assert.match(texts.faq[0].a, /0 автомобилей/);
+  assert.match(texts.faq[0].a, /5 сентября 2026/);
+  assert.match(texts.sections[0].paragraphs.join(" "), /Предложения участников рынка не заменяют решение ЕЭК/);
   assert.doesNotMatch(texts.sections[0].paragraphs.join(" "), /privat-auto\.by/);
 });
 

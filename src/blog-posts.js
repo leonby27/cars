@@ -336,6 +336,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "ev-quota-2027",
+    reviewedOn: "2026-11-02",
     rubric: "law",
     kind: "article",
     name: "Квота на электромобили в 2027 году",
@@ -400,6 +401,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "mercedes-from-china",
+    reviewedOn: "2026-11-02",
     rubric: "articles",
     kind: "article",
     name: "Mercedes из Китая: чем отличается от европейского",
@@ -540,6 +542,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "util-fee",
+    reviewedOn: "2026-11-02",
     cover: { src: "/blog/util-fee", alt: "Автовоз с новыми машинами на трассе" },
     rubric: "law",
     kind: "article",
@@ -558,6 +561,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "denza-d9-vs-voyah-dream",
+    reviewedOn: "2026-11-02",
     rubric: "comparisons",
     kind: "duel",
     name: "Denza D9 или Voyah Dream: что выбрать",
@@ -621,6 +625,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "phev-hev-erev",
+    reviewedOn: "2026-11-02",
     rubric: "articles",
     kind: "article",
     name: "PHEV, HEV и EREV: три гибрида и разница в деньгах",
@@ -635,6 +640,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "volkswagen-from-china",
+    reviewedOn: "2026-11-02",
     rubric: "articles",
     kind: "article",
     name: "Volkswagen из Китая: какие модели там есть",
@@ -943,6 +949,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "electric-vs-petrol",
+    reviewedOn: "2026-11-02",
     cover: { src: "/blog/electric-vs-petrol", alt: "Заправка бензином и зарядка электромобиля рядом" },
     rubric: "articles",
     kind: "article",
@@ -1151,6 +1158,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "byd-han-vs-geely-preface",
+    reviewedOn: "2026-11-02",
     rubric: "comparisons",
     kind: "duel",
     name: "BYD Han или Geely Preface",
@@ -1216,6 +1224,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "china-or-korea",
+    reviewedOn: "2026-11-02",
     rubric: "articles",
     kind: "article",
     name: "Китайская машина или корейская",
@@ -1443,6 +1452,7 @@ const BY_BLOG_POSTS = Object.freeze([
 
   {
     slug: "bmw-x5-vs-li-auto-l9",
+    reviewedOn: "2026-11-02",
     rubric: "comparisons",
     kind: "duel",
     name: "BMW X5 или Li Auto L9",
@@ -2181,7 +2191,8 @@ export const blogPostDateSentence = (post, now = new Date()) => blogRelativeDate
 export const blogUpdatedAt = (post, catalogChangedAt = null) => {
   const published = post?.published ? new Date(`${post.published}T00:00:00Z`) : null;
   const changed = catalogChangedAt ? new Date(catalogChangedAt) : null;
-  const valid = [published, changed].filter((date) => date && !Number.isNaN(date.getTime()));
+  const reviewed = post?.reviewedOn ? new Date(`${post.reviewedOn}T00:00:00Z`) : null;
+  const valid = [published, changed, reviewed].filter((date) => date && !Number.isNaN(date.getTime()));
   if (!valid.length) return null;
   return new Date(Math.max(...valid.map((date) => date.getTime())));
 };

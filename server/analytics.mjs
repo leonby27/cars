@@ -4,7 +4,8 @@ import crypto from "node:crypto";
 import { analyticsActivityKind } from "../src/analytics-activity.js";
 import { isKnownAnalyticsBotAgent, isKnownAnalyticsBotHints } from "../src/analytics-bots.js";
 import { REVIEWED_AUTOMATION_SQL } from "./analytics-reviewed-automation.mjs";
-import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics-acquisition.js";
+import { analyticsAcquisition, analyticsAcquisitionKind, PAID_TAG_PATTERN, RSYA_TAG_PATTERN } from "../src/analytics-acquisition.js";
+import { GOOGLE_AI_SOURCE_PATTERN, YANDEX_AI_SOURCE_PATTERN } from "../src/analytics-ai-source.js";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
 import { countLeadPeople } from "./analytics-lead-people.mjs";
@@ -564,6 +565,11 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
   const secondOfDay = Math.floor(((now + MINSK_OFFSET_MS) % 86_400_000) / 1000);
   const result = await trafficDb.query(`WITH steps AS (
       SELECT ${MINSK_DAY} AS day, path, event_name, lower(coalesce(properties->>'entrySource','')) AS entry_source,
+        CASE
+          WHEN coalesce(properties->>'acquisition','') IN ('paid','rsya') OR path ~* '${PAID_TAG_PATTERN}' OR path ~* '${RSYA_TAG_PATTERN}' THEN ''
+          WHEN lower(coalesce(properties->>'entrySource','')) ~ '${GOOGLE_AI_SOURCE_PATTERN}' THEN 'google-ai'
+          WHEN lower(coalesce(properties->>'entrySource','')) ~ '${YANDEX_AI_SOURCE_PATTERN}' THEN 'yandex-ai'
+          ELSE '' END AS ai_source,
         extract(epoch FROM (created_at AT TIME ZONE 'Europe/Minsk')::time) AS second_of_day,
         created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
         lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
@@ -573,11 +579,13 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
     SELECT day::text AS day,
       count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits,
       count(*) FILTER (
-        WHERE (${VISIT_STARTS}) AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.')
+        WHERE (${VISIT_STARTS}) AND ai_source = '' AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.|^ya\\.ru$')
       )::int AS yandex,
       count(*) FILTER (
-        WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.'
+        WHERE (${VISIT_STARTS}) AND ai_source = '' AND path !~* '(^|[?&])ysclid=' AND entry_source ~ '(^|\\.)google\\.'
       )::int AS google,
+      count(*) FILTER (WHERE (${VISIT_STARTS}) AND ai_source = 'google-ai')::int AS google_ai,
+      count(*) FILTER (WHERE (${VISIT_STARTS}) AND ai_source = 'yandex-ai')::int AS yandex_ai,
       -- То же правило, что у подписи «ChatGPT» в таблице заходов: реферер chatgpt.com
       -- или метка utm_source=chatgpt, которую подставляет сам чат-бот.
       count(*) FILTER (
@@ -586,11 +594,13 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
       count(*) FILTER (WHERE event_name = 'page_view')::int AS views,
       count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
       count(*) FILTER (
-        WHERE (${VISIT_STARTS}) AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.') AND second_of_day < $3
+        WHERE (${VISIT_STARTS}) AND ai_source = '' AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.|^ya\\.ru$') AND second_of_day < $3
       )::int AS yandex_to_now,
       count(*) FILTER (
-        WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.' AND second_of_day < $3
+        WHERE (${VISIT_STARTS}) AND ai_source = '' AND path !~* '(^|[?&])ysclid=' AND entry_source ~ '(^|\\.)google\\.' AND second_of_day < $3
       )::int AS google_to_now,
+      count(*) FILTER (WHERE (${VISIT_STARTS}) AND ai_source = 'google-ai' AND second_of_day < $3)::int AS google_ai_to_now,
+      count(*) FILTER (WHERE (${VISIT_STARTS}) AND ai_source = 'yandex-ai' AND second_of_day < $3)::int AS yandex_ai_to_now,
       count(*) FILTER (WHERE event_name = 'page_view' AND second_of_day < $3)::int AS views_to_now
     FROM steps
     GROUP BY day ORDER BY day`, [from, to, secondOfDay]);

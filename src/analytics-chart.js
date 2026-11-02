@@ -7,7 +7,7 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
   const end = dayNumber(today) - (period === "yesterday" ? 1 : 0);
   const single = period === "today" || period === "yesterday";
   const count = single ? 1 : Number(period) || 7;
-  const scaled = metric === "views" ? ["views"] : ["visits", "yandex", "google", "chatgpt"];
+  const scaled = metric === "views" ? ["views"] : ["visits", "yandex", "yandex_ai", "google", "google_ai", "chatgpt"];
   const max = Math.max(1, ...daily.flatMap(item => scaled.map(key => Number(item[key]) || 0)));
   const rough = max / 4;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
@@ -18,22 +18,28 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
     const visits = Number(item.visits) || 0;
     const yandex = Number(item.yandex) || 0;
     const google = Number(item.google) || 0;
+    const yandex_ai = Number(item.yandex_ai) || 0;
+    const google_ai = Number(item.google_ai) || 0;
     const chatgpt = Number(item.chatgpt) || 0;
     const views = Number(item.views) || 0;
     // «В это время» показываем только у прошедших дней: у сегодняшнего оно совпадает
     // с итогом дня, и строка в подсказке была бы пустой по смыслу.
     const sameTimeValue = key => item.day === today || item[key] == null || !Number.isFinite(Number(item[key])) ? null : Number(item[key]);
     return {
-      ...item, visits, yandex, google, chatgpt, views,
+      ...item, visits, yandex, yandex_ai, google, google_ai, chatgpt, views,
       isToday: item.day === today,
       value: metric === "views" ? views : visits,
       valueToNow: sameTimeValue(metric === "views" ? "views_to_now" : "visits_to_now"),
       yandexToNow: sameTimeValue("yandex_to_now"),
       googleToNow: sameTimeValue("google_to_now"),
+      yandexAiToNow: sameTimeValue("yandex_ai_to_now"),
+      googleAiToNow: sameTimeValue("google_ai_to_now"),
       x: daily.length > 1 ? index / (daily.length - 1) * 100 : 50,
       y:chartY(metric === "views" ? views : visits),
       yandexY:chartY(yandex),
       googleY:chartY(google),
+      yandexAiY:chartY(yandex_ai),
+      googleAiY:chartY(google_ai),
       chatgptY:chartY(chatgpt),
       selected: dayNumber(item.day) >= end - count + 1 && dayNumber(item.day) <= end,
     };
