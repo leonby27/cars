@@ -37,6 +37,11 @@ const overlap = (topic, title) => {
  * лучше признаться, что материал не найден, чем подставить чужой.
  */
 export function findPostByTopic(topic) {
+  // У этой темы заголовок статьи изменился: совпадение слов выбирает соседнюю
+  // статью про квоту следующего года и теряет прежнюю обложку в расписании.
+  if (topic === "Что будет, когда квота на электромобили кончится") {
+    return blogAllPosts().find((post) => post.slug === "ev-quota-end") || null;
+  }
   let best = null;
   let score = 0;
   for (const post of blogAllPosts()) {
