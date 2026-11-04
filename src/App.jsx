@@ -604,8 +604,15 @@ function useRoute(user) {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+  useLayoutEffect(() => {
+    if (route.resetScrollOnCommit || route.restoreY === 0) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [route.key, route.resetScrollOnCommit, route.restoreY]);
+
   useEffect(() => {
-    if (route.restoreY === null) return;
+    // The top of the page is exact. A card anchor can drift when the catalog reloads.
+    if (route.restoreY === null || route.restoreY === 0) return;
     const { restoreY: target, restoreAnchor, restoreOffset } = route;
     const deadline = Date.now() + 4000;
     let timer = null;
@@ -740,14 +747,18 @@ function useRoute(user) {
     // Mark only the committed navigation, after the metadata wait. Background
     // renders while waiting must not consume a filter transition.
     catalogFilterMoveTarget = preserveCatalog ? catalogLocationKey(targetPath, target.search) : null;
+    const resetScroll = !keepScrollPosition && !catalogState;
+    // Keep the departing catalog at its current offset until the detail route is in the DOM.
+    const resetScrollOnCommit = resetScroll && isCatalogPath(currentPath) && targetPath.startsWith("/cars/");
     setRoute((current) => ({
       path: targetPath,
       restoreY: catalogState ? Number(catalogState.scrollY) || 0 : null,
+      resetScrollOnCommit,
       restoreAnchor: catalogState?.scrollAnchor || null,
       restoreOffset: Number(catalogState?.scrollAnchorOffset) || 0,
       key: current.key + 1,
     }));
-    if (!keepScrollPosition && !catalogState) window.scrollTo({ top: 0, behavior: "instant" });
+    if (resetScroll && !resetScrollOnCommit) window.scrollTo({ top: 0, behavior: "instant" });
   };
   // Шаг назад по истории отдаёт и фильтры, и позицию карточки. Если в каталог
   // пришли не оттуда (прямая ссылка, переход через похожую машину), поднимаем
@@ -1424,6 +1435,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   const setCurrency = useSetCurrency();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(() => typeof window !== "undefined" && window.scrollY > 0);
+  const [pastCatalogBackdrop, setPastCatalogBackdrop] = useState(false);
   const menuRef = useRef(null);
   const menuPanelRef = useRef(null);
   const menuTriggerRef = useRef(null);
@@ -1444,11 +1456,26 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   }, [path]);
 
   useEffect(() => {
-    const update = () => setScrolled(window.scrollY > 0);
-    update();
+    let backdropHeight = 0;
+    const update = () => {
+      setScrolled(window.scrollY > 0);
+      setPastCatalogBackdrop(backdropHeight > 0 && window.scrollY >= backdropHeight);
+    };
+    const measure = () => {
+      const shell = headerRef.current?.closest(".app-content");
+      backdropHeight = shell?.querySelector(":scope > .catalog-with-backdrop")
+        ? parseFloat(getComputedStyle(shell, "::before").height) || 0
+        : 0;
+      update();
+    };
+    measure();
+    window.addEventListener("resize", measure);
     window.addEventListener("scroll", update, { passive:true });
-    return () => window.removeEventListener("scroll", update);
-  }, []);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", update);
+    };
+  }, [path]);
 
   // Пока меню раскрыто, плавающие кнопки внизу экрана убираем — иначе на
   // телефоне они накрывают его нижние пункты.
@@ -1584,7 +1611,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   );
 
   return (
-    <header className={`site-header site-header-mobile-layout${partnerMode ? " partner-header" : ""}${scrolled ? " is-scrolled" : ""}`}>
+    <header className={`site-header site-header-mobile-layout${partnerMode ? " partner-header" : ""}${scrolled ? " is-scrolled" : ""}${pastCatalogBackdrop ? " past-catalog-backdrop" : ""}`}>
       <div className="header-inner" ref={headerRef}>
         {onBack && <button type="button" className="header-menu-trigger header-back" aria-label="Назад" onClick={onBack}>
           <ArrowLeft size={24} weight="bold" aria-hidden="true" />
@@ -2423,9 +2450,11 @@ function VehicleSearch({ metaLoading = false, constrained = false, selectedType,
           {priceRange()}
         </div>
       )}
-      {!narrow && moreFiltersOpen && (
-        <div className="filter-extra-row desktop-filter-extra" id={extraFiltersId}>
-          {extraFilters()}
+      {!narrow && (
+        <div className="desktop-filter-extra" id={extraFiltersId} aria-hidden={!moreFiltersOpen} inert={!moreFiltersOpen}>
+          <div className="filter-extra-clip">
+            <div className="filter-extra-row">{extraFilters()}</div>
+          </div>
         </div>
       )}
       {/* Марки и модели — два шага одной шторки: меняется только её содержимое.

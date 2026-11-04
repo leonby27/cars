@@ -4,6 +4,7 @@
 :root {
   --site-content-width: 1360px;
   --site-wide-width: 1400px;
+  --catalog-breadcrumb-top: 38px;
   font-family:
     "Manrope",
     -apple-system,
@@ -172,8 +173,9 @@ button {
   color: inherit;
   cursor: pointer;
 }
-.page-width {
-  width: min(var(--site-content-width), calc(100% - 48px));
+.page-width,
+.header-inner {
+  width: min(var(--site-wide-width), calc(100% - 48px));
   margin-inline: auto;
 }
 .site-header {
@@ -186,9 +188,7 @@ button {
   backdrop-filter: none;
 }
 .header-inner {
-  width: min(var(--site-wide-width), calc(100% - 48px));
   height: 100%;
-  margin: auto;
   display: flex;
   align-items: center;
   gap: 42px;
@@ -1768,6 +1768,75 @@ html body #root .app-search-field.home-popular-search {
 }
 .catalog {
   padding-bottom: 80px;
+}
+@media (min-width: 701px) {
+  .app-content:has(> .catalog-with-backdrop) {
+    position: relative;
+    isolation: isolate;
+    --catalog-backdrop-height: 188px;
+  }
+  .app-content:has(> .catalog-with-backdrop)::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 0 auto;
+    height: calc(var(--catalog-backdrop-height) + var(--catalog-header-height) + var(--catalog-breadcrumb-top) - 14px);
+    pointer-events: none;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.34'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cpath fill='%23fff' d='M0 0h160v160H0z' filter='url(%23grain)'/%3E%3C/svg%3E"),
+      linear-gradient(170deg, #0b0a15 12%, #131a2e 52%, #302053);
+    background-blend-mode: soft-light;
+  }
+  :root[data-theme="dark"] .app-content:has(> .catalog-with-backdrop)::before {
+    mask-image: linear-gradient(#000 65%, transparent);
+  }
+  .catalog-with-backdrop:is([data-catalog-country="china"], [data-catalog-country="korea"])::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 73%;
+    translate: -50% 0;
+    width: min(51%, 690px);
+    height: 286px;
+    pointer-events: none;
+    background: var(--catalog-flag) center calc(var(--catalog-flag-y, 50%) + 30px) / cover no-repeat;
+    filter: blur(44px);
+    opacity: .19;
+    mask-image:
+      linear-gradient(90deg, transparent, #000 24%, #000 66%, transparent),
+      linear-gradient(180deg, rgb(0 0 0 / 48%), #000 39%, #000 64%, transparent);
+    mask-composite: intersect;
+  }
+  .catalog-with-backdrop[data-catalog-country="china"] {
+    --catalog-flag: url("/flags/china.svg");
+    --catalog-flag-y: 16%;
+  }
+  .catalog-with-backdrop[data-catalog-country="korea"] {
+    --catalog-flag: url("/flags/korea.svg");
+  }
+  :root[data-theme="dark"] .catalog-with-backdrop > .search-box {
+    box-shadow: 0 -18px 100px -10px rgb(3 2 8 / 65%), 0 18px 50px rgb(24 27 32 / 11%);
+  }
+  .catalog-with-backdrop > .breadcrumbs,
+  .catalog-with-backdrop > .breadcrumbs :is(a, button) {
+    color: #c4cbd7;
+  }
+  .catalog-with-backdrop .catalog-heading h1 {
+    color: #f5f7fb;
+  }
+  .catalog-with-backdrop .catalog-heading .heading-country-trigger {
+    color: #ff6575;
+  }
+  .catalog-with-backdrop .catalog-heading .heading-country-trigger:is(:hover, :focus-visible),
+  .catalog-with-backdrop .catalog-heading .heading-country-root.open .heading-country-trigger {
+    color: #ffa3ad;
+  }
+}
+@media (min-width: 701px) and (max-width: 980px) {
+  .app-content:has(> .catalog-with-backdrop) {
+    --catalog-backdrop-height: 217px;
+  }
 }
 .catalog-heading {
   display: flex;
@@ -5662,7 +5731,7 @@ html[data-theme="dark"] #root .load-more {
 @media (max-width: 700px) {
   .page-width,
   .header-inner {
-    width: min(100% - 28px, var(--site-content-width));
+    width: min(var(--site-wide-width), calc(100% - 28px));
   }
   .site-header {
     height: 58px;
@@ -9883,6 +9952,30 @@ html[data-theme="dark"] #root .spec-search,
 .filter-extra-row {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 8px;
+}
+.desktop-filter-extra {
+  --filter-reveal-duration: 280ms;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--filter-reveal-duration) var(--motion-ease);
+}
+.desktop-filter-extra[aria-hidden="false"] {
+  grid-template-rows: 1fr;
+}
+.filter-extra-clip {
+  display: flow-root;
+  min-height: 0;
+  overflow: clip;
+}
+.desktop-filter-extra[aria-hidden="false"] > .filter-extra-clip {
+  overflow: visible;
+  /* Let the dropdown menus extend beyond the row once it is fully open. */
+  transition: overflow 0s var(--filter-reveal-duration) allow-discrete;
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-filter-extra {
+    --filter-reveal-duration: 0ms;
+  }
 }
 /* Исключения из поиска («кроме 001»): отдельная строка фишек, каждую можно снять.
    Держатся фоном, без обводки — как остальные блоки. */
@@ -14195,7 +14288,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     max-height: calc(100dvh - 90px);
   }
   .header-inner {
-    width: min(var(--site-wide-width), calc(100% - 28px));
     gap: 8px;
   }
   .wordmark {
@@ -24614,19 +24706,30 @@ html body #root .market-compare-sort .select-trigger {
   margin-left: auto;
 }
 @media (min-width: 701px) {
-  /* Reserve the same 36px row with or without the vehicle action buttons. */
   .catalog > .breadcrumbs {
-    min-height: 75px; /* 23px top + 36px row + 16px bottom. */
-    line-height: 24px;
-    overflow-x: auto;
-    white-space: nowrap;
+    padding-block: 14px 8px;
   }
+  .catalog-with-backdrop > .breadcrumbs,
+  .detail-topbar {
+    padding-block: var(--catalog-breadcrumb-top) 8px;
+  }
+  .catalog-with-backdrop > .breadcrumbs,
   .detail-topbar > .breadcrumbs {
-    min-height: 36px;
+    font-size: 14px;
+  }
+  .catalog > .breadcrumbs,
+  .detail-topbar > .breadcrumbs {
     line-height: 24px;
     flex-wrap: nowrap;
     overflow-x: auto;
     white-space: nowrap;
+  }
+  .detail-topbar > .breadcrumbs {
+    align-self: flex-start;
+    min-height: 24px;
+  }
+  .detail > .detail-topbar > .detail-actions {
+    margin-block: -6px;
   }
   .catalog > .breadcrumbs > *,
   .detail-topbar > .breadcrumbs > * {
@@ -24845,6 +24948,13 @@ html[data-theme="dark"] :is(#root, body) .detail-header-price .price-dropdown {
     grid-template-rows: auto auto;
     row-gap: 5px;
     padding-top: 10px;
+  }
+  .detail > .detail-layout .detail-title {
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .detail > .detail-layout :is(.detail-title-line h1, .detail-header-price > .price-total > strong) {
+    line-height: 45px;
   }
   .detail-title:has(.detail-header-price) > div:first-child,
   .detail-title > .detail-header-price {
@@ -25576,6 +25686,69 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
 @media (prefers-reduced-motion: reduce) {
   .site-header::after {
     transition: none;
+  }
+}
+
+@media (min-width: 701px) {
+  .app-content:has(> .catalog-with-backdrop) {
+    --catalog-header-height: 78px;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header.past-catalog-backdrop {
+    background: var(--page);
+    animation: catalog-header-reveal 240ms var(--motion-ease);
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header::before {
+    display: none;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop) {
+    --header-trigger-bg: rgb(255 255 255 / 12%);
+    --header-trigger-hover-bg: rgb(255 255 255 / 20%);
+    position: relative;
+    background: transparent;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop) .wordmark-image-light {
+    display: none;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop) .wordmark-image-dark {
+    display: block;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop)
+    :is(.header-actions, .header-inner > .header-back, .header-menu-shell > .header-menu-trigger) {
+    --ink: #f5f7fb;
+    --muted: #c4cbd7;
+    --accent-dark: #ff7b82;
+    color: var(--ink);
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop)
+    .decree-pricing-button[aria-checked="false"] .decree-switch-track {
+    background: #737c89;
+  }
+  .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop)
+    .header-actions .header-currency-switch button.active {
+    background: #fff;
+    color: #cc102b;
+    box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
+  }
+  html[data-theme="light"] .app-content:has(> .catalog-with-backdrop)
+    .site-header .decree-pricing-button[aria-checked="false"] .decree-switch-track {
+    background: #737c89;
+  }
+  html[data-theme="light"] .app-content:has(> .catalog-with-backdrop)
+    .site-header .header-currency-switch button.active {
+    color: #cc102b;
+  }
+  :root[data-theme="dark"] .app-content:has(> .catalog-with-backdrop)
+    .site-header.past-catalog-backdrop .header-currency-switch button.active {
+    color: #ff8794;
+  }
+}
+@keyframes catalog-header-reveal {
+  from { translate: 0 -100%; }
+  to { translate: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-content:has(> .catalog-with-backdrop) > .site-header.past-catalog-backdrop {
+    animation: none;
   }
 }
 

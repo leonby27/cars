@@ -2267,7 +2267,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     </main>;
   }
   return (
-    <main className="catalog page-width">
+    <main className="catalog catalog-with-backdrop page-width" data-catalog-country={countryKey(filters.country) || undefined}>
       <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
