@@ -1,7 +1,7 @@
 import { homeDescription, vehicleDescription } from "./meta-descriptions.js";
 import { orderPageHead } from "./page-head-order.js";
 import { PasswordField } from "./password-field.jsx";
-import { secondaryPage } from "./secondary-page-load.jsx";
+import { loadSecondaryPages, secondaryPage } from "./secondary-page-load.jsx";
 
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
 import { Phone } from "@phosphor-icons/react";
@@ -677,15 +677,17 @@ function useRoute(user) {
   const navigationTurn = useRef(0);
   const navigate = useCallback((next, options = {}) => {
     const turn = ++navigationTurn.current;
-    const query = typeof next === "string" ? catalogMetaQueryForPath(next) : null;
-    if (options.preserveCatalog || query === null || resolvedCatalogMeta(query)) {
-      navigateNow(next, options);
-      return;
-    }
     const go = () => {
       if (navigationTurn.current === turn) navigateNow(next, options);
     };
-    requestCatalogMeta(query).catch(() => {});
+    const query = typeof next === "string" ? catalogMetaQueryForPath(next) : null;
+    if (!options.preserveCatalog && query !== null && !resolvedCatalogMeta(query)) {
+      requestCatalogMeta(query).catch(() => {});
+    }
+    const targetPath = typeof next === "string" ? new URL(next, window.location.origin).pathname : null;
+    if (targetPath && isCatalogPath(targetPath)) {
+      return loadSecondaryPages().then(go, go);
+    }
     go();
   }, [user]);
   const navigateNow = (next, { replace = false, preserveScroll = false, preserveCatalog = false, catalogState = null } = {}) => {
@@ -801,7 +803,10 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
     navigate(href);
   };
   // Ссылка в каталог: справочник раздела начинаем грузить уже при наведении.
-  const prefetch = String(href || "").startsWith("/catalog") ? () => prefetchCatalogMeta(href) : undefined;
+  const prefetch = String(href || "").startsWith("/catalog") ? () => {
+    prefetchCatalogMeta(href);
+    loadSecondaryPages().catch(() => {});
+  } : undefined;
   return <a href={appHref(href)} onClick={handleClick} onPointerEnter={prefetch} onTouchStart={prefetch} onFocus={prefetch} {...props}>{children}</a>;
 }
 
@@ -2638,6 +2643,23 @@ function VehicleSearch({ metaLoading = false, constrained = false, selectedType,
   );
 }
 
+function CatalogFiltersLink({ navigate }) {
+  const [pending, setPending] = useState(false);
+  const openCatalog = (href) => {
+    if (pending) return;
+    setPending(true);
+    Promise.resolve(navigate(href)).finally(() => setPending(false));
+  };
+  return (
+    <AppLink href="/catalog" navigate={openCatalog} className="hero-search-filters" aria-label="Открыть фильтры в каталоге" aria-busy={pending || undefined}>
+      {pending
+        ? <span className="catalog-link-spinner" aria-hidden="true" />
+        : <SlidersHorizontal size={21} weight="bold" />}
+      <span>Фильтры</span>
+    </AppLink>
+  );
+}
+
 function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [type, setType] = useState("Все");
   const [brand, setBrand] = useState("Все марки");
@@ -3227,10 +3249,7 @@ function HeroSearch({ value, onChange, navigate }) {
             <X size={18} weight="bold" />
           </button>
         ) : (
-          <AppLink href="/catalog" navigate={navigate} className="hero-search-filters" aria-label="Открыть фильтры в каталоге">
-            <SlidersHorizontal size={21} weight="bold" />
-            <span>Фильтры</span>
-          </AppLink>
+          <CatalogFiltersLink navigate={navigate} />
         )}
       </div>
     </div>

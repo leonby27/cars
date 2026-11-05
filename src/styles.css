@@ -469,6 +469,17 @@ a.wordmark {
   color: var(--page);
   transition: opacity var(--motion-fast) ease;
 }
+.hero-search-filters > .catalog-link-spinner {
+  display: block;
+  flex: 0 0 21px;
+  width: 21px;
+  height: 21px;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  corner-shape: round;
+  animation: app-loader-spin .7s linear infinite;
+}
 .hero-search-filters:hover {
   opacity: 0.82;
 }
@@ -1821,7 +1832,7 @@ html body #root .app-search-field.home-popular-search {
     pointer-events: none;
     background: var(--catalog-flag) center calc(var(--catalog-flag-y, 50%) + 30px) / cover no-repeat;
     filter: blur(60px);
-    opacity: .19;
+    opacity: .133;
     mask-image:
       linear-gradient(90deg, transparent, #000 24%, #000 66%, transparent),
       linear-gradient(180deg, rgb(0 0 0 / 48%), #000 39%, #000 64%, transparent);
@@ -24734,7 +24745,7 @@ html body #root .market-compare-sort .select-trigger {
     padding-block: 14px 8px;
   }
   .catalog-with-backdrop > .breadcrumbs,
-  .detail-topbar {
+  .detail > .detail-topbar {
     padding-block: var(--catalog-breadcrumb-top) 8px;
   }
   .catalog-with-backdrop > .breadcrumbs,
