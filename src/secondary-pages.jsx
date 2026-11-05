@@ -1356,7 +1356,7 @@ const emptyCatalogFilters = () => ({
   ...emptyExclusions(),
 });
 
-function FilterPanel({ filters, setFilters, metaLoading = false, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null, catalogHrefFor = savedSearchCatalogHref }) {
+function FilterPanel({ onSubmit, filters, setFilters, metaLoading = false, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null, catalogHrefFor = savedSearchCatalogHref }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   // Модель не сбрасываем: её выбирал посетитель, см. такой же changeType выше.
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, ...POWERTRAIN_FILTER_RESET }));
@@ -1417,6 +1417,7 @@ function FilterPanel({ filters, setFilters, metaLoading = false, resultCount, br
       resultCount={resultCount}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
+      onSubmit={onSubmit}
       onSaveSearch={onSaveSearch}
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
@@ -1856,6 +1857,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
+  const [submitFeedback, setSubmitFeedback] = useState(false);
+  const submitFeedbackTimer = useRef(null);
+  useEffect(() => () => window.clearTimeout(submitFeedbackTimer.current), []);
+  const showSubmitFeedback = () => {
+    window.clearTimeout(submitFeedbackTimer.current);
+    setSubmitFeedback(true);
+    submitFeedbackTimer.current = window.setTimeout(() => setSubmitFeedback(false), 1000);
+  };
   const [metaLoading, setMetaLoading] = useState(() => !bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)));
   const [detailsError, setDetailsError] = useState(false);
   const detailsRetry = useRef(null);
@@ -2196,7 +2205,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   }, [useApi, remoteLoading, remoteError, remoteHasMore, remoteCars.length]);
   const displayed = useApi ? remoteCars : filtered.slice(startOffset, startOffset + loadedLimit);
   const showSkeletons = remoteLoading && showLoadingSkeletons;
-  const replacingResults = showSkeletons && !loadingMore.current;
+  const replacingResults = submitFeedback || (showSkeletons && !loadingMore.current);
   const loadingSkeletons = view === "grid" ? (
     <div className="featured-grid catalog-card-grid mobile-cards-grid" aria-hidden="true">
       {skeletonCards.map((key) => <CardSkeleton key={key} />)}
@@ -2292,7 +2301,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           <CatalogHeading title={heading.title} tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} />
         </div>
       </div>
-      <FilterPanel metaLoading={metaLoading} filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
+      <FilterPanel onSubmit={showSubmitFeedback} metaLoading={metaLoading} filters={filters} setFilters={updateFilters} catalogHrefFor={selectionHref} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
       {metaLoading && filters.brand !== "Все марки" && <div className="model-quick-chips" role="status" aria-label="Загружаем модели"><span className="catalog-data-skeleton" /></div>}
       {!metaLoading && filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`} style={{
@@ -2340,7 +2349,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         </div>
       )}
       <div className="catalog-layout">
-        <section className="results-list" aria-busy={remoteLoading ? "true" : undefined}>
+        <section className="results-list" aria-busy={remoteLoading || submitFeedback ? "true" : undefined}>
           <div className="result-tools">
             <div className="result-summary">
               <b>{knownResultCount == null ? <span className="catalog-data-skeleton" role="status" aria-label="Загружаем количество автомобилей" /> : `${knownResultCount} шт.`}</b>
@@ -2377,7 +2386,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           )}
           {detailsError && <p className="catalog-message" role="status">Не удалось обновить данные фильтров или количество. <button type="button" className="text-button" onClick={() => detailsRetry.current?.()}>Повторить</button></p>}
           {showSkeletons && loadingMore.current && loadingSkeletons}
-          {showSkeletons && <span className="visually-hidden" role="status">Загружаем объявления…</span>}
+          {(showSkeletons || submitFeedback) && <span className="visually-hidden" role="status">Загружаем объявления…</span>}
 
           <div className="catalog-results-footer">
             {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает

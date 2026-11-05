@@ -2368,7 +2368,7 @@ function VehicleSearch({ metaLoading = false, constrained = false, selectedType,
   ].filter(Boolean);
   const sheetFooter = (
     <button type="button" className="primary sheet-submit" onClick={() => { setSheet(null); onSubmit?.(); }}>
-      {resultCount == null ? <>Показать <span className="catalog-data-skeleton" aria-label="Загружаем количество" /> авто</> : `Показать ${resultCount} авто`}
+      Показать авто
     </button>
   );
   const brandRows = options.brands.filter((item) => item !== "Все марки");
@@ -2630,7 +2630,7 @@ function VehicleSearch({ metaLoading = false, constrained = false, selectedType,
           )}
           <button type="button" className="primary search-submit" onClick={onSubmit}>
             <MagnifyingGlass size={20} weight="bold" />
-            {resultCount == null ? <>Показать <span className="catalog-data-skeleton" aria-label="Загружаем количество" /> авто</> : `Показать ${resultCount} авто`}
+            Показать авто
           </button>
         </div>
       )}

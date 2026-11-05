@@ -496,10 +496,10 @@ a.wordmark {
 /* В тёмной теме строка поиска светлее фона страницы, а подложка крестика
    очистки — ещё на шаг светлее, иначе они сливаются. */
 html[data-theme="dark"] .hero-search-field {
-  background: #23272d;
+  background: #232830;
 }
 html[data-theme="dark"] .hero-search-clear {
-  background: #30353d;
+  background: #303640;
 }
 .hero-quick-search {
   display: none;
@@ -1413,10 +1413,10 @@ html body #root .app-search-field.home-popular-search {
   line-height: 1.45;
 }
 :root[data-theme="dark"] .trust-strip > div {
-  background: #191c20;
+  background: #191d23;
 }
 :root[data-theme="dark"] .trust-strip div > span {
-  background: #30353c;
+  background: #30363f;
 }
 @media (min-width: 701px) and (max-width: 980px) {
   .trust-strip {
@@ -1775,7 +1775,8 @@ html body #root .app-search-field.home-popular-search {
     isolation: isolate;
     --catalog-backdrop-height: 188px;
   }
-  .app-content:has(> .catalog-with-backdrop)::before {
+  .app-content:has(> .catalog-with-backdrop)::before,
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail)::before {
     content: "";
     position: absolute;
     z-index: -1;
@@ -1787,8 +1788,26 @@ html body #root .app-search-field.home-popular-search {
       linear-gradient(170deg, #0b0a15 12%, #131a2e 52%, #302053);
     background-blend-mode: soft-light;
   }
-  :root[data-theme="dark"] .app-content:has(> .catalog-with-backdrop)::before {
-    mask-image: linear-gradient(#000 65%, transparent);
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) {
+    position: relative;
+    isolation: isolate;
+  }
+  :root[data-theme="dark"] .app-content > main > .hero {
+    background: transparent;
+  }
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) > .site-header:not(.is-scrolled) {
+    background: transparent;
+  }
+  :root[data-theme="dark"] .app-content:has(> .catalog-with-backdrop, > main > .hero, > main.detail)::before {
+    opacity: .68;
+    height: calc(var(--catalog-backdrop-height, 188px) + var(--catalog-header-height, 78px) + var(--catalog-breadcrumb-top) - 14px + 120px);
+    mask-image: linear-gradient(
+      #000 35%,
+      rgb(0 0 0 / 90%) 48%,
+      rgb(0 0 0 / 55%) 66%,
+      rgb(0 0 0 / 18%) 84%,
+      transparent
+    );
   }
   .catalog-with-backdrop:is([data-catalog-country="china"], [data-catalog-country="korea"])::before {
     content: "";
@@ -1801,7 +1820,7 @@ html body #root .app-search-field.home-popular-search {
     height: 286px;
     pointer-events: none;
     background: var(--catalog-flag) center calc(var(--catalog-flag-y, 50%) + 30px) / cover no-repeat;
-    filter: blur(44px);
+    filter: blur(60px);
     opacity: .19;
     mask-image:
       linear-gradient(90deg, transparent, #000 24%, #000 66%, transparent),
@@ -1815,7 +1834,12 @@ html body #root .app-search-field.home-popular-search {
   .catalog-with-backdrop[data-catalog-country="korea"] {
     --catalog-flag: url("/flags/korea.svg");
   }
-  :root[data-theme="dark"] .catalog-with-backdrop > .search-box {
+  :root[data-theme="dark"] #root .catalog-with-backdrop > .search-box {
+    --filter-field-bg: #2e343d;
+    --filter-field-disabled-bg: #242931;
+    --filter-field-open-bg: #303540;
+    --filter-pill-bg: #2e343d;
+    background: linear-gradient(180deg, #232830, var(--panel-soft) 85%);
     box-shadow: 0 -18px 100px -10px rgb(3 2 8 / 65%), 0 18px 50px rgb(24 27 32 / 11%);
   }
   .catalog-with-backdrop > .breadcrumbs,
@@ -1834,7 +1858,7 @@ html body #root .app-search-field.home-popular-search {
   }
 }
 @media (min-width: 701px) and (max-width: 980px) {
-  .app-content:has(> .catalog-with-backdrop) {
+  .app-content:has(> .catalog-with-backdrop, > main > .hero, > main.detail) {
     --catalog-backdrop-height: 217px;
   }
 }
@@ -2561,7 +2585,7 @@ html[data-theme="dark"] :is(.brand-guide-price-range, .brand-guide-table-wrap, .
   background: var(--filter-field-bg);
 }
 html[data-theme="dark"] .brand-guide-budget-tabs button.active {
-  background: #383d45;
+  background: #383e48;
   color: #fff;
   box-shadow: none;
 }
@@ -2592,7 +2616,7 @@ html[data-theme="dark"] .brand-guide .brand-guide-budget-models a:hover,
 html[data-theme="dark"] .brand-guide .brand-guide-budget-models a:focus-visible,
 html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:hover,
 html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
-  background: #383d45;
+  background: #383e48;
 }
 .filter-panel {
   padding: 18px;
@@ -4057,11 +4081,11 @@ body.header-menu-open .detail-floating-availability {
   }
 }
 :root[data-theme="dark"] .info-proof > article {
-  background: #191c20;
+  background: #191d23;
   box-shadow: none;
 }
 :root[data-theme="dark"] .info-proof-icon {
-  background: #1d2024;
+  background: #1d2127;
 }
 .info-section {
   padding-top: 80px;
@@ -4534,27 +4558,27 @@ body.header-menu-open .detail-floating-availability {
 :root[data-theme="dark"] {
   color: #f3f4f6;
   background: #111315;
-  --header-control-bg: #1b1e22;
+  --header-control-bg: #1b1f25;
   --accent-dark: #ff6870;
   --accent-soft: rgba(238, 28, 37, 0.16);
   --ink: #f3f4f6;
   --muted: #aeb4bd;
   --line: #30353c;
   --focus-ring: #59616c;
-  --surface: #202329;
-  --filter-field-bg: #292d34;
-  --filter-field-disabled-bg: #24282e;
-  --filter-field-open-bg: #30343c;
-  --model-chip-bg: #292d34;
-  --model-chip-hover-bg: #30343c;
-  --menu-popover-bg: #262a30;
+  --surface: #20242c;
+  --filter-field-bg: #292e37;
+  --filter-field-disabled-bg: #242931;
+  --filter-field-open-bg: #30353f;
+  --model-chip-bg: #292e37;
+  --model-chip-hover-bg: #30353f;
+  --menu-popover-bg: #262b33;
   --green: #65d49a;
   --price-rating-groove: #454c55;
   --price-good: #4ede93;
   --price-bad: #ff6f63;
   --page: #111315;
-  --panel: #22262b;
-  --panel-soft: #1b1e22;
+  --panel: #22272e;
+  --panel-soft: #1b1f25;
   --tooltip-bg: #f3f4f6;
   --tooltip-ink: #17191c;
   --tooltip-ink-soft: rgba(23, 25, 28, 0.78);
@@ -4656,7 +4680,7 @@ html[data-theme="dark"] #root .load-more {
 }
 :root[data-theme="dark"] .price-currency-switch button.active,
 :root[data-theme="dark"] .header-actions .currency-switch button.active {
-  background: #383d45;
+  background: #383e48;
   color: #fff;
   box-shadow: none;
 }
@@ -4670,7 +4694,7 @@ html[data-theme="dark"] #root .load-more {
   color: #fff17c;
 }
 :root[data-theme="dark"] :where(.featured-image, .gallery-thumbs button, .customer-order-car img) {
-  background: #24282e;
+  background: #242931;
   border-color: var(--line);
 }
 :root[data-theme="dark"] :where(.type-tabs button, .select-field > span, .custom-select > span) {
@@ -4684,7 +4708,7 @@ html[data-theme="dark"] #root .load-more {
   color: #7f8690;
 }
 :root[data-theme="dark"] .site-footer {
-  background: #1b1e22;
+  background: #1b1f25;
   border: 0;
   box-shadow: none;
   color: var(--muted);
@@ -4693,13 +4717,13 @@ html[data-theme="dark"] #root .load-more {
   color: var(--ink);
 }
 :root[data-theme="dark"] #root .site-footer :where(.footer-app-qr, .footer-app-stores button) {
-  background: #252930;
+  background: #252a33;
 }
 :root[data-theme="dark"] #root .site-footer :where(.footer-app-qr, .footer-app-stores button):hover {
-  background: #2d323a;
+  background: #2d333d;
 }
 :root[data-theme="dark"] #root .footer-newsletter {
-  background: #252930;
+  background: #252a33;
 }
 :root[data-theme="dark"] #root .footer-newsletter-form {
   border-color: #343a44;
@@ -8164,7 +8188,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   --result-pill-bg: var(--surface);
 }
 :root[data-theme="dark"] #root .result-view-toggle button.active {
-  background: #383d45;
+  background: #383e48;
   color: #ff7a81;
   box-shadow: none;
 }
@@ -10347,10 +10371,10 @@ html[data-theme="dark"] #root .spec-search,
   box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
 }
 :root[data-theme="dark"] .sheet-tabs {
-  background: #15181c;
+  background: #15191f;
 }
 :root[data-theme="dark"] .sheet-tab.chosen {
-  background: #343941;
+  background: #343a44;
   color: #ff6870;
   box-shadow: none;
 }
@@ -10935,7 +10959,7 @@ html[data-theme="dark"] #root .spec-search,
   outline-offset: 2px;
 }
 :root[data-theme="dark"] .segmented-control:not(.quick-view-currency) button.active {
-  background: #383d45;
+  background: #383e48;
   color: #fff;
   box-shadow: none;
 }
@@ -13699,7 +13723,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
 
 /* Кружок закрытия в тёмной теме читается только если он светлее панели окна. */
 html[data-theme="dark"] .modal-close {
-  background: #2b3038;
+  background: #2b313b;
 }
 
 /* Dark theme component states: keep interaction hierarchy deliberate. */
@@ -13709,12 +13733,12 @@ html[data-theme="dark"] {
   --line-strong: #454b55;
   --focus-ring: #59616c;
   --page: #111315;
-  --panel: #22262b;
-  --panel-soft: #1b1e22;
-  --surface: #202329;
-  --filter-field-bg: #292d34;
-  --filter-field-disabled-bg: #24282e;
-  --filter-field-open-bg: #30343c;
+  --panel: #22272e;
+  --panel-soft: #1b1f25;
+  --surface: #20242c;
+  --filter-field-bg: #292e37;
+  --filter-field-disabled-bg: #242931;
+  --filter-field-open-bg: #30353f;
   --yellow-ink: #17191c;
 }
 html[data-theme="dark"] body #root .search-box {
@@ -13723,13 +13747,13 @@ html[data-theme="dark"] body #root .search-box {
 html[data-theme="dark"] .auth-page {
   background:
     radial-gradient(circle at 17% 25%, rgba(238, 28, 37, 0.12), transparent 34%),
-    linear-gradient(135deg, #111315 0%, #15181c 58%);
+    linear-gradient(135deg, #111315 0%, #15191f 58%);
 }
 html[data-theme="dark"] :where(.primary, .primary:hover, .primary:focus-visible) {
   color: var(--yellow-ink);
 }
 html[data-theme="dark"] :where(.popular-brands-heading > button, .popular-brands-heading > .popular-brands-all, .popular-brands-more button, .auth-switch button.active) {
-  background: #30353d;
+  background: #303640;
   color: var(--ink);
   box-shadow: none;
 }
@@ -13739,15 +13763,15 @@ html[data-theme="dark"] :where(.auth-switch, .account-navigation) button.active 
   box-shadow: none;
 }
 html[data-theme="dark"] .auth-modal .auth-switch {
-  background: #191c20;
+  background: #191d23;
 }
 html[data-theme="dark"] body #root .auth-modal .auth-field input {
   border: 0;
-  background: #16191d;
+  background: #161a20;
 }
 html[data-theme="dark"] body #root .auth-modal .auth-field input:focus {
   border: 0;
-  background: #1a1e23;
+  background: #1a1f26;
 }
 html[data-theme="dark"] .auth-modal .modal-close {
   background: #3b414a;
@@ -13757,10 +13781,10 @@ html[data-theme="dark"] .auth-modal .modal-close:hover {
   background: #454c56;
 }
 html[data-theme="dark"] .mobile-filter-sheet-header button {
-  background: #30343c;
+  background: #30353f;
 }
 html[data-theme="dark"] .mobile-filter-sheet-header button:hover {
-  background: #383d45;
+  background: #383e48;
 }
 html[data-theme="dark"] .popular-brands-heading > button:hover,
 html[data-theme="dark"] .popular-brands-heading > .popular-brands-all:hover,
@@ -13796,7 +13820,7 @@ html[data-theme="dark"] body #root .custom-select.open {
   border-color: var(--focus-ring);
 }
 html[data-theme="dark"] body #root .select-menu {
-  background: #1b1e22;
+  background: #1b1f25;
   border-color: var(--line-strong);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
 }
@@ -13823,7 +13847,7 @@ html[data-theme="dark"] body #root .select-menu .select-options :is(button, a).s
   color: var(--accent-dark) !important;
 }
 html[data-theme="dark"] body #root .select-search {
-  background: #22262c;
+  background: #22272f;
   border-color: var(--line-strong);
 }
 /* Поиск в «Полных данных» спокойнее прочих: без обводки и на самом мягком
@@ -13846,7 +13870,7 @@ html[data-theme="dark"] body #root .custom-select.disabled :where(span, b, svg) 
   color: #858c96;
 }
 html[data-theme="dark"] body #root :where(.primary, .secondary):disabled {
-  background: #2a2f36;
+  background: #2a3039;
   border-color: #343a43;
   color: #777f8b;
   cursor: not-allowed;
@@ -14239,11 +14263,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 }
 :root[data-theme="dark"] #root .side-card .secondary {
   border-color: transparent;
-  background: #30343c;
+  background: #30353f;
 }
 :root[data-theme="dark"] #root .side-card .secondary:hover {
   border-color: transparent;
-  background: #383d45;
+  background: #383e48;
 }
 
 @media (max-width: 980px) {
@@ -14354,11 +14378,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     border-radius: calc(12px * var(--corner-scale));
   }
   :root[data-theme="dark"] .header-menu-currency button.active {
-    background: #383d45;
+    background: #383e48;
     color: #fff;
   }
   :root[data-theme="dark"] .header-menu-theme button.active {
-    background: #383d45;
+    background: #383e48;
     color: #ff7a81;
   }
   /* Общий тёмный стиль валюты выше по файлу использует поверхность полей.
@@ -14520,17 +14544,17 @@ html[data-theme="dark"] body #root :where(
 }
 /* Выбранный раздел меню: подсветка чуть выше фона панели, без светлой плашки. */
 html[data-theme="dark"] body #root .account-navigation button.active {
-  background: #2b3037;
+  background: #2b313a;
 }
 /* Вложенные элементы внутри панели теперь светлее её, иначе сливаются. */
 html[data-theme="dark"] body #root .availability-check-block {
   background: var(--panel);
 }
 html[data-theme="dark"] body #root .availability-comment-field textarea {
-  background: #16191d;
+  background: #161a20;
 }
 html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
-  background: #1a1e23;
+  background: #1a1f26;
 }
 
 /* Тёмная тема на узком экране: карточка с именем и переключатель разделов
@@ -16299,7 +16323,7 @@ html[data-theme="dark"] .tool-live-bar {
   line-height: 1.45;
 }
 html[data-theme="dark"] .cost-calculator-note {
-  background: #353a43;
+  background: #353b46;
 }
 
 
@@ -17045,7 +17069,7 @@ html[data-theme="dark"] .tool-calc-share.copied:hover {
   color: var(--muted);
 }
 html[data-theme="dark"] .market-compare-search {
-  background: #353a43;
+  background: #353b46;
 }
 .market-compare-search input {
   flex: 1 1 auto;
@@ -17231,7 +17255,7 @@ html[data-theme="dark"] .market-compare-price-range.open .market-compare-price-r
 }
 html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound,
 html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound .select-trigger {
-  background: #353a43;
+  background: #353b46;
 }
 html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound .select-trigger b {
   color: var(--ink);
@@ -17318,7 +17342,7 @@ html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-b
   }
   html[data-theme="dark"] #root .market-compare-filter-row > .select-field,
   html[data-theme="dark"] .market-compare-filter-row > .market-compare-price-range {
-    background: #272b31;
+    background: #272c34;
   }
   html[data-theme="dark"] #root .market-compare-filter-row > .select-field .select-trigger,
   html[data-theme="dark"] #root .market-compare-filter-row > .select-field .select-trigger b,
@@ -17366,10 +17390,10 @@ html[data-theme="dark"] .market-compare-scroll {
   border-color: transparent;
 }
 html[data-theme="dark"] .market-compare-scroll {
-  background: #353a43;
+  background: #353b46;
 }
 html[data-theme="dark"] .market-compare-table thead th {
-  background: #2b3038;
+  background: #2b313b;
   box-shadow: inset 0 -1px 0 rgb(255 255 255 / 8%);
 }
 .market-compare-table {
@@ -17503,7 +17527,7 @@ html[data-theme="dark"] .market-compare-table tbody tr + tr td {
   line-height: 1.5;
 }
 html[data-theme="dark"] .market-compare-empty {
-  background: #353a43;
+  background: #353b46;
 }
 .market-compare-thin {
   margin: 24px 0 0;
@@ -17633,7 +17657,7 @@ html[data-theme="dark"] .market-compare-open td {
   background: color-mix(in srgb, var(--panel-soft) 94%, #000000);
 }
 html[data-theme="dark"] .market-compare-more {
-  background: #353a43;
+  background: #353b46;
 }
 html[data-theme="dark"] .market-compare-more:hover {
   background: #3d434d;
@@ -17748,7 +17772,7 @@ html[data-theme="dark"] .market-compare-win {
 }
 html[data-theme="dark"] .market-card {
   border-color: transparent;
-  background: #272b31;
+  background: #272c34;
 }
 .market-card-photo {
   display: grid;
@@ -17761,7 +17785,7 @@ html[data-theme="dark"] .market-card {
   color: var(--muted);
 }
 html[data-theme="dark"] .market-card-photo {
-  background: #353a43;
+  background: #353b46;
 }
 .market-card-photo img {
   width: 100%;
@@ -17819,7 +17843,7 @@ html[data-theme="dark"] .market-card-photo {
   font-size: 14px;
 }
 html[data-theme="dark"] #root .market-card-year-select {
-  background: #353a43;
+  background: #353b46;
 }
 .market-card-data {
   align-self: center;
@@ -17831,7 +17855,7 @@ html[data-theme="dark"] #root .market-card-year-select {
   background: var(--panel-soft);
 }
 html[data-theme="dark"] .market-card-data {
-  background: #353a43;
+  background: #353b46;
 }
 .market-card-stat-row {
   display: grid;
@@ -18529,7 +18553,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
    Держим её ближе к фону, а форму отбиваем тенью — и на столько же приглушаем
    каждый блок внутри, чтобы шаг «карточка → блок» остался прежним. */
 :root[data-theme="dark"] .quota-pop {
-  background: #1c1f23;
+  background: #1c2026;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
 }
 :root[data-theme="dark"] .quota-pop .quota-panel {
@@ -18674,8 +18698,8 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 :root[data-theme="dark"] .quota-panel-bar {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--accent-dark) 38%, #17191d),
-    color-mix(in srgb, var(--accent-dark) 20%, #17191d)
+    color-mix(in srgb, var(--accent-dark) 38%, #171a20),
+    color-mix(in srgb, var(--accent-dark) 20%, #171a20)
   );
 }
 /* Заполненная часть показывает остаток слева направо. Вертикальный штрих отмечает
@@ -21957,7 +21981,7 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   background: #30353c;
 }
 :root[data-theme="dark"] :is(.service-dark-intro, .catalog-service-features) .info-proof-icon-art {
-  background: #30353c;
+  background: #30363f;
 }
 :is(.service-dark-intro, .catalog-service-features) .info-proof-icon-art img {
   position: absolute;
@@ -22146,7 +22170,7 @@ html[data-theme="light"] .service-opportunity-card .service-opportunity-filter-l
   display: block;
 }
 html[data-theme="dark"] .service-opportunity-card {
-  background: #202329;
+  background: #20242c;
 }
 html[data-theme="dark"] .service-opportunity-card p {
   color: var(--muted);
@@ -23484,22 +23508,22 @@ html[data-theme="dark"] .service-report-inspection-row,
 html[data-theme="dark"] .service-report-inspection-empty,
 html[data-theme="dark"] .service-report-facts dl > div,
 html[data-theme="dark"] .service-report-recommendation li {
-  background: #292d33;
+  background: #292e36;
 }
 html[data-theme="dark"] .service-report-risk-grid > article {
-  background: #202328;
+  background: #20242b;
 }
 html[data-theme="dark"] .service-report-inspection-tabs {
-  background: #191c20;
+  background: #191d23;
 }
 html[data-theme="dark"] .service-report-inspection-row.attention {
-  background: color-mix(in srgb, var(--warn-ink) 12%, #292d33);
+  background: color-mix(in srgb, var(--warn-ink) 12%, #292e36);
 }
 html[data-theme="dark"] .service-report-inspection-row.limited {
-  background: color-mix(in srgb, #fff 3%, #292d33);
+  background: color-mix(in srgb, #fff 3%, #292e36);
 }
 html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
-  background: color-mix(in srgb, var(--warn-ink) 18%, #292d33);
+  background: color-mix(in srgb, var(--warn-ink) 18%, #292e36);
 }
 html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row,
 html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row.attention,
@@ -25566,7 +25590,7 @@ html[data-theme] .header-menu .header-menu-theme button.active {
   transform: none;
 }
 html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
-  background: #30343c;
+  background: #30353f;
 }
 .header-menu-drawer .header-menu-theme + nav::before {
   content: "";
@@ -25677,7 +25701,7 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
     background: var(--panel-soft);
   }
   :root[data-theme="dark"] .header-menu nav a:hover {
-    background: #30353d;
+    background: #303640;
   }
   :root[data-theme="dark"] .header-menu nav a.active {
     background: #383e47;
@@ -25724,6 +25748,27 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
     background: #737c89;
   }
   .app-content:has(> .catalog-with-backdrop) > .site-header:not(.past-catalog-backdrop)
+    .header-actions .header-currency-switch button.active {
+    background: #fff;
+    color: #cc102b;
+    box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
+  }
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) > .site-header:not(.is-scrolled) {
+    --header-trigger-bg: rgb(255 255 255 / 12%);
+    --header-trigger-hover-bg: rgb(255 255 255 / 20%);
+  }
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) > .site-header:not(.is-scrolled)
+    :is(.header-actions, .header-inner > .header-back, .header-menu-shell > .header-menu-trigger) {
+    --ink: #f5f7fb;
+    --muted: #c4cbd7;
+    --accent-dark: #ff7b82;
+    color: var(--ink);
+  }
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) > .site-header:not(.is-scrolled)
+    .decree-pricing-button[aria-checked="false"] .decree-switch-track {
+    background: #737c89;
+  }
+  :root[data-theme="dark"] .app-content:has(> main > .hero, > main.detail) > .site-header:not(.is-scrolled)
     .header-actions .header-currency-switch button.active {
     background: #fff;
     color: #cc102b;
