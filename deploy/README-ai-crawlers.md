@@ -1,5 +1,19 @@
 # Shared crawler and catalog protection
 
+## Default public access for ABCars — 9 November 2026
+
+Public access policy for `abcars.by` and `www.abcars.by`. Country alone does not trigger verification on these hosts. Ordinary browser, crawler and audit reads use the same public pages and data. Generic client library names do not deny access on ABCars. The deny list for named bulk crawlers, verified provider allowances, per-IP rates, signed session export budgets and reCAPTCHA for personal enumeration remain in force. Private reads require the existing authentication, and write actions retain their own limits.
+
+The Singapore IPv4 and IPv6 map still denies access at nginx before redirects, shared cache, application, verified provider exemptions and reCAPTCHA. ABDrive keeps its existing geographic checks. The daily map update retains the last validated nginx list until it can install a new one.
+
+Cache hits and stale responses stay at nginx. Misses reach the ABCars application, which bounds concurrent catalog work and allows a small, time-limited wait. Cards, initial catalog pages and metadata share three slots and a queue of 12 with a 2.2-second wait limit. Large API batches, full model lists and catalog pages after page 3 share two slots and a queue of eight with a 250 ms wait limit. Informational pages with live data have two independent slots. Auth and forms can reach the application independently. Saturated reads without a usable cached response receive `503`, `Retry-After: 2` and `Cache-Control: no-store`.
+
+The loopback photo gateway on `127.0.0.1:8791` shares eight outbound slots for uncached Che168 and Encar images. Existing saved files, cache keys, Encar sizes and cache locking stay in use. The Guazi web proxy limits external fetches to six per application process, after its disk cache and duplicate-request check. Photo reads on ABCars share a per-IP rate of 20/s with a burst of 100.
+
+For an authorized production release, validate the new app and the three configuration sets together. Use the crawler protection, photo store and catalog guard installers for their respective files. Check that the photo gateway port is free before installation. Install the application and capacity controls before enabling the new geographic policy. The catalog gate is shared across visitors within the single ABCars application process; review the aggregate budget before adding app instances.
+
+Local staging used nginx, the ABCars app and PostgreSQL with 138,000 synthetic listings. The load test called the normal database import writer for 18,000 records while serving web requests. With the application warm, a 15-second burst sent 6,920 bulk requests. The gate returned 6,466 temporary responses with retry headers. All 419 ordinary reads and both guest leads succeeded. Import completed in 22.1 seconds. A separate stress run just after restarting the application also completed the import and served all ordinary reads and leads, with the slowest ordinary uncached reads taking up to 3.4 seconds. Photo origins used fixtures and were tested separately. Local mobile and desktop Lighthouse loaded the home page. The edge returned 403 in 720 Singapore cases using simulated IPv4 and IPv6 source ranges, including cache hits, redirects, API calls and verification routes.
+
 ## Ahrefs relaxation release — 26 October 2026
 
 Owner authorized commit, push and server installation on 26 October 2026. Official Ahrefs IP + AhrefsBot/AhrefsSiteAudit UA bypass personal IP/session export budgets as well as geographic verification. The local official network snapshot must be valid and unexpired; refresh happens before checking the exemption. A forged UA or an ordinary UA from an Ahrefs IP retains visitor safeguards.

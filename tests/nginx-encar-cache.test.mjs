@@ -32,10 +32,11 @@ test("nginx: Encar sizes stay separate in either request order and bypass old st
   }
   const locations = (await readFile(new URL("../deploy/nginx-abcars-photo-location.conf", import.meta.url), "utf8"))
     .replaceAll("include /etc/nginx/snippets/abcars-headers.conf;", "")
-    .replaceAll("root /srv/abcars-media;", "root /test/media;")
+    .replaceAll("include /etc/nginx/snippets/car-ai-limit.conf;", "")
+    .replaceAll("root /srv/abcars-media;", "root /test/media;");
+  const cache = (await readFile(new URL("../deploy/nginx-abcars-photos-cache.conf", import.meta.url), "utf8"))
     .replace('set $photo_origin "ci.encar.com";', 'set $photo_origin "127.0.0.1:8090";')
     .replace("proxy_pass https://$photo_origin$encar_path?", "proxy_pass http://$photo_origin$encar_path?");
-  const cache = await readFile(new URL("../deploy/nginx-abcars-photos-cache.conf", import.meta.url), "utf8");
   await writeFile(path.join(directory, "nginx.conf"), `
     events {}
     http {

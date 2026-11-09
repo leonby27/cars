@@ -32,6 +32,8 @@ trap restore ERR
 # Preserve the current site configuration; only insert the shared denial rule.
 python3 - <<'PY'
 from pathlib import Path
+import re
+
 for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available/abdrive']:
     path = Path(name)
     text = path.read_text()
@@ -79,9 +81,10 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
 legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
 text = legacy.read_text().replace('ahrefsbot|', '').replace('ahrefssiteaudit|', '')
 text = text.replace('imagesift|semrushbot', 'imagesift|serankingbacklinksbot|semrushbot')
-# Google research/user-directed crawlers share the verified Google exemption.
-# Keep the legacy BY-only high-rate limiter consistent with the shared maps.
-text = text.replace('storebot-google|adsbot-google|bingbot', 'storebot-google|adsbot-google|googleother|google-cloudvertexbot|gemini-deep-research|bingbot')
+# Match the BY policy while keeping the live rates and custom settings intact.
+text = text.replace('|scrapy|python-requests|go-http-client|node-fetch|libwww-perl|httrack|', '|')
+text, count = re.subn(r'map (?:\$http_user_agent|\$car_read_address) \$abcars_limit_key \{[^}]*\}', lambda _: 'map $car_read_address $abcars_limit_key {\n  default $car_read_address;\n}', text)
+if count != 1:raise RuntimeError('Missing unique ABCars visitor key')
 text = text.replace('ccbot|google-extended|applebot-extended', 'ccbot|applebot-extended')
 legacy.write_text(text)
 photos = Path('/etc/nginx/snippets/abcars-photo-location.conf')

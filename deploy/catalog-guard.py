@@ -119,6 +119,7 @@ class Store:
           CREATE TABLE IF NOT EXISTS attempts (ip TEXT PRIMARY KEY,started REAL,issued INTEGER,submitted INTEGER);
           CREATE TABLE IF NOT EXISTS clearance_totals (scope TEXT PRIMARY KEY,started REAL,units INTEGER,details INTEGER);
         ''')
+        self.open_hosts=frozenset(geo_policy.get('open_hosts',())) if geo_policy else frozenset()
         self.last_cleanup=0
         self.geo=geo_module.Geography(self.db,self.now,geo_policy,geo_module.Countries(country_path,geo_policy,self.now)) if geo_policy and country_path else None
 
@@ -182,7 +183,7 @@ class Store:
         if self.geo:self.geo.clean()
         self.last_cleanup=now
 
-    def check(self,ip,method,uri,cookie='',session=None,user_agent=''):
+    def check(self,ip,method,uri,cookie='',session=None,user_agent='',host=''):
         read=reading(method,uri)
         if read is None and not self.geo:return True,None
         address=ipaddress.ip_address(ip)
@@ -205,7 +206,7 @@ class Store:
                     grant=self.db.execute('SELECT id,units,details FROM passes WHERE id=? AND ip=? AND expires>?',(grant_id,ip,self.now())).fetchone()
             except (ValueError,KeyError,http.cookies.CookieError):pass
             snapshot={'ip_hash':ip,'units':units,'collections':collections,'paged':paged,'details':details}
-            if self.geo:
+            if self.geo and host not in self.open_hosts:
                 try:
                     gate=self.geo.country_gate(address,user_agent)
                     if gate and not grant and not self.geo.session_verified(session):return False,{**snapshot,**gate}
@@ -319,10 +320,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.send(403,headers={'X-Guard-Reason':'geo_country_blocked'})
                 if self.headers.get('X-Guard-Exempt') in ('1','10','01','11'): return self.send(204)
                 method=self.headers.get('X-Guard-Method','GET');uri=self.headers.get('X-Guard-URI','/')
-                # Allowed-country assets need neither a session nor catalog budgets.
-                if reading(method,uri) is None and (not geo or geo.countries.classification(ipaddress.ip_address(self.context())) in ('exempt','unknown')):return self.send(204)
+                host=self.headers.get('X-Guard-Host','')
+                # Light requests on an open host need neither a session nor a budget.
+                if reading(method,uri) is None and (host in self.server.store.open_hosts or not geo or geo.countries.classification(ipaddress.ip_address(self.context())) in ('exempt','unknown')):return self.send(204)
                 session,session_cookie=self.server.store.ensure_session(self.headers.get('Cookie',''))
-                allowed,snapshot=self.server.store.check(self.context(),self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/'),self.headers.get('Cookie',''),session=session,user_agent=self.headers.get('User-Agent',''))
+                allowed,snapshot=self.server.store.check(self.context(),method,uri,self.headers.get('Cookie',''),session=session,user_agent=self.headers.get('User-Agent',''),host=host)
                 if not allowed:
                     print(json.dumps({'event':'catalog_verification_required','at':int(time.time()),'mode':self.server.mode,**snapshot}),flush=True)
                 headers={}

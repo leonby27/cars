@@ -1810,6 +1810,10 @@ html body #root .app-search-field.home-popular-search {
     background: transparent;
   }
   :root[data-theme="dark"] .app-content:has(> .catalog-with-backdrop, > main > .hero, > main.detail)::before {
+    background:
+      radial-gradient(ellipse at 83% 20%, rgb(88 116 184 / 13%), transparent 48%),
+      linear-gradient(170deg, #0b0a15 12%, #131a2e 52%, #302053);
+    background-blend-mode: normal;
     opacity: .68;
     height: calc(var(--catalog-backdrop-height, 188px) + var(--catalog-header-height, 78px) + var(--catalog-breadcrumb-top) - 14px + 120px);
     mask-image: linear-gradient(
@@ -1819,6 +1823,34 @@ html body #root .app-search-field.home-popular-search {
       rgb(0 0 0 / 18%) 84%,
       transparent
     );
+  }
+  @media (hover: hover) and (pointer: fine) {
+    :root[data-theme="dark"] .app-content[data-starlight-enabled]:has(> .catalog-with-backdrop, > main > .hero, > main.detail)::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0 0 auto;
+      height: calc(var(--catalog-backdrop-height, 188px) + var(--catalog-header-height, 78px) + var(--catalog-breadcrumb-top) - 14px + 120px);
+      pointer-events: none;
+      background: url("/backgrounds/starlight.svg") center top / 1600px 460px repeat-x;
+      mask-image:
+        linear-gradient(#000 35%, rgb(0 0 0 / 90%) 48%, rgb(0 0 0 / 55%) 66%, rgb(0 0 0 / 18%) 84%, transparent),
+        radial-gradient(ellipse 620px 380px at var(--starlight-x, -1000px) var(--starlight-y, -1000px), rgb(0 0 0 / 90%) 0%, rgb(0 0 0 / 65%) 24%, rgb(0 0 0 / 32%) 50%, rgb(0 0 0 / 10%) 75%, transparent 100%),
+        var(--starlight-trail, linear-gradient(transparent, transparent));
+      /* Clip the combined current spotlight and ten fading trail samples to the backdrop. */
+      mask-composite: intersect, add, add, add, add, add, add, add, add, add, add, add;
+      opacity: 0;
+      transition: opacity 1.8s ease-in-out;
+    }
+    :root[data-theme="dark"] .app-content[data-starlight-enabled][data-starlight-active]:has(> .catalog-with-backdrop, > main > .hero, > main.detail)::after {
+      opacity: .85;
+      transition-duration: 1.1s;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root[data-theme="dark"] .app-content::after {
+      transition: none;
+    }
   }
   .catalog-with-backdrop:is([data-catalog-country="china"], [data-catalog-country="korea"])::before {
     content: "";

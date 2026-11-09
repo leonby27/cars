@@ -1,6 +1,6 @@
 [Unit]
 Description=Refresh country access rules and verified crawler networks
-After=network-online.target
+After=network-online.target nginx.service
 Wants=network-online.target
 
 [Service]
@@ -13,5 +13,6 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/usr/local/lib/car-catalog-guard /var/log/nginx /var/lib/nginx /var/cache/nginx /run/lock
+# nginx -t opens the existing PID file even when it only validates the config.
+ReadWritePaths=/usr/local/lib/car-catalog-guard /var/log/nginx /var/lib/nginx /var/cache/nginx /run/lock -/run/nginx.pid
 UMask=0022

@@ -6670,6 +6670,58 @@ const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car
 const bootCarSync = (id) => (id && window.__boot?.carValue && sameListing(window.__boot.carId, id) ? window.__boot.carValue : null);
 const bootRelatedSync = () => (Array.isArray(window.__boot?.relatedValue) ? window.__boot.relatedValue : []);
 
+// Keep the decorative spotlight out of React state: pointer movement only updates CSS.
+// Saved experiment; re-enable when the owner decides to revisit it.
+const STARLIGHT_ENABLED = false;
+const starlightIdleTimers = new WeakMap();
+const starlightTrails = new WeakMap();
+
+function updateStarlightTrail(shell, trail) {
+  const now = performance.now();
+  trail.points = trail.points.filter((point) => now - point.time < 2400);
+  const masks = trail.points.map((point) => {
+    const strength = (.38 * (1 - (now - point.time) / 2400) ** 1.5).toFixed(3);
+    return `radial-gradient(ellipse 620px 380px at ${point.x}px ${point.y}px, rgb(0 0 0 / ${strength}) 0%, transparent 100%)`;
+  });
+  shell.style.setProperty("--starlight-trail", masks.length ? masks.join(",") : "linear-gradient(transparent, transparent)");
+  trail.timer = trail.points.length && shell.isConnected
+    ? setTimeout(() => updateStarlightTrail(shell, trail), 80)
+    : null;
+}
+
+function fadeStarlight(shell) {
+  clearTimeout(starlightIdleTimers.get(shell));
+  starlightIdleTimers.delete(shell);
+  delete shell.dataset.starlightActive;
+}
+
+function moveStarlight(event) {
+  if (event.pointerType === "touch" || document.documentElement.dataset.theme !== "dark"
+    || !window.matchMedia("(min-width: 701px) and (hover: hover) and (pointer: fine)").matches) return;
+  const shell = event.currentTarget;
+  if (!shell.matches(":has(> .catalog-with-backdrop, > main > .hero, > main.detail)")) return;
+  const bounds = shell.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  shell.style.setProperty("--starlight-x", `${x}px`);
+  shell.style.setProperty("--starlight-y", `${y}px`);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const trail = starlightTrails.get(shell) || { points: [], timer: null };
+    starlightTrails.set(shell, trail);
+    const now = performance.now();
+    const last = trail.points.at(-1);
+    if (!last || now - last.time >= 120) {
+      trail.points.push({ x, y, time: now });
+      trail.points = trail.points.slice(-10);
+      clearTimeout(trail.timer);
+      updateStarlightTrail(shell, trail);
+    }
+  }
+  shell.dataset.starlightActive = "";
+  clearTimeout(starlightIdleTimers.get(shell));
+  starlightIdleTimers.set(shell, setTimeout(() => fadeStarlight(shell), 700));
+}
+
 export function App() {
   const [user, setUser] = useState(null);
   const { path, navigate, backToCatalog } = useRoute(user);
@@ -7534,7 +7586,7 @@ export function App() {
      <AvailabilityContext.Provider value={availability}>
      <AuthContext.Provider value={{ user, backend:authBackend }}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} carPending={Boolean(detailId) && (loading || routeLoading || awaitingTarget)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
-      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
+      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} data-starlight-enabled={STARLIGHT_ENABLED ? "" : undefined} onPointerMove={STARLIGHT_ENABLED ? moveStarlight : undefined} onPointerLeave={STARLIGHT_ENABLED ? (event) => fadeStarlight(event.currentTarget) : undefined} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           onBack={contentPath === "/partner" ? (partnerSection !== "overview" ? () => setPartnerSection("overview") : null) : contentPath !== "/" ? () => {

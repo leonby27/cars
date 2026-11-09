@@ -19,6 +19,18 @@ geo=importlib.util.module_from_spec(spec);spec.loader.exec_module(geo)
 
 
 class Checks(unittest.TestCase):
+    def test_scheduled_refresh_uses_previous_month_only_if_new_month_is_missing(self):
+        now=datetime.datetime(2026,11,1,tzinfo=datetime.timezone.utc)
+        missing=update.urllib.error.HTTPError('fixture',404,'not found',None,None)
+        with patch.object(update,'fetch',side_effect=[missing,b'october']) as download:
+            self.assertEqual(update.fetch_countries(now),('2026-10',b'october'))
+            self.assertEqual([call.args[0].rsplit('-',2)[-2:] for call in download.call_args_list],
+                             [['2026','11.csv.gz'],['2026','10.csv.gz']])
+        with patch.object(update,'fetch',side_effect=missing) as download:
+            with self.assertRaises(update.urllib.error.HTTPError):
+                update.fetch_countries(now,'2026-11')
+            download.assert_called_once()
+
     def test_source_build_preserves_singapore_ipv4_and_ipv6_denials(self):
         rows=['{0},{0},{1}'.format(ipaddress.IPv4Address(i),'SG' if i==100 else 'BY') for i in range(100000)]
         rows+=['2001:db8::,2001:db8::ffff,SG','2001:db8::1:0,2001:db8::1:ffff,US']

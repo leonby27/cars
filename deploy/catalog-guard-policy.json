@@ -11,6 +11,7 @@
   "geography": {
     "enabled": true,
     "blocked_countries": ["SG"],
+    "open_hosts": ["abcars.by", "www.abcars.by"],
     "exempt_countries": [
       "AD",
       "AL",

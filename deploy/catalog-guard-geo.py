@@ -21,14 +21,17 @@ def load_policy(path):
     if 'geography' not in policy:raise ValueError('Explicit geography policy required')
     value=policy['geography']
     if not isinstance(value,dict) or type(value.get('enabled',False)) is not bool:raise ValueError('Invalid geography policy')
-    if set(value)-{'enabled','exempt_countries','blocked_countries'}:raise ValueError('Unknown geography setting')
+    if set(value)-{'enabled','exempt_countries','blocked_countries','open_hosts'}:raise ValueError('Unknown geography setting')
     if not value.get('enabled',False):return None
     countries=value.get('exempt_countries')
     if not isinstance(countries,list) or not countries or any(not isinstance(c,str) or not re.fullmatch('[A-Z]{2}',c) for c in countries):raise ValueError('Explicit country exemptions required')
     blocked=value.get('blocked_countries',[])
     if not isinstance(blocked,list) or any(not isinstance(c,str) or not re.fullmatch('[A-Z]{2}',c) for c in blocked):raise ValueError('Invalid blocked countries')
     if set(blocked)&set(countries):raise ValueError('Blocked countries cannot be exempt')
-    return {'exempt_countries':sorted(set(countries)), 'blocked_countries':sorted(set(blocked))}
+    hosts=value.get('open_hosts',[])
+    allowed_hosts=policy.get('verification',{}).get('allowed_hosts',[])
+    if not isinstance(hosts,list) or any(not isinstance(h,str) or h not in allowed_hosts for h in hosts):raise ValueError('Invalid open hosts')
+    return {'exempt_countries':sorted(set(countries)), 'blocked_countries':sorted(set(blocked)), 'open_hosts':sorted(set(hosts))}
 
 
 class Countries:

@@ -18,6 +18,7 @@ import re
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 SERVICE_FEEDS={
@@ -101,6 +102,22 @@ def fetch(url):
     return data
 
 
+def fetch_countries(now, month=None):
+    def download(source_month):
+        return fetch('https://download.db-ip.com/free/dbip-country-lite-'+source_month+'.csv.gz')
+
+    if month:
+        return month, download(month)
+    current = now.strftime('%Y-%m')
+    try:
+        return current, download(current)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+    previous = (now.replace(day=1)-datetime.timedelta(days=1)).strftime('%Y-%m')
+    return previous, download(previous)
+
+
 def blocked_config(countries):
     networks=countries.blocked_networks()
     if countries.policy.get('blocked_countries') and not networks:
@@ -162,14 +179,19 @@ def main():
     parser.add_argument('--reload-nginx',action='store_true')
     args = parser.parse_args()
     policy = json.loads(Path(args.policy).read_text())['geography']
-    month = args.month or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
-    data = Path(args.source_file).read_bytes() if args.source_file else fetch('https://download.db-ip.com/free/dbip-country-lite-'+month+'.csv.gz')
+    output = Path(args.output)
+    previous = json.loads(output.read_text()) if output.exists() else {}
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if args.source_file:
+        month, data = args.month or now.strftime('%Y-%m'), Path(args.source_file).read_bytes()
+    else:
+        month, data = fetch_countries(now, args.month)
+        if not args.month and month < previous.get('source', {}).get('month', ''):
+            raise ValueError('Country source is older than the installed release')
     ahrefs = json.loads(fetch('https://api.ahrefs.com/v3/public/crawler-ip-ranges?output=json'))
     if args.reload_nginx and not args.nginx_output:parser.error('--reload-nginx requires --nginx-output')
-    previous=json.loads(Path(args.output).read_text()).get('service_networks',{}) if Path(args.output).exists() else {}
-    services=refresh_services(previous)
+    services=refresh_services(previous.get('service_networks',{}))
     result = build(data, policy['exempt_countries'], month, ahrefs, blocked=policy.get('blocked_countries',[]),services=services)
-    output = Path(args.output)
     publish(result,output,args.policy,args.nginx_output,args.reload_nginx)
     print(json.dumps({'output':str(output), 'source_records':result['source_records'], 'compact_ranges':result['compact_range_count'], 'ahrefs_ranges':len(result['ahrefs_networks'])}))
 

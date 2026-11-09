@@ -1,4 +1,5 @@
 import {cachedGuaziImage} from './guazi-image-cache.mjs';
+import {originBusyHeaders, originCapacity} from './origin-capacity.mjs';
 import {imageUrl} from '../scripts/lib/guazi-pilot-data.mjs';
 import {allowedGuaziPhotoQuery} from '../src/photo-source.js';
 import {catalogSources,setCatalogSource,sameOriginSettingRequest} from './catalog-sources.mjs';
@@ -166,13 +167,45 @@ const isStaffVisit = async (request) => {
   try { return Boolean((await getSessionAccount(request))?.staff); } catch { return false; }
 };
 
+const catalogCapacity = originCapacity(3, 12, 2200);
+const collectionCapacity = originCapacity(2, 8, 250);
+const editorialCapacity = originCapacity(2, 8, 350);
+const catalogReadPath = /^\/api\/(?:cars(?:\/[^/]+)?|pages\/(?:catalog|car|model)|model-catalog|model-facts|catalog\/meta|brand-guide|market\/compare)$/;
+
+function readCapacity(method, url) {
+  if (method !== "GET" && method !== "HEAD") return null;
+  // Large lists and deep pages have their own queue. Bulk reads cannot take
+  // the slots used for opening cards, initial catalog pages and light metadata.
+  const params = url.searchParams;
+  if (url.pathname === "/api/cars" && (Number(params.get("offset")) >= 144 || Number(params.get("limit")) > 48)) return collectionCapacity;
+  if (url.pathname === "/api/pages/catalog" && Number(params.get("page")) > 3) return collectionCapacity;
+  if (url.pathname === "/api/model-catalog" && params.get("light") !== "1") return collectionCapacity;
+  if (catalogReadPath.test(url.pathname)) return catalogCapacity;
+  // Homepage renders its saved snapshot. Other static-app pages can replay
+  // live catalog queries and have their own capacity for articles and tools.
+  if (url.pathname === "/api/pages/static" && (url.searchParams.get("path") || "").replace(/\//g, "").length) return editorialCapacity;
+  return null;
+}
+
+function readBusy(response, pathname) {
+  if (!pathname.startsWith("/api/pages/")) return json(response, 503, { error:"origin_busy" }, originBusyHeaders);
+  return html(response, 503, '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Попробуйте ещё раз</title><h1>Сайт временно занят</h1><p>Обновите страницу через несколько секунд.</p></html>', originBusyHeaders);
+}
+
 export async function handleApiRequest(request, response) {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
-  // Отмечаем, что с этого адреса к нам обратились. Сами сообщения счётчика не в счёт:
-  // иначе бот, который только их и шлёт, подтверждал бы сам себя (см. noteSiteRequest).
-  if (!url.pathname.startsWith("/api/analytics/")) noteSiteRequest(clientAddress(request));
+  const capacity = readCapacity(request.method, url);
+  const release = capacity && await capacity.acquire();
+  if (response.destroyed) {
+    release?.();
+    return;
+  }
+  if (capacity && !release) return readBusy(response, url.pathname);
   try {
+    // Отмечаем, что с этого адреса к нам обратились. Сами сообщения счётчика не в счёт:
+    // иначе бот, который только их и шлёт, подтверждал бы сам себя (см. noteSiteRequest).
+    if (!url.pathname.startsWith("/api/analytics/")) noteSiteRequest(clientAddress(request));
     if (request.method === "POST" && url.pathname === "/api/analytics/events") {
       const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
       if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
@@ -273,7 +306,8 @@ export async function handleApiRequest(request, response) {
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
       if (!allowedImageSource(source)) return json(response, 403, { error:"image_host_not_allowed" });
       if (!allowedGuaziPhotoQuery(source)) return json(response, 403, { error:"image_variant_not_allowed" });
-      const cached = await cachedGuaziImage(source.href);
+      const cached = await cachedGuaziImage(source.href,{limitOrigin:true});
+      if (!cached) return readBusy(response, url.pathname);
       response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=604800, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
       return response.end(cached.bytes);
     }
@@ -720,5 +754,7 @@ export async function handleApiRequest(request, response) {
     console.error(error);
     if (isDatabaseUnavailable(error)) return json(response, 503, { error:"service_unavailable" });
     return json(response, 500, { error:"internal_error" });
+  } finally {
+    release?.();
   }
 }

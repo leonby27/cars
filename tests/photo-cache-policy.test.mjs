@@ -7,8 +7,12 @@ const config = readFileSync(new URL("../deploy/nginx-abcars-photo-location.conf"
 
 test("фото не закрепляются в браузере на год и сервер перепроверяет временный кэш", () => {
   assert.doesNotMatch(config, /\bimmutable\b/);
-  // Две пары location (Che168 и Encar, 29.09.2026) — по два заголовка в каждой.
-  assert.equal(config.match(/max-age=604800, stale-while-revalidate=86400/g)?.length, 4);
+  // Stored files and cached upstream images share the same one-week policy.
+  assert.equal(config.match(/max-age=604800, stale-while-revalidate=86400/g)?.length, 2);
+  assert.equal(config.match(/add_header Cache-Control \$abcars_photo_client_cache always;/g)?.length, 2);
+  const cache = readFileSync(new URL("../deploy/nginx-abcars-photos-cache.conf", import.meta.url), "utf8");
+  assert.match(cache, /200 "public, max-age=604800, stale-while-revalidate=86400"/);
+  assert.match(cache, /503 "no-store"/);
   assert.equal(config.match(/proxy_cache_valid\s+200\s+1d;/g)?.length, 2);
   assert.match(config, /proxy_cache_valid\s+200\s+1d;/);
 });

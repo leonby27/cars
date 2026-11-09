@@ -30,6 +30,41 @@ test('Guazi images are served without persistence when the disk reserve would be
  assert.equal((await cachedGuaziImage(url,{fetchImpl,statfsImpl,minFreeBytes:2048})).cached,false);
  assert.equal(requests,2);assert.deepEqual(await fs.readdir(dir),[]);
 });
+test('Guazi serves disk hits and joins duplicate misses when outbound slots are full', async t => {
+ const dir = await fs.mkdtemp(new URL('../runtime/guazi-cache-capacity-test-', import.meta.url));
+ const prior = process.env.GUAZI_IMAGE_CACHE_DIR;
+ process.env.GUAZI_IMAGE_CACHE_DIR = dir;
+ t.after(async () => {
+  if (prior === undefined) delete process.env.GUAZI_IMAGE_CACHE_DIR;
+  else process.env.GUAZI_IMAGE_CACHE_DIR = prior;
+  await fs.rm(dir, { recursive: true, force: true });
+ });
+ const root = 'https://global-image-pub.guazistatic-global.com/';
+ const image = () => new Response(new Uint8Array([255,216,255,0]), { headers: { 'content-type':'image/jpeg' } });
+ await cachedGuaziImage(root + 'warm.jpg', { fetchImpl: image });
+ let open, entered;
+ const blocked = new Promise(resolve => { open = resolve; });
+ const ready = new Promise(resolve => { entered = resolve; });
+ let calls = 0;
+ const options = { limitOrigin: true, fetchImpl: async () => {
+  if (++calls === 6) entered();
+  await blocked;
+  return image();
+ } };
+ const active = Array.from({ length: 6 }, (_, index) => cachedGuaziImage(root + index + '.jpg', options));
+ try {
+  await ready;
+  assert.equal(await cachedGuaziImage(root + 'overloaded.jpg', options), null);
+  assert.equal((await cachedGuaziImage(root + 'warm.jpg', options)).cached, true);
+  const duplicate = cachedGuaziImage(root + '0.jpg', options);
+  open();
+  assert.equal(await duplicate, await active[0]);
+  assert.equal(calls, 6);
+ } finally {
+  open();
+  await Promise.all(active);
+ }
+});
 test('bulk stops on a failed detail, resumes the same page and replays accepted cars without refetching',async t=>{
  const {runBulk}=await import('../scripts/guazi-bulk.mjs');
  const {makeSegments}=await import('../scripts/lib/guazi-core.mjs');

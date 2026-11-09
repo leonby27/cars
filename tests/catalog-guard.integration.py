@@ -36,7 +36,7 @@ def number(ip):return int(__import__('ipaddress').ip_address(ip))
 with tempfile.TemporaryDirectory(prefix='catalog-guard-fixture-') as directory:
     path=Path(directory);policy=guard.geo_module.load_policy(root/'deploy/catalog-guard-policy.json')
     countries=path/'countries.json'
-    countries.write_text(json.dumps({'exempt_countries':policy['exempt_countries'],'blocked_countries':policy['blocked_countries'],'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,number('127.5.0.0')-1,'outside'],[number('127.5.0.0'),number('127.5.255.255'),'exempt'],[number('127.6.0.0'),number('127.8.0.0')-1,'outside'],[number('127.8.0.0'),number('127.8.255.255'),'blocked'],[number('127.9.0.0'),2**32-1,'outside']],'6':[[0,2**128-1,'outside']]},'ahrefs_networks':['127.6.0.0/24']}))
+    countries.write_text(json.dumps({'exempt_countries':policy['exempt_countries'],'blocked_countries':policy['blocked_countries'],'expires_utc':'2090-01-01T00:00:00Z','ranges':{'4':[[0,number('127.5.0.0')-1,'outside'],[number('127.5.0.0'),number('127.5.255.255'),'exempt'],[number('127.6.0.0'),number('127.8.0.0')-1,'outside'],[number('127.8.0.0'),number('127.8.255.255'),'blocked'],[number('127.9.0.0'),2**32-1,'outside']],'6':[[0,0,'outside'],[1,1,'blocked'],[2,2**128-1,'outside']]},'ahrefs_networks':['127.6.0.0/24']}))
     store=guard.Store(path/'state.sqlite3',b'fixture-secret',mass_export={},geo_policy=policy,country_path=countries)
     service=guard.GuardServer(('127.0.0.1',0),guard.Handler);service.store=store;service.mode='enforce';service.client_script=(root/'deploy/catalog-guard-client.js').read_bytes()
     service.verification=guard.captcha_module.Recaptcha('fixture-public','fixture-secret',['a.test','b.test'])
@@ -53,9 +53,9 @@ http {{
  access_log off;
  proxy_cache_path {path}/cache levels=1:2 keys_zone=fixture:1m;
  geo $car_internal_address {{ default 0;127.0.0.1 1; }}
- geo $car_country_blocked {{ default 0;127.8.0.0/16 1; }}
+ geo $car_country_blocked {{ default 0;127.8.0.0/16 1;::1 1; }}
  map "$remote_addr:$http_user_agent" $car_verified_search {{ default 0;"127.0.0.10:Googlebot/2.1" 1;"127.0.0.11:YandexBot/3.0" 1; }}
- server {{ listen 127.0.0.1:{listen};server_name a.test b.test;
+ server {{ listen 127.0.0.1:{listen};listen [::1]:{listen};server_name a.test b.test abcars.by www.abcars.by;
  include {path}/server.conf;
  location /assets/ {{ root {path};try_files $uri =404;add_header X-Fixture-Asset yes; }}
  location / {{
@@ -71,7 +71,7 @@ http {{
     sessions={}
     (path/'assets').mkdir();(path/'assets/a.js').write_text('fixture-asset')
     def request(uri='/catalog',ip='127.5.0.2',host='a.test',method='GET',headers=None,body=None):
-        c=http.client.HTTPConnection('127.0.0.1',listen,source_address=(ip,0),timeout=3)
+        c=http.client.HTTPConnection('::1' if ':' in ip else '127.0.0.1',listen,source_address=(ip,0),timeout=3)
         h={'Host':host,'User-Agent':'Mozilla/5.0',**(headers or {})}
         if sessions.get((ip,host)):h['Cookie']=sessions[(ip,host)]+('; '+h['Cookie'] if h.get('Cookie') else '')
         c.request(method,uri,body=body,headers=h);r=c.getresponse();result=r.status,dict(r.headers),r.read();c.close()
@@ -116,6 +116,20 @@ http {{
                 for method in ['GET','HEAD','POST']:
                     denied=request(uri,ip='127.8.0.1',host=host,method=method,headers={'User-Agent':'Googlebot/2.1','X-Guard-Exempt':'1'})
                     assert denied[0]==403 and 'X-Catalog-Verification' not in denied[1],(uri,method,denied)
+        # The open host serves visitors and unknown clients from outside the old
+        # countries. Its shared cache never overrides the Singapore denial.
+        for host in ['abcars.by','www.abcars.by']:
+            for uri in ['/','/catalog','/cars/42','/api/cars','/api/auth/me','/assets/a.js','/robots.txt']:
+                ordinary=request(uri,ip='127.9.0.4',host=host,headers={'User-Agent':'Chrome-Lighthouse'})
+                assert ordinary[0]==200 and 'X-Catalog-Verification' not in ordinary[1],(host,uri,ordinary)
+                for ip in ['127.8.0.1','::1']:
+                    denied=request(uri,ip=ip,host=host,headers={'User-Agent':'Googlebot/2.1','X-Forwarded-For':'127.9.0.4'})
+                    assert denied[0]==403 and 'Location' not in denied[1],(host,ip,uri,denied)
+        assert request('/api/order-drafts',ip='127.9.0.4',host='abcars.by',method='POST')[0]==200
+        with store.lock,store.db:
+            store.budget(store.key('127.9.0.4'));store.db.execute('UPDATE budgets SET details=600 WHERE ip=?',(store.key('127.9.0.4'),))
+        assert request('/api/cars/unseen',ip='127.9.0.4',host='abcars.by')[1]['X-Catalog-Verification']=='/_catalog-check'
+        assert request('/',ip='127.9.0.4',host='abcars.by')[0]==200
         challenge=request('/_catalog-check?return=/catalog',ip='127.9.0.1')
         assert b'g-recaptcha' in challenge[2] and b'fixture-public' in challenge[2]
         assert b'fixture-secret' not in challenge[2] and b'data:image/png' not in challenge[2] and b'<audio' not in challenge[2]
