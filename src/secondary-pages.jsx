@@ -3990,7 +3990,7 @@ function ChineseNameMark({ car }) {
 // в кабинет, и человек попадал неизвестно куда. Теперь запрос уходит с самой страницы,
 // а окно подтверждает, что заявка принята. Собрано тем же набором, что и остальные
 // такие окна сайта: значок, заголовок, строка текста и кнопка.
-function AvailabilityRequestModal({ onClose, preview = false }) {
+function AvailabilityRequestModal({ onClose, preview = false, russianPhone = false }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -4002,11 +4002,12 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal availability-request-modal" role="dialog" aria-modal="true" aria-labelledby="availability-request-title" aria-describedby="availability-request-description">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <Illustration className="availability-request-icon" src="/illustrations/catalog-service-shield.png" width="80" height="80" alt="" aria-hidden="true" />
-        <h2 id="availability-request-title">{preview ? "Карточка в предпросмотре" : "Заявка принята"}</h2>
+        {!russianPhone && <Illustration className="availability-request-icon" src="/illustrations/catalog-service-shield.png" width="80" height="80" alt="" aria-hidden="true" />}
+        <h2 id="availability-request-title">{russianPhone ? "Заявки из РФ временно недоступны" : preview ? "Карточка в предпросмотре" : "Заявка принята"}</h2>
         <p id="availability-request-description">{preview
           ? "Кнопка показана для проверки интерфейса. Заявки по локальной тестовой карточке не отправляются."
-          : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
+          : russianPhone ? "Мы временно не принимаем заявки на автомобили с российским номером телефона."
+            : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
         </div>
@@ -4053,7 +4054,8 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
     setPending(true);
     try {
       await submitLead(car, { name:values.name.trim(), phone });
-      onDone();
+      // Код +7 используется и в Казахстане.
+      onDone(/^7[3489]/.test(phone) ? "russian-phone" : "sent");
     } catch (submitError) {
       setError(authMessages[submitError.message] || "Не удалось отправить заявку. Попробуйте ещё раз.");
     } finally {
@@ -4547,10 +4549,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               car={car}
               submitLead={submitAvailabilityLead}
               onClose={() => setAvailabilityStatus("")}
-              onDone={() => setAvailabilityStatus("sent")}
+              onDone={setAvailabilityStatus}
             />
           ) : availabilityStatus ? (
-            <AvailabilityRequestModal preview={availabilityStatus === "preview"} onClose={() => setAvailabilityStatus("")} />
+            <AvailabilityRequestModal preview={availabilityStatus === "preview"} russianPhone={availabilityStatus === "russian-phone"} onClose={() => setAvailabilityStatus("")} />
           ) : null}
         </div>
       </div>
