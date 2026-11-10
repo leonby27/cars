@@ -78,7 +78,7 @@ export const logisticsFor = (car) => LOGISTICS[car?.origin] || LOGISTICS[originF
 export const sourceCurrencyOf = (car) => String(car?.sourceCurrency || logisticsFor(car).currency).toUpperCase();
 
 export const PRICING = {
-  usdByn:2.9921, cnyBynPer10:4.4866, eurByn:3.3424, krwBynPer1000:2.2073, rubBynPer100:3.6584, rateDate:"09.11.2026",
+  usdByn:2.9976, cnyBynPer10:4.4951, eurByn:3.3551, krwBynPer1000:2.2073, rubBynPer100:3.6532, rateDate:"10.11.2026",
   serviceByn:2000,
   // «Подбор и сопровождение» — ориентир: точную сумму называют после расчёта
   // конкретной машины. serviceFeeEnabled:false убирает строку и сумму из итога.
