@@ -6,6 +6,20 @@ export class SourceBlocked extends Error {
   constructor(url, status, reason = 'access_check') { super(`Guazi access check${status ? ` (HTTP ${status})` : ''} [${reason}] at ${url}`); this.code = 'SOURCE_BLOCKED'; this.url = url; this.status = status; this.reason = reason; }
 }
 
+function blockedResponse(url, response, reason) {
+  const status = response.status();
+  const error = new SourceBlocked(url, status, reason);
+  const headers = response.headers();
+  const requestId = headers['eo-log-uuid'];
+  if (/^[a-z0-9_-]{1,128}$/i.test(requestId ?? '')) error.requestId = requestId;
+  if ([429, 567, 570, 571, 579].includes(status)) {
+    const retry = headers['retry-after'];
+    const advertised = /^\d+$/.test(retry || '') ? Number(retry) * 1000 : Date.parse(retry) - Date.now();
+    error.retryAfterMs = Math.max(30000, Number.isSafeInteger(advertised) ? advertised : 0);
+  }
+  return error;
+}
+
 // A normal access check may recur during a long session. Permit bounded checks
 // in the SAME context, never an unbounded reload/profile/IP rotation loop.
 export function verificationBudget({ now = Date.now, windowMs = 3600000, maxAttempts = 4, minIntervalMs = 60000 } = {}) {
@@ -28,15 +42,7 @@ export async function readSessionCard(request, url, { timeout = 25000, allowMiss
   });
   try {
     const status = response.status();
-    if ([403, 429, 566, 567, 570, 571, 579].includes(status)) {
-      const error = new SourceBlocked(url, status, 'http_access_check');
-      const retry = response.headers()['retry-after'];
-      if ([429, 567, 570, 571, 579].includes(status)) {
-        const advertised = /^\d+$/.test(retry || '') ? Number(retry) * 1000 : Date.parse(retry) - Date.now();
-        error.retryAfterMs = Math.max(30000, Number.isFinite(advertised) ? advertised : 0);
-      }
-      throw error;
-    }
+    if ([403, 429, 566, 567, 570, 571, 579].includes(status)) throw blockedResponse(url, response, 'http_access_check');
     const missing = allowMissing && [404, 410].includes(status);
     if (!missing && (status < 200 || status >= 300)) throw new Error(`Card HTTP ${status}`);
     if (productId(response.url()) !== id) throw new Error('Unexpected product redirect');
@@ -74,7 +80,7 @@ export function pageSnapshot() {
   };
 }
 
-export async function openGuaziBrowser({ profile, headless = false, cdp, timeout = 25000, delay = 1000, transport = 'navigation', verifyCheckbox = false, requestInterval = 400, authState, publicOnly = false, onEvent = async () => {} }, { browserEngine = chromium } = {}) {
+export async function openGuaziBrowser({ profile, headless = false, cdp, timeout = 25000, delay = 1000, transport = 'navigation', verifyCheckbox = false, requestInterval = 400, authState, publicOnly = false, stopOnHttp567 = false, onEvent = async () => {} }, { browserEngine = chromium } = {}) {
   if (publicOnly && (authState || cdp)) throw new Error('Public collector cannot use authentication or an existing browser');
   let browser, context;
   if (publicOnly) {
@@ -122,7 +128,8 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
     try {
       // One attempt per encounter at the known EdgeOne checkbox, with a shared
       // hourly budget. Changed widgets/puzzles or a failed check stop the run.
-      await page.reload({ waitUntil: 'domcontentloaded', timeout });
+      const response = await page.reload({ waitUntil: 'domcontentloaded', timeout });
+      if (stopOnHttp567 && response?.status() === 567) throw blockedResponse(page.url(), response);
       const deadline = Date.now() + timeout;
       let clicked = false;
       while (Date.now() < deadline) {
@@ -163,7 +170,7 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       await pause(Math.max(0, delay - (Date.now() - lastVisit)));
       lastVisit = Date.now();
       const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
-      if ([403, 429, 566, 567, 570, 571, 579].includes(response?.status())) throw new SourceBlocked(url, response.status());
+      if ([403, 429, 566, 567, 570, 571, 579].includes(response?.status())) throw blockedResponse(url, response);
       if (response && response.status() >= 400) throw new Error(`Page HTTP ${response.status()}`);
     }
     async function read(url, parse) {
@@ -313,13 +320,7 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
     try {
       const status = response.status();
       if ([401,403,429,566,567,570,571,579].includes(status)) {
-        const error = new SourceBlocked(url, status, status === 401 ? 'anonymous_auth_required' : 'http_access_check');
-        if ([429,567,570,571,579].includes(status)) {
-          const retry = response.headers()['retry-after'];
-          const advertised = /^\d+$/.test(retry || '') ? Number(retry) * 1000 : Date.parse(retry) - Date.now();
-          error.retryAfterMs = Math.max(30000, Number.isFinite(advertised) ? advertised : 0);
-        }
-        throw error;
+        throw blockedResponse(url, response, status === 401 ? 'anonymous_auth_required' : 'http_access_check');
       }
       if (!response.ok()) throw new Error(`List HTTP ${status}`);
       if (!response.headers()['content-type']?.includes('json')) throw new SourceBlocked(url,status,'non_json_list');
@@ -346,7 +347,7 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       const seen = generation;
       try { return await fetchCard(url, options); }
       catch (e) {
-        if (e.code !== 'SOURCE_BLOCKED') throw e;
+        if (e.code !== 'SOURCE_BLOCKED' || (stopOnHttp567 && e.status === 567)) throw e;
         let capture;
         if (refresh) capture = await refresh;
         else if (seen === generation) capture = await renew(url, e);
@@ -372,7 +373,7 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       const seen = generation;
       try { return await fetchList(body); }
       catch (error) {
-        if (error.code !== 'SOURCE_BLOCKED' || error.status === 401) throw error;
+        if (error.code !== 'SOURCE_BLOCKED' || error.status === 401 || (stopOnHttp567 && error.status === 567)) throw error;
         if (refresh) await refresh;
         else if (seen === generation) await renew(catalogUrl,error,true);
         await paceRequest();

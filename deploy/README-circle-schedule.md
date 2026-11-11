@@ -19,6 +19,13 @@ Che168 uses the existing full-circle command and its 100-new-cars-per-brand
 setting. Guazi starts a new circle after completion, otherwise resumes its
 durable checkpoint. Encar updates existing cars, then imports the refresh's
 fresh discoveries using existing import/physical-vehicle deduplication rules.
+
+On HTTP 567, Guazi saves its checkpoint and the EdgeOne request ID when
+provided. The scheduled runner waits at least one hour, or longer if requested
+by `Retry-After`, then resumes that checkpoint once. A second failure leaves
+the saved queue and sends one final report. `Продолжить 2` still starts a
+manual resume.
+
 Incomplete Encar refreshes prevent the import stage. Telegram receives only one
 result per launch: a numeric summary after success, or detailed failure context,
 saved progress and recent log lines after an error. There are no automatic

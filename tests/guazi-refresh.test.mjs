@@ -51,6 +51,7 @@ async function fixture(t, { active = [a], listed = [a, b] } = {}) {
     store: f.store, policy, notify: async text => f.messages.push(text), log: () => {},
     browserFactory: async options => {
       assert.equal(options.publicOnly, true); assert.equal(options.authState, undefined); assert.equal(options.requestInterval, 750);
+      assert.equal(options.stopOnHttp567, true);
       return { publicBootstrap: async () => {}, publicSearch: async body => { f.searches.push(body); return f.search(body); },
         worker: async () => ({ card: async (href, options) => { assert.equal(options.allowMissing, true); const id = href.match(/-([a-z0-9]{10})\.html/)[1]; f.reads.push(id); return f.detail(id); } }),
         close: async () => { f.closed++; },
@@ -93,17 +94,28 @@ test('next round actually rereads lists and cards; completed round cannot be res
 
 test('blocked card saves committed checks; resume keeps initial snapshot and skips only those successes', async t => {
   const f = await fixture(t);
-  f.detail = async id => { if (id === b) throw blocked(); return capture(id); };
+  f.detail = async id => {
+    if (id === b) return readSessionCard({ get: async () => ({
+      status: () => 567,
+      headers: () => ({ 'retry-after': '7200', 'eo-log-uuid': 'test-request-567' }),
+      dispose: async () => {},
+    }) }, url(id));
+    return capture(id);
+  };
   await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
   const state = await f.state(); assert.equal(state.status, 'blocked'); assert.equal(state.counts.updated, 1);
+  assert.deepEqual(state.accessFailure, { status: 567, requestId: 'test-request-567', retryAfterMs: 7_200_000 });
+  assert.equal(f.removals.length, 0);
   await assert.rejects(f.run(), /Предыдущ|Прошлый/);
   assert.equal((await f.state()).run, state.run);
   f.detail = async id => capture(id);
   const resumed = await f.run(false);
   assert.equal(resumed.status, 'complete'); assert.equal(resumed.run, state.run); assert.equal(f.snapshots, 1);
+  assert.equal(resumed.accessFailure, undefined);
   assert.equal(f.reads.filter(id => id === a).length, 1); assert.equal(f.reads.filter(id => id === b).length, 2);
   assert.equal(f.messages.length, 2);
-  assert.match(f.messages[0], /Источник|Source access check/);
+  assert.match(f.messages[0], /HTTP 567/);
+  assert.match(f.messages[0], /EO-LOG-UUID: test-request-567/);
   assert.match(f.messages[0], /Последняя марка: Tesla/);
   assert.match(f.messages[0], /Сохранено проверок: 1/);
   assert.match(f.messages.at(-1), /За этот круг новых заведено: 1/);

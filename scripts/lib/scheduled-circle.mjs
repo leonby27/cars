@@ -2,6 +2,9 @@
 import { circleSummary, circleFailure } from './circle-report.mjs';
 import { encarCanRetry } from './encar-result.mjs';
 export const CIRCLE_SOURCES = Object.freeze({ '1': 'che', '2': 'guazi', '3': 'encar' });
+const guaziCheckpoint = 'runtime/guazi-refresh/current.json';
+const guaziRetryDelayMs = 60 * 60 * 1000;
+const maxTimeoutMs = 2 ** 31 - 1;
 
 export function circlePlan(source, state) {
   if (source === 'che') return [{ command: 'xvfb-run', args: ['-a', 'node', 'scripts/refresh-che168.mjs', '--new-per-brand=100', '--new-circle'], log: '/tmp/circle.log' }];
@@ -61,10 +64,31 @@ export async function runScheduledCircle(source, { readState, running, run, afte
       await notify(`${label}: запуск по расписанию пропущен — источник уже работает.`);
       return 'busy';
     }
-    state = source === 'guazi' ? await readState('runtime/guazi-refresh/current.json') : source === 'encar' ? await readState('runtime/encar-refresh-checkpoint.json') : null;
+    state = source === 'guazi' ? await readState(guaziCheckpoint) : source === 'encar' ? await readState('runtime/encar-refresh-checkpoint.json') : null;
     for (const step of circlePlan(source, state)) {
       if (source === 'encar') await runEncarStep(step, 'runtime/encar-refresh-report.json');
-      else await run(step);
+      else if (source === 'guazi') {
+        try { await run(step); }
+        catch (error) {
+          if (stop()) throw error;
+          const blocked = await readState(guaziCheckpoint);
+          if (blocked?.status !== 'blocked' || blocked.accessFailure?.status !== 567 || !blocked.run
+            || !(Date.parse(blocked.updatedAt) >= startedAt) || blocked.updatedAt === state?.updatedAt) throw error;
+
+          state = blocked;
+          const advertisedDelay = blocked.accessFailure.retryAfterMs;
+          const delay = Number.isSafeInteger(advertisedDelay) ? Math.max(guaziRetryDelayMs, advertisedDelay) : guaziRetryDelayMs;
+          // Node's timers treat a delay beyond maxTimeoutMs as one millisecond.
+          for (let remaining = delay; remaining > 0; remaining -= maxTimeoutMs) {
+            if (stop()) throw error;
+            await wait(Math.min(remaining, maxTimeoutMs));
+          }
+          if (stop() || await running(source)) throw error;
+          const pending = await readState(guaziCheckpoint);
+          if (pending?.run !== blocked.run || pending.status !== 'blocked' || pending.updatedAt !== blocked.updatedAt) throw error;
+          await run(circlePlan('guazi', pending)[0]);
+        }
+      } else await run(step);
     }
     if (source === 'encar') {
       report = await readState('runtime/encar-refresh-report.json');
@@ -86,7 +110,7 @@ export async function runScheduledCircle(source, { readState, running, run, afte
       if (report.addFailed) throw Error(`Che168: не удалось добавить новых карточек: ${report.addFailed}`);
     }
     if (source === 'guazi') {
-      state = await readState('runtime/guazi-refresh/current.json');
+      state = await readState(guaziCheckpoint);
       if (state?.status !== 'complete') throw Error('Круг не завершён; прогресс сохранён. Продолжение: «Продолжить 2».');
     }
     await afterRefresh();

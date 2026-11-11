@@ -38,6 +38,69 @@ test('Guazi schedule resumes its actual current.json and verifies completion', a
     run: async step => { assert.ok(!step.args.includes('--new-circle')); complete = true; },
   });
 });
+test('Guazi resumes the same round once after HTTP 567 and reports only the final outcome', async () => {
+  for (const failsAgain of [false, true]) {
+    const delays = [], messages = [], steps = [];
+    let finalized = 0, state = { run: 'previous-round', status: 'complete' };
+    const result = runScheduledCircle('guazi', {
+      now: () => startedAt, running: async () => false, readState: async () => state,
+      run: async step => {
+        steps.push(step.args);
+        if (steps.length === 2) {
+          assert.equal(state.run, 'current-round');
+          assert.equal(state.counts.checked, 12);
+        }
+        if (steps.length === 1 || failsAgain) {
+          state = { run: 'current-round', status: 'blocked', updatedAt: iso, counts: { checked: 12 },
+            accessFailure: { status: 567, retryAfterMs: failsAgain ? 7_200_000 : 30_000, requestId: `test-${steps.length}` } };
+          throw Error('refresh failed');
+        }
+        state = { ...state, status: 'complete', accessFailure: undefined };
+      },
+      wait: async ms => delays.push(ms), diagnostics: async () => ({ state }),
+      afterRefresh: async () => { finalized++; }, notify: async text => messages.push(text),
+    });
+    if (failsAgain) await assert.rejects(result, /refresh failed/);
+    else assert.equal(await result, 'complete');
+    assert.deepEqual(steps.map(args => args.includes('--new-circle')), [true, false]);
+    assert.deepEqual(delays, [failsAgain ? 7_200_000 : 3_600_000]);
+    assert.equal(finalized, failsAgain ? 0 : 1);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], failsAgain ? /EO-LOG-UUID: test-2/ : /^✅/);
+  }
+});
+
+test('Guazi does not retry a stale block or a round changed during the pause', async () => {
+  for (const changedDuringWait of [false, true]) {
+    let calls = 0, waits = 0;
+    const blocked = { run: 'saved-round', status: 'blocked', updatedAt: iso, accessFailure: { status: 567 } };
+    let state = changedDuringWait ? null : blocked;
+    await assert.rejects(runScheduledCircle('guazi', {
+      now: () => startedAt, running: async () => false, readState: async () => state,
+      run: async () => { calls++; state = blocked; throw Error('refresh failed'); },
+      wait: async () => { waits++; state = { ...blocked, updatedAt: new Date(startedAt + 4_000_000).toISOString() }; },
+    }), /refresh failed/);
+    assert.equal(calls, 1);
+    assert.equal(waits, Number(changedDuringWait));
+  }
+});
+
+test('stopping Guazi during the pause prevents resumption', async () => {
+  let calls = 0, stopped = false, state;
+  const messages = [];
+  await assert.rejects(runScheduledCircle('guazi', {
+    now: () => startedAt, running: async () => false, readState: async () => state, stop: () => stopped,
+    run: async () => {
+      calls++;
+      state = { run: 'saved-round', status: 'blocked', updatedAt: iso, accessFailure: { status: 567 } };
+      throw Error('refresh failed');
+    },
+    wait: async () => { stopped = true; }, notify: async text => messages.push(text),
+  }), { code: 'ABCARS_STOPPED' });
+  assert.equal(calls, 1);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /^⏹/);
+});
 test('Encar failure stops subsequent import and reports the error', async () => {
   let calls = 0;
   const messages = [];

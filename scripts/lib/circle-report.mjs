@@ -61,6 +61,7 @@ export function circleFailure(source, error, { report, state, importReport, curs
     state?.phase ? `Этап обхода: ${phases[state.phase] || state.phase}` : null,
     state?.brand ? `Последняя марка: ${state.brand}` : null,
     state?.error && !String(error.message).includes(state.error) ? `Ошибка источника: ${state.error}` : null,
+    state?.accessFailure?.requestId ? `Guazi EO-LOG-UUID: ${state.accessFailure.requestId}` : null,
     report?.note || (reason !== report?.fatal ? report?.fatal : null),
     state && (Array.isArray(state.brandsDone) || Number.isFinite(state.brandsTotal)) ? `Марок завершено: ${state.brandsDone?.length || 0} из ${state.brandsTotal ?? '?'}` : null,
     count('Сохранено проверок', counts?.checked ?? report?.checkedThisRun),

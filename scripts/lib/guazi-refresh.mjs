@@ -139,6 +139,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     state.counts = emptyCounts();
     for (const result of results.values()) { state.counts.checked++; state.counts[result.outcome]++; }
     state.status = 'running'; state.pid = process.pid; delete state.error;
+    delete state.accessFailure;
     ownsState = true;
     runTick = Date.now();
     await save();
@@ -156,7 +157,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       await fs.appendFile(path.join(out, 'events.jsonl'), JSON.stringify({ ...data, at: new Date().toISOString() }) + '\n');
     };
     const retry = operation => withGuaziRetries(() => { checkStop(); return operation(); }, { onRetry: event });
-    browser = await browserFactory({ publicOnly: true, transport: 'session-http', verifyCheckbox: true, requestInterval: 750, delay: 250, onEvent: event });
+    browser = await browserFactory({ publicOnly: true, transport: 'session-http', verifyCheckbox: true, requestInterval: 750, delay: 250, stopOnHttp567: true, onEvent: event });
     await retry(() => browser.publicBootstrap());
     const reader = await browser.worker();
     // Each NEW round has a fresh census and fresh discovery directories. Resume
@@ -279,6 +280,11 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
   } catch (error) {
     if (ownsState) {
       state.status = signal?.aborted || error.code === 'GUAZI_PAUSED' ? 'paused' : error.code === 'SOURCE_BLOCKED' ? 'blocked' : 'error';
+      if (state.status === 'blocked') {
+        const { status, requestId, retryAfterMs } = error;
+        state.accessFailure = { status, requestId, retryAfterMs };
+        if (requestId) log(`Guazi EO-LOG-UUID: ${requestId}`);
+      }
       state.error = String(error.message).split('\n')[0].slice(0, 240); await save();
       await message(circleFailure('guazi', error, { state, elapsedMs: state.activeElapsedMs, logPath: paths.log }));
     }

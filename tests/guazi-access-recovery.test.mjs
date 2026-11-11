@@ -87,3 +87,34 @@ test('parallel recovery never returns another car from the shared browser refres
   assert.deepEqual(f.stats(), { visits: 2, disposed: 3 });
  } finally { await f.browser.close(); }
 });
+
+test('a refresh hands HTTP 567 back to the scheduler without another source request', async () => {
+ const catalogUrl = 'https://en.guazi.com/used-cars/';
+ const blocked = {
+  status: () => 567,
+  headers: () => ({ 'eo-log-uuid': 'edgeone-567', 'retry-after': '7200' }),
+  dispose: async () => {},
+ };
+ let navigations = 0, requests = 0, blockNavigation = false;
+ const page = {
+  route: async () => {}, setDefaultTimeout: () => {},
+  goto: async () => { navigations++; return blockNavigation ? blocked : { status: () => 200 }; },
+  evaluate: async () => ({ url: catalogUrl, title: 'Catalog', text: '', scripts: [], products: [url], pages: [] }),
+ };
+ const request = async () => { requests++; return blocked; };
+ const context = { route: async () => {}, newPage: async () => page, close: async () => {}, request: { get: request, post: request } };
+ const browser = await openGuaziBrowser({ publicOnly: true, transport: 'session-http', delay: 0, requestInterval: 0, stopOnHttp567: true }, {
+  browserEngine: { launch: async () => ({ newContext: async () => context, close: async () => {} }) },
+ });
+ try {
+  await browser.listing(catalogUrl);
+  const accessError = { code: 'SOURCE_BLOCKED', status: 567, retryAfterMs: 7_200_000, requestId: 'edgeone-567' };
+  const reader = await browser.worker();
+  await assert.rejects(reader.card(url), accessError);
+  await assert.rejects(browser.publicSearch({}), accessError);
+  assert.equal(requests, 2);
+  assert.equal(navigations, 1);
+  blockNavigation = true;
+  await assert.rejects(browser.listing(catalogUrl), accessError);
+ } finally { await browser.close(); }
+});
