@@ -30,7 +30,7 @@ test('Guazi images are served without persistence when the disk reserve would be
  assert.equal((await cachedGuaziImage(url,{fetchImpl,statfsImpl,minFreeBytes:2048})).cached,false);
  assert.equal(requests,2);assert.deepEqual(await fs.readdir(dir),[]);
 });
-test('Guazi serves disk hits and joins duplicate misses when outbound slots are full', async t => {
+test('Guazi queues a cold gallery burst, serves disk hits and joins duplicate misses', async t => {
  const dir = await fs.mkdtemp(new URL('../runtime/guazi-cache-capacity-test-', import.meta.url));
  const prior = process.env.GUAZI_IMAGE_CACHE_DIR;
  process.env.GUAZI_IMAGE_CACHE_DIR = dir;
@@ -46,23 +46,39 @@ test('Guazi serves disk hits and joins duplicate misses when outbound slots are 
  const blocked = new Promise(resolve => { open = resolve; });
  const ready = new Promise(resolve => { entered = resolve; });
  let calls = 0;
+ let concurrent = 0;
+ let peak = 0;
  const options = { limitOrigin: true, fetchImpl: async () => {
+  peak = Math.max(peak, ++concurrent);
   if (++calls === 6) entered();
   await blocked;
-  return image();
+  return new Response(new ReadableStream({
+   async start(controller) {
+    controller.enqueue(new Uint8Array([255,216,255,0]));
+    await new Promise(resolve => setTimeout(resolve, 30));
+    concurrent--;
+    controller.close();
+   },
+  }), { headers: { 'content-type':'image/jpeg' } });
  } };
- const active = Array.from({ length: 6 }, (_, index) => cachedGuaziImage(root + index + '.jpg', options));
+ const galleryUrls = Array.from({ length: 36 }, (_, index) => [
+  `${root}${index}.jpg?x-bce-process=image/resize,m_lfit,w_600/format,f_webp/quality,q_90`,
+  `${root}${index}.jpg?x-bce-process=image/format,f_jpg`,
+ ]).flat();
+ const gallery = galleryUrls.map(url => cachedGuaziImage(url, options));
  try {
   await ready;
-  assert.equal(await cachedGuaziImage(root + 'overloaded.jpg', options), null);
   assert.equal((await cachedGuaziImage(root + 'warm.jpg', options)).cached, true);
-  const duplicate = cachedGuaziImage(root + '0.jpg', options);
+  const duplicate = cachedGuaziImage(galleryUrls.at(-1), options);
   open();
-  assert.equal(await duplicate, await active[0]);
-  assert.equal(calls, 6);
+  const photos = await Promise.all(gallery);
+  assert.equal(photos.filter(photo => photo?.contentType === 'image/jpeg').length, galleryUrls.length);
+  assert.equal(await duplicate, photos.at(-1));
+  assert.equal(calls, galleryUrls.length);
+  assert.equal(peak, 6);
  } finally {
   open();
-  await Promise.all(active);
+  await Promise.allSettled(gallery);
  }
 });
 test('bulk stops on a failed detail, resumes the same page and replays accepted cars without refetching',async t=>{

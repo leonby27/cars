@@ -6,7 +6,9 @@ import {imageCacheRoot,guaziImageCacheFile} from './guazi-image-key.mjs';
 export {imageCacheRoot};
 export const imageCacheMinFreeBytes=()=>Math.max(0,Number(process.env.GUAZI_IMAGE_CACHE_MIN_FREE_BYTES)||2*1024*1024*1024);
 const inFlight=new Map();
-const imageOrigin=originCapacity(6);
+// A cold gallery requests many distinct variants in one burst. Let misses wait
+// briefly for the same six slots so they do not fail while earlier photos load.
+const imageOrigin=originCapacity(6,72,5000);
 export async function cachedGuaziImage(url,options={}){
  const key=imageUrl(url);if(inFlight.has(key))return inFlight.get(key);
  const task=loadGuaziImage(key,options).finally(()=>inFlight.delete(key));inFlight.set(key,task);return task;
@@ -14,7 +16,7 @@ export async function cachedGuaziImage(url,options={}){
 async function loadGuaziImage(url,{fetchImpl=fetch,statfsImpl=fs.statfs,minFreeBytes=imageCacheMinFreeBytes(),limitOrigin=false}={}){
  const valid=imageUrl(url);const file=guaziImageCacheFile(valid);
  try{const [bytes,meta]=await Promise.all([fs.readFile(file),fs.readFile(file+'.json','utf8').then(JSON.parse)]);imageFormat(bytes,meta.contentType);return{bytes,contentType:meta.contentType,cached:true};}catch(e){if(e.code!=='ENOENT')throw e;}
- const release=limitOrigin ? imageOrigin.acquire() : null;
+ const release=limitOrigin ? await imageOrigin.acquire() : null;
  if(limitOrigin&&!release)return null;
  try{
   const response=await boundedGet(valid,{validate:imageUrl,fetchImpl,maxBytes:12*1024*1024});imageFormat(response.bytes,response.contentType);
