@@ -338,8 +338,6 @@ function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
 // Под «Заходами» цифра сама по себе ничего не говорит, поэтому подписью идёт тот же
 // отрезок суток вчера и среднее за неделю до этого. У многодневных срезов сравнивать
 // не с чем — там показываем, сколько заходов приходится на день внутри периода.
-// График показывает либо заходы, либо просмотры карточек: рост просмотров говорит о
-// том, доходят ли посетители до самих машин, а не только до статей.
 // Как часто открытая страница сама перечитывает цифры. Минута — компромисс: заявка
 // и так приходит в телеграм сразу, а здесь важнее, чтобы вкладка, открытая с утра, к
 // вечеру не показывала утренние числа.
@@ -453,6 +451,7 @@ export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "a
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
   const trendCache = useRef(new Map());
+  const [weekly, setWeekly] = useState(false);
   const [selectedMetric, setTrendMetric] = usePersistedChoice(`${storagePrefix}-metric`, trendMetricIds, "visits");
   const trendMetric = visitsOnly ? "visits" : selectedMetric;
   const [showYandex, setShowYandex] = usePersistedChoice(`${storagePrefix}-yandex`, ["0", "1"], "0");
@@ -495,15 +494,18 @@ export function AnalyticsTrendPanel({ data, period, device = "all", traffic = "a
           {!visitsOnly && <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
             {trendMetrics.map(([id, label]) => <button key={id} type="button" className={trendMetric === id ? "active" : ""} onClick={() => setTrendMetric(id)}>{label}</button>)}
           </div>}
-          {trendMetric === "visits" && <div className="analytics-trend-controls">
+          <div className="analytics-trend-controls">
+            {trendMetric === "visits" && <>
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
               {hasYandexAi && <label className="analytics-chart-source-toggle is-yandex_ai"><input type="checkbox" checked={showYandexAi === "1"} onChange={(event) => setShowYandexAi(event.target.checked ? "1" : "0")} /><span>Яндекс AI</span></label>}
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
               {hasGoogleAi && <label className="analytics-chart-source-toggle is-google_ai"><input type="checkbox" checked={showGoogleAi === "1"} onChange={(event) => setShowGoogleAi(event.target.checked ? "1" : "0")} /><span>Google AI</span></label>}
               <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
-          </div>}
+            </>}
+            <label className="analytics-chart-source-toggle analytics-chart-weekly"><input type="checkbox" checked={weekly} onChange={(event) => setWeekly(event.target.checked)} /><span>По неделям</span></label>
+          </div>
         </div>
-        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} weekly={weekly} from={trendData.from} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
         <div className="analytics-chart-resize" role="separator" tabIndex={0} aria-label="Высота графика" aria-orientation="horizontal" aria-valuemin={TREND_HEIGHT.min} aria-valuemax={TREND_HEIGHT.max} aria-valuenow={chartHeight} aria-valuetext={`${chartHeight} пикселей`} title="Изменить высоту графика: потяните вверх или вниз" {...handleProps}>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m5 19 14-14M13 19l6-6" /></svg>
         </div>

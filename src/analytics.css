@@ -87,6 +87,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-trend-collapse { width:34px; height:34px; display:grid; place-items:center; margin-left:auto; padding:0; border:0; border-radius:calc(9px * var(--corner-scale)); background:transparent; color:var(--muted); cursor:pointer; }
 .analytics-trend-collapse:hover { background:var(--panel-soft); color:var(--accent); }
 .analytics-chart-source-toggle { --source-color:var(--ink); min-height:34px; display:inline-flex; align-items:center; gap:7px; color:var(--muted); font-weight:700; cursor:pointer; white-space:nowrap; }
+.analytics-chart-source-toggle.analytics-chart-weekly { margin-left:auto; }
 .analytics-chart-source-toggle.is-yandex { --source-color:#b98500; }
 .analytics-chart-source-toggle.is-google { --source-color:#4285f4; }
 .analytics-chart-source-toggle.is-google_ai { --source-color:#8b5cf6; }

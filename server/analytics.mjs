@@ -564,7 +564,7 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
   // на весь график: сколько секунд прошло с минской полуночи прямо сейчас.
   const secondOfDay = Math.floor(((now + MINSK_OFFSET_MS) % 86_400_000) / 1000);
   const result = await trafficDb.query(`WITH steps AS (
-      SELECT ${MINSK_DAY} AS day, path, event_name, lower(coalesce(properties->>'entrySource','')) AS entry_source,
+      SELECT ${MINSK_DAY} AS day, visitor_id, path, event_name, lower(coalesce(properties->>'entrySource','')) AS entry_source,
         CASE
           WHEN coalesce(properties->>'acquisition','') IN ('paid','rsya') OR path ~* '${PAID_TAG_PATTERN}' OR path ~* '${RSYA_TAG_PATTERN}' THEN ''
           WHEN lower(coalesce(properties->>'entrySource','')) ~ '${GOOGLE_AI_SOURCE_PATTERN}' THEN 'google-ai'
@@ -592,6 +592,8 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
         WHERE (${VISIT_STARTS}) AND entry_source ~ '^chatgpt$|(^|\\.)(chatgpt\\.com|chat\\.openai\\.com|openai\\.com)$'
       )::int AS chatgpt,
       count(*) FILTER (WHERE event_name = 'page_view')::int AS views,
+      count(DISTINCT visitor_id)::int AS visitors,
+      count(DISTINCT visitor_id) FILTER (WHERE second_of_day < $3)::int AS visitors_to_now,
       count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
       count(*) FILTER (
         WHERE (${VISIT_STARTS}) AND ai_source = '' AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.|^ya\\.ru$') AND second_of_day < $3

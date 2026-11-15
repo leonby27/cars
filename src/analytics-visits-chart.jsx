@@ -6,14 +6,13 @@ const dateLabel = day => new Intl.DateTimeFormat("ru-RU", { day: "numeric", mont
 // по-разному, и без этого каждый всплеск приходится сверять с календарём.
 const weekdayLabel = day => new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "Europe/Minsk" }).format(new Date(day));
 const pointLabel = day => `${dateLabel(day)}, ${weekdayLabel(day)}`;
-// Одна и та же картинка показывает заходы или просмотры страниц — меняются только
-// подписи: на оси, в подсказке и в описании для чтения с экрана.
+const formatValue = new Intl.NumberFormat("ru-RU", { maximumFractionDigits:2 }).format;
 const METRICS = {
-  visits:{ axis:"Заходы", chart:"График заходов по дням", point:"заходов", tooltip:"Заходов" },
-  views:{ axis:"Просмотры страниц", chart:"График просмотров страниц по дням", point:"просмотров страниц", tooltip:"Просмотров страниц" },
+  visits:{ axis:"Заходы", chart:"График заходов", point:"заходов", tooltip:"Заходов" },
+  views:{ axis:"Просмотры на человека", chart:"График просмотров на человека", point:"просмотров на человека", tooltip:"Просмотров на человека" },
 };
 
-export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits" }) {
+export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits", weekly = false, from }) {
   const plotRef = useRef(null);
   const [height, setHeight] = useState(270);
   useEffect(() => {
@@ -22,7 +21,10 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
     return () => observer.disconnect();
   }, []);
   const labels = METRICS[metric] || METRICS.visits;
-  const { points, ticks, single } = visitsChart(daily, period, now, metric, height);
+  const { points, ticks, single } = visitsChart(daily, period, now, metric, height, { weekly, from });
+  const pointDate = ({ day, lastDay }) => weekly
+    ? day === lastDay ? dateLabel(day) : `${dateLabel(day)} – ${dateLabel(lastDay)}`
+    : pointLabel(day);
   const completedPoints = points.filter(point => !point.isToday);
   const todayIndex = points.findIndex(point => point.isToday);
   const todaySegment = todayIndex > 0 ? points.slice(todayIndex - 1, todayIndex + 1) : [];
@@ -38,10 +40,10 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
     { id:"google_ai", y:"googleAiY", label:"Google AI", toNow:"googleAiToNow" },
     { id:"chatgpt", y:"chatgptY", label:"ChatGPT" },
   ].filter((item) => sources.includes(item.id)) : [];
-  return <div className="analytics-line-chart" aria-label={labels.chart}>
+  return <div className="analytics-line-chart" aria-label={`${labels.chart} ${weekly ? "по неделям" : "по дням"}`}>
     <div className="analytics-chart-axis-title">{labels.axis}</div>
     <div className="analytics-chart-body">
-      <div className="analytics-chart-axis" aria-hidden="true">{ticks.map(tick => <span key={tick.value} style={{ top: `${tick.y}%` }}>{tick.value}</span>)}</div>
+      <div className="analytics-chart-axis" aria-hidden="true">{ticks.map(tick => <span key={tick.value} style={{ top: `${tick.y}%` }}>{formatValue(tick.value)}</span>)}</div>
       <div className="analytics-chart-plot" ref={plotRef}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {ticks.map(tick => <line key={tick.value} className="analytics-chart-grid" x1="0" x2="100" y1={tick.y} y2={tick.y} />)}
@@ -51,19 +53,19 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
           {todaySegment.length === 2 && <polyline className={`analytics-chart-line analytics-chart-visitors is-today${todaySelected ? " analytics-chart-selected" : ""}`} points={todaySegment.map(point => `${point.x},${point.y}`).join(" ")} />}
           {todaySegment.length === 2 && sourceLines.map((source) => <polyline key={`${source.id}-today`} className={`analytics-chart-line analytics-chart-source is-${source.id} is-today`} points={todaySegment.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
         </svg>
-        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}${point.isToday ? " is-today" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: ${labels.point} — ${point.value}${point.valueToNow === null ? "" : `, к этому времени суток — ${point.valueToNow}`}`}>
+        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}${point.isToday ? " is-today" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointDate(point)}: ${labels.point} — ${formatValue(point.value)}${point.valueToNow === null ? "" : `, к этому времени суток — ${formatValue(point.valueToNow)}`}`}>
           <span className="analytics-chart-marker" />
-          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{labels.tooltip}: {point.value}</strong>{point.valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {point.valueToNow}</span>}</span>
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointDate(point)}<strong>{labels.tooltip}: {formatValue(point.value)}</strong>{point.valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {formatValue(point.valueToNow)}</span>}</span>
         </button>)}
         {sourceLines.flatMap((source) => points.map((point) => {
           const valueToNow = point[source.toNow] ?? null;
-          return <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}${point.isToday ? " is-today" : ""}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}${valueToNow === null ? "" : `, к этому времени суток — ${valueToNow}`}`}>
+          return <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}${point.isToday ? " is-today" : ""}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointDate(point)}: заходов из ${source.label} — ${formatValue(point[source.id])}${valueToNow === null ? "" : `, к этому времени суток — ${formatValue(valueToNow)}`}`}>
           <span className="analytics-chart-marker" />
-          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{source.label}: {point[source.id]}</strong>{valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {valueToNow}</span>}</span>
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointDate(point)}<strong>{source.label}: {formatValue(point[source.id])}</strong>{valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {formatValue(valueToNow)}</span>}</span>
         </button>;
         }))}
       </div>
     </div>
-    <div className="analytics-chart-dates">{points.filter((_, index) => index % labelStep === 0 || index === points.length - 1).map(point => <span key={point.day} style={{ left: `${point.x}%` }} data-edge={point.x === 0 ? "left" : point.x === 100 ? "right" : "center"}>{pointLabel(point.day)}</span>)}</div>
+    <div className="analytics-chart-dates">{points.filter((_, index) => index % labelStep === 0 || index === points.length - 1).map(point => <span key={point.day} style={{ left: `${point.x}%` }} data-edge={point.x === 0 ? "left" : point.x === 100 ? "right" : "center"}>{weekly ? dateLabel(point.day) : pointDate(point)}</span>)}</div>
   </div>;
 }

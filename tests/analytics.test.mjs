@@ -398,6 +398,7 @@ test("график получает и просмотры всех страни�
   await getAnalyticsTrend("90", { db });
   const sql = calls[0].sql;
   assert.match(sql, /event_name = 'page_view'\)::int AS views/);
+  assert.match(sql, /count\(DISTINCT visitor_id\)::int AS visitors/);
   // Заходы — только первые шаги, но остальные шаги нужны для просмотров: отбор
   // заходов должен жить в счётчике, а не отсекать строки целиком.
   assert.match(sql, /count\(\*\) FILTER \(WHERE gap IS NULL/);
@@ -421,7 +422,7 @@ test("график отдаёт по каждому дню счёт к теку�
     assert.ok(counter.includes(source));
   }
   assert.match(sql, /event_name = 'page_view' AND second_of_day < \$3\)::int AS views_to_now/);
-  assert.match(sql, /second_of_day < \$3/);
+  assert.match(sql, /count\(DISTINCT visitor_id\) FILTER \(WHERE second_of_day < \$3\)::int AS visitors_to_now/);
   assert.match(sql, /extract\(epoch FROM \(created_at AT TIME ZONE 'Europe\/Minsk'\)::time\)/);
   // 12:30 по Минску — половина первого дня.
   assert.equal(calls[0].values[2], 45_000);
@@ -436,7 +437,6 @@ test("график считает заходы тем же правилом, ч�
   await getAnalyticsTrend("90", { db, activity:"actions" });
   const sql = calls[0].sql;
   assert.match(sql, /AS visits/);
-  assert.doesNotMatch(sql, /count\(DISTINCT visitor_id\)/, "график считает заходы, а не уникальных посетителей");
   assert.match(sql, /interval '30 minutes'/);
   assert.match(sql, /previous_day IS DISTINCT FROM day/);
   assert.match(sql, /AT TIME ZONE 'Europe\/Minsk'/);

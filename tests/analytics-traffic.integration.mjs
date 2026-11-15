@@ -76,6 +76,7 @@ try {
   const today = trend.daily.find((row) => row.day === "2026-10-02");
   assert.equal(today.visits, filtered.summary.visits);
   assert.equal(today.views, filtered.summary.page_views);
+  assert.equal(today.visitors, filtered.summary.visitors);
   assert.ok(!trend.daily.some((row) => row.day === "2026-09-25"), "продолжение квотного захода до начала периода не становится целевым");
   const desktop = await getAnalyticsDashboard("today", { ...options, device:"desktop" });
   assert.equal(desktop.summary.vehicle_views, 3, "фильтр устройства не меняет страницу входа");

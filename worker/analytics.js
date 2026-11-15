@@ -135,11 +135,12 @@ const daysValue = (url) => {
 
 async function trend(db, days) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  const daily = await db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors
+  const daily = await db.prepare(`SELECT date(created_at, '+3 hours') AS day, count(DISTINCT visitor_id) AS visitors,
+        count(*) FILTER (WHERE event_name = 'page_view') AS views
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT}
         AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
-      GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff, cutoff).all();
-  return { days, period:String(days), generatedAt:new Date().toISOString(), daily:daily.results || [] };
+      GROUP BY day ORDER BY day`).bind(cutoff, cutoff).all();
+  return { days, period:String(days), from:cutoff, generatedAt:new Date().toISOString(), daily:daily.results || [] };
 }
 
 async function dashboard(db, days) {

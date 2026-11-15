@@ -6,7 +6,7 @@ const daily = Array.from({ length: 100 }, (_, i) => ({ day: new Date(Date.UTC(20
 const now = "2026-09-08T12:00:00Z";
 test("высокий график добавляет целые деления без изменения масштаба и точек", () => {
   for (const metric of ["visits", "views"]) {
-    const days = [{ day:"2026-09-08", visits:124, views:124 }];
+    const days = [{ day:"2026-09-08", visits:124, views:248, visitors:2 }];
     const normal = visitsChart(days, "7", now, metric, 270);
     const tall = visitsChart(days, "7", now, metric, 540);
     assert.deepEqual(normal.ticks.map(tick => tick.value), [0, 50, 100, 150]);
@@ -60,16 +60,14 @@ test("линии Яндекса и Google используют общую шка
   assert.ok(ticks.at(-1).value >= 20);
 });
 
-// Переключатель графика меняет саму величину: в режиме просмотров шкала считается по
-// просмотрам, иначе редкий день с большим числом заходов прижимал бы линию к нулю.
-test("режим просмотров рисует просмотры и масштабируется по ним", () => {
+test("режим просмотров делит просмотры на уникальных посетителей за сутки", () => {
   const days = [
-    { day:"2026-09-07", visits:12, yandex:8, google:3, views:40 },
-    { day:"2026-09-08", visits:20, yandex:11, google:6, views:118 },
+    { day:"2026-09-07", visits:12, yandex:8, google:3, views:40, visitors:20 },
+    { day:"2026-09-08", visits:20, yandex:11, google:6, views:118, visitors:40 },
   ];
   const views = visitsChart(days, "7", now, "views");
-  assert.deepEqual(views.points.map(point => point.value), [40, 118]);
-  assert.ok(views.ticks.at(-1).value >= 118);
+  assert.deepEqual(views.points.map(point => point.value), [2, 2.95]);
+  assert.equal(views.ticks.at(-1).value, 3);
   assert.ok(views.points[1].y < views.points[0].y);
   const visits = visitsChart(days, "7", now);
   assert.deepEqual(visits.points.map(point => point.value), [12, 20]);
@@ -81,13 +79,13 @@ test("режим просмотров рисует просмотры и мас�
 // там она повторяла бы итог.
 test("подсказка знает, сколько набралось к текущему часу", () => {
   const days = [
-    { day:"2026-09-07", visits:12, views:40, visits_to_now:5, views_to_now:18 },
-    { day:"2026-09-08", visits:20, views:118, visits_to_now:20, views_to_now:118 },
+    { day:"2026-09-07", visits:12, views:40, visitors:20, visits_to_now:5, views_to_now:18, visitors_to_now:8 },
+    { day:"2026-09-08", visits:20, views:118, visitors:40, visits_to_now:20, views_to_now:118, visitors_to_now:40 },
   ];
   const visits = visitsChart(days, "7", now);
   assert.deepEqual(visits.points.map(point => point.valueToNow), [5, null]);
   const views = visitsChart(days, "7", now, "views");
-  assert.deepEqual(views.points.map(point => point.valueToNow), [18, null]);
+  assert.deepEqual(views.points.map(point => point.valueToNow), [2.25, null]);
   // День без этой цифры (старый ответ сервера) строку просто не показывает.
   const legacy = visitsChart([{ day:"2026-09-07", visits:12 }], "7", now);
   assert.equal(legacy.points[0].valueToNow, null);
@@ -112,4 +110,24 @@ test("отсутствующие и некорректные сравнения 
     assert.equal(points[0].yandexToNow, null);
     assert.equal(points[0].googleToNow, null);
   }
+});
+
+test("недели по Минску показывают средние дневные значения для всех линий", () => {
+  const days = [
+    { day:"2026-09-05", visits:8, google:4, views:30, visitors:5 },
+    { day:"2026-09-06", visits:5, google:3, views:40, visitors:20, views_to_now:15, visitors_to_now:10 },
+    { day:"2026-09-07", visits:9, google:1, views:21, visitors:7 },
+  ];
+  const options = { weekly:true, from:"2026-09-03T21:00:00Z" };
+  const now = "2026-09-07T21:01:00Z";
+  const { points } = visitsChart(days, "today", now, "visits", 270, options);
+  assert.deepEqual(points.map(({ day, lastDay, isToday, selected }) => [day, lastDay, isToday, selected]), [
+    ["2026-09-04", "2026-09-06", false, false],
+    ["2026-09-07", "2026-09-08", true, true],
+  ]);
+  assert.deepEqual(points.map(point => point.value), [13 / 3, 4.5]);
+  assert.deepEqual(points.map(point => point.google), [7 / 3, 0.5]);
+  const views = visitsChart(days, "today", now, "views", 270, options);
+  assert.deepEqual(views.points.map(point => point.value), [4, 3]);
+  assert.deepEqual(views.points.map(point => point.valueToNow), [null, null]);
 });
