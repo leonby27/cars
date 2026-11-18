@@ -17,7 +17,7 @@ async function setup(t, walkCode, carCode = "throw Error('This fixture must neve
   await fs.mkdir(path.join(root, 'runtime'));
   await fs.copyFile(path.join(repository, 'scripts/import-encar.mjs'), path.join(root, 'scripts/import-encar.mjs'));
   for (const name of ['config', 'src']) await fs.symlink(path.join(repository, name), path.join(root, name));
-  for (const name of ['korea-specs.mjs', 'encar-parser.mjs', 'encar-import-identity.mjs', 'circle-report.mjs', 'sitemap-refresh.mjs']) {
+  for (const name of ['korea-specs.mjs', 'encar-parser.mjs', 'encar-import-identity.mjs', 'circle-report.mjs', 'circle-completion.mjs', 'sitemap-refresh.mjs']) {
     await fs.symlink(path.join(repository, 'scripts/lib', name), path.join(root, 'scripts/lib', name));
   }
   await fs.writeFile(path.join(root, 'scripts/lib/encar-client.mjs'), `
@@ -67,6 +67,20 @@ test('unavailable cards are normal rejections and do not prevent a complete impo
   assert.equal(report.complete,true);
   assert.equal(report.fatal,null);
   assert.equal(report.rejectedByReason['listing gone (404)'],2);
+});
+
+test('actual Encar importer accepts 100 isolated unreadable cards but keeps 101 incomplete', async t => {
+  for (const count of [100, 101]) {
+    const root = await setup(t, `for(let i=0;i<${count};i++)onItem({externalId:String(i)});return {slices:1,pages:1,items:${count},candidates:${count},skipped:{},broken:0};`,
+      'return {status:503};');
+    const result = exec(process.execPath, ['scripts/import-encar.mjs', '--database=0', '--limit=1000'], { cwd: root });
+    if (count === 100) await result;
+    else await assert.rejects(result, { code: 1 });
+    const report = JSON.parse(await fs.readFile(path.join(root, 'runtime/encar-import-report.json')));
+    assert.equal(report.complete, count === 100);
+    assert.equal(report.rejectedByReason['detail request failed (503)'], count);
+    assert.equal(report.imported, 0);
+  }
 });
 
 test('importer stops on a sustained outage and waits for the other worker before saving its final report', async t => {

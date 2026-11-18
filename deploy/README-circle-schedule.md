@@ -215,3 +215,12 @@ Stop future scheduling with:
 This does not stop a currently running collector. Stop a scheduled collector
 with the corresponding `abcars-circle@SOURCE.service`; Che168/Guazi can also
 be stopped through their existing Telegram commands.
+
+Owner policy, 2026-11-18: each source round may finish successfully with at most
+100 individual problem cards across existing checks and discovery imports
+combined. Reports show these deferrals separately; no fresh price, successful
+check date or sale is invented for them. The next round retries them from its
+fresh snapshot. More than 100 remains incomplete. Stops, incomplete lists,
+source-wide access failures, database writes and catalog integrity errors remain
+failures. Che168 refresh and discovery also verify the requested detail ID
+before accepting its price or importing its data.

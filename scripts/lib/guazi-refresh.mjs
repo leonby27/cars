@@ -10,7 +10,8 @@ import { readJson, writeJson, mapLimit } from './guazi-pilot-io.mjs';
 import { withGuaziRetries } from './guazi-retry.mjs';
 import { removeDeadProcessLock } from './guazi-server-runtime.mjs';
 import { orderGuaziBrands } from '../guazi-census.mjs';
-import { circleFailure } from './circle-report.mjs';
+import { circleFailure, safeDiagnostic } from './circle-report.mjs';
+import { withinCircleProblemLimit } from './circle-completion.mjs';
 
 export const refreshPaths = root => ({
   base: path.join(root, 'runtime', 'guazi-refresh'),
@@ -43,9 +44,9 @@ export function formatGuaziBrandReport({ brand, sourceCount, priceChanged, added
   ].join('\n');
 }
 
-export function formatGuaziRoundReport({ brands, checked, priceChanged, added, unavailable, remaining, elapsedMs, review, skipped, reactivated, rejected }) {
+export function formatGuaziRoundReport({ brands, checked, priceChanged, added, unavailable, remaining, elapsedMs, review, skipped, reactivated, rejected, skippedProblemListings }) {
   return [
-    '🏁 Каталог Guazi обновлён целиком',
+    '🏁 Круг обновления каталога Guazi завершён',
     `Круг 2 закрыт: обойдено марок ${brands}`,
     '',
     `За этот круг проверено наших объявлений: ${checked} · изменилось цен: ${priceChanged} (от $100)`,
@@ -56,6 +57,7 @@ export function formatGuaziRoundReport({ brands, checked, priceChanged, added, u
     ...((skipped || review) ? [`Пропущено автоматически: ${(skipped || 0) + (review || 0)}`] : []),
     ...(reactivated ? [`Вернулось в продажу: ${reactivated}`] : []),
     ...(rejected ? [`Отклонено новых: ${rejected}`] : []),
+    ...(skippedProblemListings ? [`Проблемных карточек пропущено до следующего круга: ${skippedProblemListings}`] : []),
   ].join('\n');
 }
 
@@ -83,7 +85,7 @@ export async function readResults(file) {
   if (end !== text.length) await fs.truncate(file, Buffer.byteLength(text.slice(0, end)));
   return new Map(text.slice(0, end).split('\n').filter(Boolean).map(line => {
     const result = JSON.parse(line);
-    if (!/^[a-z0-9]{10}$/.test(result.id) || !Object.hasOwn(emptyCounts(), result.outcome) || result.outcome === 'checked') throw Error('Invalid Guazi result journal');
+    if (!/^[a-z0-9]{10}$/.test(result.id) || (!Object.hasOwn(emptyCounts(), result.outcome) && result.outcome !== 'deferred') || result.outcome === 'checked') throw Error('Invalid Guazi result journal');
     return [result.id, result];
   }));
 }
@@ -136,8 +138,9 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     const active = new Map(snapshot.map(row => [row.externalId, row]));
     const resultsFile = path.join(out, 'results.jsonl');
     const results = await readResults(resultsFile);
+    const problemIds = new Set([...results.values()].filter(result => result.problem).map(result => result.id));
     state.counts = emptyCounts();
-    for (const result of results.values()) { state.counts.checked++; state.counts[result.outcome]++; }
+    for (const result of results.values()) { state.counts.checked++; state.counts[result.outcome] = (state.counts[result.outcome] || 0) + 1; }
     state.status = 'running'; state.pid = process.pid; delete state.error;
     delete state.accessFailure;
     ownsState = true;
@@ -149,7 +152,8 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         await fs.appendFile(resultsFile, JSON.stringify({ ...result, at: new Date().toISOString() }) + '\n');
         const previous = results.get(result.id);
         if (previous) state.counts[previous.outcome]--; else state.counts.checked++;
-        results.set(result.id, result); state.counts[result.outcome]++;
+        results.set(result.id, result); state.counts[result.outcome] = (state.counts[result.outcome] || 0) + 1;
+        if (result.problem) problemIds.add(result.id); else problemIds.delete(result.id);
       });
       return recording;
     };
@@ -157,6 +161,22 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       await fs.appendFile(path.join(out, 'events.jsonl'), JSON.stringify({ ...data, at: new Date().toISOString() }) + '\n');
     };
     const retry = operation => withGuaziRetries(() => { checkStop(); return operation(); }, { onRetry: event });
+    const checkJob = async (job, brand, rechecked = false) => {
+      let result;
+      try { result = await checkGuaziJob(job, { brand, active, segments, config, reader, retry, store, run: state.run, rechecked }); }
+      catch (error) {
+        checkStop();
+        if (!['read', 'parse'].includes(error.stage) || ['SOURCE_BLOCKED', 'GUAZI_PAUSED'].includes(error.code)) throw error;
+        const previous = results.get(job.candidate.id);
+        result = { ...(previous || { id: job.candidate.id, brand, outcome: 'deferred', priorStatus: active.get(job.candidate.id)?.status,
+          job: { candidate: job.candidate, listed: job.listed, segmentId: job.segment?.id, partition: job.partition } }),
+          rechecked, problem: { stage: error.stage, code: error.code, error: safeDiagnostic(error.message).slice(0, 240) } };
+      }
+      await record(result);
+      if (!withinCircleProblemLimit(problemIds.size)) {
+        throw Error('Guazi: более 100 проблемных карточек; прогресс сохранён');
+      }
+    };
     browser = await browserFactory({ publicOnly: true, transport: 'session-http', verifyCheckbox: true, requestInterval: 750, delay: 250, stopOnHttp567: true, onEvent: event });
     await retry(() => browser.publicBootstrap());
     const reader = await browser.worker();
@@ -188,7 +208,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     state.brandsTotal = brands.length;
     for (const brand of brands) {
       checkStop();
-      if (state.brandsDone.includes(brand.brand)) continue;
+      if (state.brandsDone.includes(brand.brand) && ![...results.values()].some(result => result.brand === brand.brand && result.outcome === 'deferred')) continue;
       if (state.brand !== brand.brand) state.brandElapsedMs = 0;
       brandTick = Date.now();
       state.brand = brand.brand; state.phase = 'discovery'; await save();
@@ -214,14 +234,14 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         candidate: { id: row.externalId, url: row.sourceUrl, violations: [] }, listed: false,
       });
       state.phase = 'details'; state.brandTotal = queue.size; await save();
-      const jobs = [...queue.values()].filter(job => !results.has(job.candidate.id));
+      const jobs = [...queue.values()].filter(job => !results.has(job.candidate.id) || results.get(job.candidate.id).outcome === 'deferred');
       let failure;
       for (let offset = 0; offset < jobs.length; offset += 25) {
         checkStop();
         await mapLimit(jobs.slice(offset, offset + 25), 4, async job => {
           if (failure || signal?.aborted) return;
           try {
-            await record(await checkGuaziJob(job, { brand: brand.brand, active, segments, config, reader, retry, store, run: state.run }));
+            await checkJob(job, brand.brand);
           } catch (error) { failure ||= error; }
         });
         await recording; await save();
@@ -232,7 +252,8 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       const byOutcome = outcome => brandResults.filter(result => result.outcome === outcome).length;
       const countBrands = [...new Set([...brand.segments.flatMap(segment => segment.covers), ...brand.existing.map(row => row.brand)])];
       const remaining = await store.countActive(countBrands);
-      state.brandsDone.push(brand.brand); await save();
+      if (!state.brandsDone.includes(brand.brand)) state.brandsDone.push(brand.brand);
+      await save();
       log(formatGuaziBrandReport({ brand: brand.brand, sourceCount: [...queue.values()].filter(job => job.listed).length,
         priceChanged: brandResults.filter(result => result.priceChanged).length,
         added: byOutcome('added'), unavailable: byOutcome('unavailable'), remaining, pages, sections,
@@ -256,19 +277,21 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         }
       }
       if (!job) throw Error(`Missing retry identity for Guazi ${result.id}`);
-      await record(await checkGuaziJob(job, { brand: result.brand, active, segments, config, reader, retry, store, run: state.run, rechecked: true }));
+      await checkJob(job, result.brand, true);
       await save();
     }
     const unchecked = snapshot.filter(row => !results.has(row.externalId));
     if (unchecked.length) throw Error(`Incomplete Guazi refresh: ${unchecked.length} starting listings unchecked`);
+    const skippedProblemListings = problemIds.size;
+    if (!withinCircleProblemLimit(skippedProblemListings)) throw Error('Guazi: более 100 проблемных карточек; прогресс сохранён');
     checkStop();
     state.phase = 'dedupe'; await save();
     await store.finalize();
     const remainingActive = await store.countActive();
     state.phase = 'audit'; await save();
-    const expectedRemaining = [...results.values()].filter(r => ['updated','added'].includes(r.outcome)).length;
+    const expectedRemaining = [...results.values()].filter(r => ['updated','added'].includes(r.outcome) || (r.outcome === 'deferred' && r.priorStatus === 'active')).length;
     state.audit = await store.audit({ run: state.run, results: [...results.values()], expectedRemaining });
-    state.summary = { brands: brands.length, checked: snapshot.length,
+    state.summary = { brands: brands.length, checked: snapshot.filter(row => results.get(row.externalId)?.outcome !== 'deferred').length, skippedProblemListings,
       priceChanged: [...results.values()].filter(result => result.priceChanged).length,
       reactivated: [...results.values()].filter(r => r.action === 'reactivated').length,
       priceChangeThresholdUsd: 100, minorPriceChanges: [...results.values()].filter(r => r.quoteChanged && !r.priceChanged).length,

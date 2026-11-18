@@ -20,6 +20,7 @@ import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
 import { buildSeoPositionRows } from "./seo-keywords.js";
 import { bindModalViewport } from "./modal-viewport.js";
+import { SITE } from "./site-profile.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -610,6 +611,7 @@ const CHATGPT_MARK = "m297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4
 export function VisitSource({ visit }) {
   const sourceKey = visitSourceKey(visit.source, visit.landingPath);
   const genericAdvertising = visitIsAdvertising(visit) && ["direct", "internal", "unknown"].includes(sourceKey);
+  if (sourceKey === "internal" && !genericAdvertising) return <InternalVisitSource />;
   const logoKey = sourceKey.replace(/-ai$/, "");
   const logo = logoKey === "google" ? "G" : logoKey === "yandex" ? "Я" : null;
   return <span className="analytics-visit-source">
@@ -642,7 +644,7 @@ const leadDeviceText = (lead) => {
   return `с ${lead.device === "mobile" ? "телефона" : "компьютера"}${system ? `, ${system}` : ""}`;
 };
 
-// Подсказка при наведении: общая у иконки устройства и у полоски «Целевые / Квота».
+// Общая подсказка для таблицы заходов и переключателей аналитики.
 // Координаты ставим сами и выносим подсказку в body — иначе её обрезала бы панель
 // с прокруткой таблицы.
 function useHoverTooltip(label) {
@@ -682,6 +684,19 @@ function useHoverTooltip(label) {
   const node = open && createPortal(<span ref={tooltip} role="tooltip" className="detail-action-tooltip is-visible"
     style={{ left:position?.left ?? 0, top:position?.top ?? 0, visibility:position ? "visible" : "hidden" }}>{label}</span>, document.body);
   return { anchor, handlers, node };
+}
+
+const internalVisitHost = new URL(SITE.origin).hostname;
+
+function InternalVisitSource() {
+  const label = `${SOURCE_WORDS.internal} ${internalVisitHost}`;
+  const { anchor, handlers, node } = useHoverTooltip(label);
+  return <>
+    <button ref={anchor} type="button" className="analytics-visit-source analytics-visit-source-trigger" aria-label={label} {...handlers}>
+      {SOURCE_WORDS.internal}
+    </button>
+    {node}
+  </>;
 }
 
 export function LeadFunnelCard({ summary = {}, period = "today", mode = "unique", onModeChange, fresh = 0, traffic = "all", acquisition = "all", activity = "all" }) {

@@ -1,9 +1,22 @@
 import { normalizeCoreCard, evaluateCoreCard } from './guazi-core.mjs';
 import { isGuaziSoldCard } from './guazi-availability.mjs';
 
-// Normal policy/data omissions have durable outcomes. Transport, parsing,
-// identity and database errors still throw; they must never look like success.
-export async function checkGuaziJob(job, { brand, active, segments, config, reader, retry, store, run, rechecked = false }) {
+// Card policy/data omissions have durable outcomes. Read/parse failures carry
+// their stage so the round can defer individual cards without masking writes.
+export async function checkGuaziJob(job, options) {
+  const store = Object.fromEntries(['markSkipped', 'markUnavailable', 'upsert'].map(method => [method, async (...args) => {
+    try { return await options.store[method](...args); }
+    catch (error) { error.stage = 'write'; throw error; }
+  }]));
+  const reader = { card: async (...args) => {
+    try { return await options.reader.card(...args); }
+    catch (error) { error.stage = 'read'; throw error; }
+  } };
+  try { return await evaluateGuaziJob(job, { ...options, store, reader }); }
+  catch (error) { error.stage ||= 'parse'; throw error; }
+}
+
+async function evaluateGuaziJob(job, { brand, active, segments, config, reader, retry, store, run, rechecked = false }) {
   const { candidate, listed } = job;
   const id = candidate.id;
   const row = active.get(id) || { id: `guazi-${id}`, externalId: id, sourceUrl: candidate.url };

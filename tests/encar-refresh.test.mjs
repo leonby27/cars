@@ -54,6 +54,30 @@ test('completed refresh persists discoveries, success counts and an empty checkp
   assert.equal(encarImportPlan(discoveries, report, Date.parse(report.startedAt)).args.at(-1), '--limit=1');
 });
 
+test('Encar defers up to 100 attempted problem cards, allows discovery import and retries them in a new round', async t => {
+  for (const count of [100, 101]) {
+    const ids = Array.from({ length: count }, (_, i) => `problem-${i}`);
+    const { options, client, reads } = await fixture(t, ids);
+    client.car = async id => { reads.push(id); return { status: 503 }; };
+    const report = await runEncarRefresh(options);
+    assert.equal(report.complete, count === 100);
+    assert.equal(report.skippedProblemListings, count === 100 ? 100 : 0);
+    assert.equal(reads.length, count);
+    const checkpoint = await readEncarCheckpoint(options.checkpointPath);
+    assert.deepEqual(checkpoint.pending, ids, 'retain evidence without touching the catalog');
+    const discoveries = JSON.parse(await fs.readFile(options.discoveriesPath));
+    if (count === 100) {
+      assert.ok(encarImportPlan(discoveries, report, Date.parse(report.startedAt)));
+      reads.length = 0;
+      client.car = async id => { reads.push(id); return { status: 200, car: { externalId: id }, detail: { advertisement: { status: 'ADVERTISE' } } }; };
+      const next = await runEncarRefresh(options);
+      assert.equal(next.complete, true);
+      assert.equal(next.skippedProblemListings, 0);
+      assert.deepEqual(reads, ids);
+    } else assert.throws(() => encarImportPlan(discoveries, report, Date.parse(report.startedAt)));
+  }
+});
+
 test('WAIT is hidden temporarily without a sale, and skipped cars are rechecked even at an unchanged price',async t=>{
   const {options,client,queries,reads}=await fixture(t,['waiting']);
   client.car=async()=>({status:200,car:null,detail:{advertisement:{status:'WAIT'}}});
@@ -333,13 +357,13 @@ test('a resume access-probe failure saves a current report without touching cata
 });
 
 test('old unresolved failures are distinct from new-attempt errors and the actual HTTP status is retained',async t=>{
-  const {options,client}=await fixture(t,['one','two']);
+  const {options,client}=await fixture(t,Array.from({length:101},(_,i)=>String(i)));
   client.car=async()=>({status:0,error:Error('old network error')});
   await runEncarRefresh(options);
   client.car=async()=>{throw Object.assign(Error('HTTP 407 without sold proof'),{code:'ENCAR_UNAVAILABLE',status:407});};
   await assert.rejects(runEncarRefresh({...options,resume:true}),/407/);
   const saved=await readEncarCheckpoint(options.checkpointPath);
-  assert.equal(saved.summary.readFailed,2);
+  assert.equal(saved.summary.readFailed,101);
   assert.equal(saved.summary.attempt.readFailed,1);
   assert.deepEqual(saved.summary.attempt.responseStatuses,{'407':1});
   assert.match(saved.summary.errors[0].error,/407/);
@@ -375,12 +399,14 @@ test('an unverified 404 never becomes a sale, and a catalog DB outage stops afte
   const {options,client,queries,reads}=await fixture(t,['missing1','missing2']);
   client.car=async()=>({status:404,error:Object.assign(Error('API missing response not confirmed'),{code:'ENCAR_UNVERIFIED_STATUS'}),detail:null,car:null});
   const partial=await runEncarRefresh(options);
+  assert.equal(partial.complete,true);
+  assert.equal(partial.skippedProblemListings,2);
   assert.equal(partial.sold,0);
   assert.equal(partial.readFailed,2);
   assert.equal(queries.filter(x=>x.sql.includes("status='unavailable'")).length,0);
   client.car=async id=>{reads.push(id);return {status:200,car:{externalId:id},detail:{advertisement:{status:'ADVERTISE'}}};};
   options.upsert=async()=>{throw Object.assign(Error('database connection refused'),{code:'ECONNREFUSED'});};
-  await assert.rejects(runEncarRefresh({...options,resume:true}),/database connection refused/);
+  await assert.rejects(runEncarRefresh(options),/database connection refused/);
   assert.deepEqual(reads,['missing1']);
   const saved=await readEncarCheckpoint(options.checkpointPath);
   assert.deepEqual(saved.pending,['missing1','missing2']);

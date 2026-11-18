@@ -125,6 +125,20 @@ test("visiting every brand cannot close a cycle with unchecked listings", () => 
   }
 });
 
+test('Che168 closes with 100 individual problems, carries unchanged dates into the next round, and rejects 101', () => {
+  const cursor = resumeRefreshCycle(null, at);
+  for (const remainingListings of [1, 100, 101]) {
+    const result = finishRefreshCycle(cursor, { remainingListings, remainingBrands: 1, unresolvedListings: remainingListings });
+    assert.equal(result.complete, remainingListings <= 100);
+    assert.equal(result.cursor.startedAt, remainingListings <= 100 ? null : at);
+  }
+  const counts = { remainingListings: 60, remainingBrands: 1, unresolvedListings: 60, failedNewListings: 40 };
+  assert.equal(finishRefreshCycle(cursor, counts).complete, true);
+  assert.equal(finishRefreshCycle(cursor, { ...counts, failedNewListings: 41 }).complete, false);
+  assert.equal(finishRefreshCycle(cursor, { ...counts, incompleteLists: true }).complete, false);
+  assert.equal(finishRefreshCycle(cursor, { ...counts, skippedChecks: 1 }).complete, false);
+});
+
 test("production wiring persists the cycle before selecting rows and checks leftovers after an incomplete list", () => {
   const source = readFileSync(new URL("../scripts/refresh-che168.mjs", import.meta.url), "utf8");
   assert.ok(source.indexOf("await saveCursor(cursor)") < source.indexOf("const { rows } = await pool.query"));

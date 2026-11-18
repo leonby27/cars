@@ -105,6 +105,10 @@ export function extractChe168DetailPayload(scripts) {
   return detail ? { detail, specGroups } : null;
 }
 
+export function che168DetailMatchesListing(payload, externalId) {
+  return /^\d+$/.test(String(externalId)) && String(payload?.detail?.infoid) === String(externalId);
+}
+
 function flattenedSpecs(groups) {
   return (groups || []).flatMap((group) => (group?.paramitems || [])
     .filter(Boolean)

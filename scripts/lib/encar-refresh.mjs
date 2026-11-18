@@ -3,6 +3,7 @@ import path from 'node:path';
 import { safeDiagnostic } from './circle-report.mjs';
 import { encarOutcome, encarEvidence, encarSourceProblem } from './encar-result.mjs';
 import { createEncarImportIdentity } from './encar-import-identity.mjs';
+import { canCompleteWithProblems } from './circle-completion.mjs';
 
 const accountedListings = (summary, pending) => summary.seenSamePrice + summary.stillAlive
   + summary.sold + (summary.skipped || 0) + pending;
@@ -274,7 +275,12 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     const accounted = accountedListings(summary, pending.size);
     if (accounted !== summary.active) throw Object.assign(new Error('Encar: итоги не совпадают с исходным набором объявлений'), { code: 'ENCAR_ACCOUNTING_MISMATCH', stage: 'write' });
     summary.finishedAt = iso();
-    summary.complete = !pending.size && !summary.walk?.broken && !summary.walk?.stopped;
+    summary.complete = canCompleteWithProblems({ problems: pending.size,
+      unattempted: [...pending].filter(id => !state.failures[id]).length,
+      stopped: stop(), incompleteLists: !!(summary.walk?.broken || summary.walk?.stopped), writeFailed: summary.writeFailed });
+    summary.skippedProblemListings = summary.complete ? pending.size : 0;
+    // Keep the IDs and last valid catalog data as evidence. A completed phase
+    // starts a fresh snapshot next time, so this tail cannot block discovery.
     const sourceProblems = [...Object.keys(attempt.responseStatuses).map(status => ({ status: Number(status) })), ...(summary.walk?.errors || [])];
     if (!summary.complete && !attempt.parseFailed && !attempt.writeFailed) Object.assign(summary, encarSourceProblem(sourceProblems));
     state.phase = summary.complete ? 'complete' : 'partial';

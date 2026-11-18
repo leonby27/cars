@@ -1,4 +1,5 @@
 import { encarCanRetry } from './encar-result.mjs';
+import { encarImportReadFailures } from './circle-completion.mjs';
 const labels = { che: 'Круг 1 · Che168', guazi: 'Круг 2 · Guazi', encar: 'Круг 3 · Encar' };
 const count = (label, value) => Number.isFinite(value) ? `${label}: ${value.toLocaleString('ru-RU')}` : null;
 const duration = ms => Number.isFinite(ms) ? `Длительность: ${Math.max(1, Math.round(ms / 60000))} мин` : null;
@@ -26,10 +27,13 @@ export function circleSummary(source, { report, state, importReport, elapsedMs }
     reactivated = state?.summary?.reactivated;
     elapsedMs = state?.activeElapsedMs ?? elapsedMs;
   } else {
-    checked = report?.active; changed = report?.priceChanged; sold = report?.sold;
+    checked = Number.isFinite(report?.active) ? report.active - (report.skippedProblemListings || 0) : undefined;
+    changed = report?.priceChanged; sold = report?.sold;
     added = importReport?.imported ?? 0; rejected = importReport?.rejected;
     reactivated = report?.reactivated;
   }
+  const skippedProblems = source === 'guazi' ? state?.summary?.skippedProblemListings
+    : (report?.skippedProblemListings || 0) + (source === 'encar' ? encarImportReadFailures(importReport) : 0);
   return [
     `✅ ${labels[source]} завершён`,
     source === 'guazi' || (source === 'encar' && report?.resumedAt) ? 'Итоги всего круга:' : 'Итоги этого запуска:',
@@ -41,6 +45,7 @@ export function circleSummary(source, { report, state, importReport, elapsedMs }
     source === 'encar' ? count('Скрыто до следующей проверки', report?.skipped) : skipped ? count('Пропущено автоматически', skipped) : null,
     source === 'encar' && (report?.historyDeferred || importReport?.historyDeferred) ? count('Историю/осмотр обновить не удалось', (report?.historyDeferred || 0) + (importReport?.historyDeferred || 0)) : null,
     rejected ? count('Отклонено по правилам отбора', rejected) : null,
+    skippedProblems ? count('Проблемных карточек пропущено до следующего круга', skippedProblems) : null,
     duration(elapsedMs),
   ].filter(Boolean).join('\n');
 }

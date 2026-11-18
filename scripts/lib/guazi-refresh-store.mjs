@@ -120,7 +120,8 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
           OR l.source_payload->>'fobPort' IS DISTINCT FROM 'Horgos'
           OR COALESCE((l.source_payload->>'fobPriceUsd')::numeric,0)<=0
           OR l.source_payload->>'fobPriceUsd' IS DISTINCT FROM l.source_payload->>'usdPrice'
-          OR l.source_payload->>'refreshRun' IS DISTINCT FROM $2
+          OR (l.source_payload->>'refreshRun' IS DISTINCT FROM $2
+            AND NOT EXISTS (SELECT 1 FROM expected e WHERE e.id=l.external_id AND e.outcome='deferred'))
           OR COALESCE(l.estimated_total_usd,0)<=0 OR v.model_year<2020 OR v.model='' OR v.brand=''
           OR (v.powertrain<>'Электромобиль' AND COALESCE((v.specifications->>'engineVolume')::numeric,0)<=0)
           OR l.mileage_km<0 OR l.price_cny<=0 OR NOT EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id=l.id))::int AS invalid

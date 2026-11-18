@@ -175,17 +175,17 @@ export class EncarClient {
     return result;
   }
 
-  /** Карточка с историей: { status, detail, record, inspection }. 404 — машина снята. */
+  /** Карточка с историей. При отказе API статус подтверждается публичной страницей. */
   async vehicle(id, { history = true } = {}) {
     let detail = await this.json(encarDetailUrl(id));
     const apiStatus = detail.status;
     let availabilitySource = 'api-detail', publicStatus;
-    if (/has_been_cr_blocked|configured to block access from your country/i.test(detail.text || '')) {
-      this.unavailable = new EncarGeoBlockedError(encarDetailUrl(id));
-      throw this.unavailable;
+    const geoBlocked = apiStatus === 404 && /has_been_cr_blocked|configured to block access from your country/i.test(detail.text || '');
+    // Encar can restrict the detail API while its public cards and list API still work.
+    if (apiStatus === 404 && detail.error?.code === 'ENCAR_INVALID_RESPONSE' && !geoBlocked) {
+      throw this.sourceUnavailable('Encar: HTTP 404 с HTML вместо ответа API; снятие с продажи не подтверждено', 404);
     }
-    if (detail.status === 404 && /<(?:!doctype|html|body)\b/i.test(detail.text || '')) throw this.sourceUnavailable('Encar: HTTP 404 с HTML вместо ответа API; снятие с продажи не подтверждено', 404);
-    if (detail.status === 407 || detail.status === 404) {
+    if (apiStatus === 407 || apiStatus === 404) {
       const page = await this.publicDetail(id);
       publicStatus = page.status;
       if (page.detail) {
@@ -197,9 +197,9 @@ export class EncarClient {
         return { status: 404, detail: null, unverifiedUnavailable: true,
           availabilitySource: 'public-missing', apiStatus, publicStatus };
       } else {
-        const reason = page.baseFailed ? 'сайт не смог загрузить данные карточки' : 'публичный статус не подтверждён';
-        const error = Object.assign(new Error(`Encar: HTTP ${detail.status}; ${reason} (HTTP ${page.status}), объявление ${id}`), { code: 'ENCAR_UNVERIFIED_STATUS', status: detail.status });
-        return { status: detail.status, error, detail: null };
+        const apiProblem = geoBlocked ? ' с региональным ограничением' : '';
+        const error = Object.assign(new Error(`Encar: HTTP ${apiStatus}${apiProblem}; публичный статус не подтверждён (HTTP ${page.status}), объявление ${id}`), { code: 'ENCAR_UNVERIFIED_STATUS', status: apiStatus });
+        return { status: apiStatus, error, detail: null };
       }
     }
     if (detail.status === 401 || detail.status === 403) throw this.sourceUnavailable(`Encar: доступ к карточке ограничен (HTTP ${detail.status})`, detail.status);

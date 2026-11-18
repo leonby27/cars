@@ -230,12 +230,29 @@ test('Che168 emits a single numeric summary, and a single detailed failure for p
 test('Encar import request errors produce detailed failure instead of a green summary', async () => {
   const messages = [];
   await assert.rejects(runScheduledCircle('encar', { now: () => startedAt, running: async () => false, run: async () => {},
-    readState: async name => name.includes('discoveries') ? { generatedAt: iso, items: [{}] } : name.includes('import-report') ? { ...report, final: true, rejectedByReason: { 'detail request failed (503)': 2 } } : report,
+    readState: async name => name.includes('discoveries') ? { generatedAt: iso, items: [{}] } : name.includes('import-report') ? { ...report, final: true, rejectedByReason: { 'detail request failed (503)': 101 } } : report,
     notify: async text => messages.push(text),
   }), /503/);
   assert.equal(messages.length, 1);
   assert.match(messages[0], /503/);
   assert.match(messages[0], /не завершён/);
+});
+
+test('Encar uses one 100-card allowance across refresh and discovery import', async () => {
+  for (const importedProblems of [40, 41]) {
+    const messages = [];
+    const refreshed = { ...report, complete: true, remainingListings: 60, unknown: 60, skippedProblemListings: 60 };
+    const result = runScheduledCircle('encar', { now: () => startedAt, running: async () => false, run: async () => {},
+      readState: async name => name.includes('discoveries') ? { generatedAt: iso, items: [{}] }
+        : name.includes('import-report') ? { ...report, final: true, complete: true, rejectedByReason: { 'detail request failed (503)': importedProblems } } : refreshed,
+      notify: async text => messages.push(text),
+    });
+    if (importedProblems === 40) {
+      assert.equal(await result, 'complete');
+      assert.match(messages[0], /пропущено до следующего круга: 100/);
+    } else await assert.rejects(result, /503/);
+    assert.equal(messages.length, 1);
+  }
 });
 
 test('Encar import partial/fatal reports cannot produce a green completion', async () => {

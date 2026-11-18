@@ -1,6 +1,7 @@
 // Weekly launches share the existing collectors and their durable progress.
 import { circleSummary, circleFailure } from './circle-report.mjs';
 import { encarCanRetry } from './encar-result.mjs';
+import { withinCircleProblemLimit, encarImportReadFailures } from './circle-completion.mjs';
 export const CIRCLE_SOURCES = Object.freeze({ '1': 'che', '2': 'guazi', '3': 'encar' });
 const guaziCheckpoint = 'runtime/guazi-refresh/current.json';
 const guaziRetryDelayMs = 60 * 60 * 1000;
@@ -28,7 +29,9 @@ export function encarImportPlan(discoveries, report, startedAt) {
   const snapshotStartedAt = Date.parse(report?.startedAt);
   const refreshedAt = Math.max(snapshotStartedAt, Date.parse(report?.resumedAt) || 0);
   if (report?.fatal || !Number.isFinite(snapshotStartedAt) || !Number.isFinite(Date.parse(report?.finishedAt)) || Date.parse(report.finishedAt) < startedAt || refreshedAt < startedAt) throw Error('Нет свежего завершённого отчёта Encar');
-  if (report.complete === false || report.remainingListings || report.walk?.broken || report.walk?.stopped || report.unknown) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
+  const deferred = report.skippedProblemListings || 0;
+  if (report.complete === false || !withinCircleProblemLimit(deferred) || (report.remainingListings || 0) !== deferred
+    || (report.unknown || 0) !== deferred || report.writeFailed || report.walk?.broken || report.walk?.stopped) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
   if (!Array.isArray(discoveries?.items) || Date.parse(discoveries.generatedAt) < snapshotStartedAt || Date.parse(discoveries.generatedAt) > Date.parse(report.finishedAt) || !Number.isFinite(Date.parse(discoveries.generatedAt))) throw Error('Нет свежих находок Encar');
   if (!discoveries.items.length) return null;
   return { command: 'node', args: ['scripts/import-encar.mjs', '--discoveries', `--limit=${discoveries.items.length}`], log: 'runtime/encar-circle.log' };
@@ -99,7 +102,7 @@ export async function runScheduledCircle(source, { readState, running, run, afte
         if (!importReport?.final || !Number.isFinite(Date.parse(importReport.startedAt)) || Date.parse(importReport.startedAt) < startedAt) throw Error('Нет свежего итогового отчёта пополнения Encar');
         if (importReport.fatal || importReport.complete === false || importReport.walk?.broken) throw Error(`Encar: пополнение не завершено${importReport.fatal ? `: ${importReport.fatal}` : ''}`);
         const failures = Object.entries(importReport.rejectedByReason || {}).filter(([reason]) => /^(?:detail request failed|detail error:)/.test(reason));
-        if (failures.length) throw Error(`Encar: ошибки чтения новых карточек: ${failures.map(([reason, count]) => `${reason} — ${count}`).join('; ')}`);
+        if (!withinCircleProblemLimit((report.skippedProblemListings || 0) + encarImportReadFailures(importReport))) throw Error(`Encar: ошибки чтения новых карточек: ${failures.map(([reason, count]) => `${reason} — ${count}`).join('; ')}`);
       }
     }
     // Collectors can save partial progress and exit normally. Do not call it complete.
@@ -107,7 +110,8 @@ export async function runScheduledCircle(source, { readState, running, run, afte
       cursor = await readState('runtime/refresh-cursor.json');
       report = await readState('runtime/refresh-report.json');
       if (!cursor || cursor.startedAt || !report?.finishedAt || !Number.isFinite(Date.parse(report.startedAt)) || Date.parse(report.startedAt) < startedAt) throw Error('Круг не завершён; прогресс сохранён. Продолжение: «Продолжить».');
-      if (report.addFailed) throw Error(`Che168: не удалось добавить новых карточек: ${report.addFailed}`);
+      const problems = (report.remainingListings || 0) + (report.addFailed || 0);
+      if (!withinCircleProblemLimit(problems) || (problems && (report.circleClosed !== true || report.skippedProblemListings !== problems))) throw Error(`Che168: не удалось проверить или добавить карточек: ${problems}`);
     }
     if (source === 'guazi') {
       state = await readState(guaziCheckpoint);

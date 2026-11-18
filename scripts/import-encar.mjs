@@ -26,6 +26,7 @@
 //                                                            техкарты (опции, осмотр, история) и дописать её
 import fs from "node:fs/promises";
 import path from "node:path";
+import { withinCircleProblemLimit, encarImportReadFailures } from './lib/circle-completion.mjs';
 import { fileURLToPath } from "node:url";
 import { EncarClient, EncarGeoBlockedError } from "./lib/encar-client.mjs";
 import { loadKoreaSpecs } from "./lib/korea-specs.mjs";
@@ -128,7 +129,8 @@ const report = (extra = {}) => ({
   failureCode: failure?.code,
   failureStatus: failure?.status,
   failureStage: failure?.stage,
-  complete: !fatal && !discoveryFailure && !walkStats?.broken && (accepted.length >= limit || (!outOfTime() && cursor >= candidates.length)),
+  complete: !fatal && !discoveryFailure && !walkStats?.broken && withinCircleProblemLimit(encarImportReadFailures({ rejectedByReason: Object.fromEntries(rejected) }))
+    && (accepted.length >= limit || (!outOfTime() && cursor >= candidates.length)),
   rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
   rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
   rejectionExamples,
@@ -245,6 +247,7 @@ async function worker() {
       continue;
     }
     const candidate = candidates[cursor++];
+    let stage = 'read';
     try {
       const { status, car, detail, error } = await client.car(candidate.externalId, { usdPerKrw, history: withHistory });
       detailReads += 1;
@@ -263,9 +266,9 @@ async function worker() {
       const duplicate = identity.claim(car, { repair });
       if (duplicate) { reject(duplicate, candidate.externalId); continue; }
       accepted.push(car);
-      if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
+      if (accepted.length - checkpointed >= batchSize) { stage = 'write'; await checkpoint(false); }
     } catch (error) {
-      if (error instanceof EncarGeoBlockedError || error.code === 'ENCAR_UNAVAILABLE') throw error;
+      if (stage === 'write' || error instanceof EncarGeoBlockedError || error.code === 'ENCAR_UNAVAILABLE') throw error;
       reject(`detail error: ${String(error.message).slice(0, 80)}`, candidate.externalId);
     }
   }

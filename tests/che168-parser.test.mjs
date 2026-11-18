@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildChe168Car, decodeNextFlightScript, extractChe168DetailPayload, extractChe168ListPayload, normalizeChe168TechnicalSpecs, parseChe168ListJsonLd } from "../scripts/lib/che168-parser.mjs";
+import { buildChe168Car, decodeNextFlightScript, extractChe168DetailPayload, extractChe168ListPayload, normalizeChe168TechnicalSpecs, parseChe168ListJsonLd, che168DetailMatchesListing } from "../scripts/lib/che168-parser.mjs";
+
+test('a successful detail response for another car cannot supply a refresh or discovery price', () => {
+  const payload = { detail: { infoid: 60541818, price: '21390' } };
+  assert.equal(che168DetailMatchesListing(payload, '56810049'), false);
+  assert.equal(che168DetailMatchesListing(payload, '59203765'), false);
+  assert.equal(che168DetailMatchesListing(payload, '60541818'), true);
+  assert.equal(che168DetailMatchesListing({}, '60541818'), false);
+  assert.equal(che168DetailMatchesListing({}, undefined), false);
+});
 
 const detail = {
   infoid: 59376071,

@@ -50,7 +50,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } from "./lib/che168-parser.mjs";
+import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car, che168DetailMatchesListing } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
@@ -1018,6 +1018,7 @@ async function reportCircleDone(round, totals) {
     `За эту сессию проверено наших объявлений: ${totals.checked} · изменилось цен: ${totals.rePriced}`,
     `За эту сессию новых заведено: ${totals.added}`,
     `За эту сессию снято с продажи: ${totals.sold}`,
+    ...(totals.skippedProblems ? [`Проблемных карточек пропущено до следующего круга: ${totals.skippedProblems}`] : []),
     `В каталоге сейчас: ${totals.remaining}`,
     `Заняло: ${totals.hours} ч`,
   ];
@@ -1054,6 +1055,7 @@ async function checkDetail(externalId) {
   // Пока мы этого не понимали, каждая такая машина считалась молчанием источника:
   // тридцать подряд — и предохранитель объявлял стену там, где её не было.
   if (!payload?.detail) return answered ? { verdict: "sold" } : { verdict: "unknown", status };
+  if (!che168DetailMatchesListing(payload, externalId)) return { verdict: "unknown", status, reason: "identity-mismatch" };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
   return price ? { verdict: "alive", price } : { verdict: "sold" };
 }
@@ -1069,6 +1071,7 @@ async function addNewCar(externalId) {
   // Найденная в списке машина к моменту скачивания карточки бывает уже снята —
   // это не сбой скачивания, а «её больше нет»: молчанием источника не считаем.
   if (!payload?.detail) return answered ? "rejected" : "failed";
+  if (!che168DetailMatchesListing(payload, externalId)) return "failed";
   let car;
   try {
     car = buildChe168Car(payload, { expectedLocale: "en" });
@@ -1442,7 +1445,7 @@ try {
     totals.rePriced += res.rePriced;
     totals.added += added;
     totals.addFailed += addFailed;
-    if (!res.ok || addFailed) totals.errors.push({ brand: entry.brand, error: `${res.why || 'Есть незавершённые проверки'}${addFailed ? `; не удалось добавить карточек: ${addFailed}` : ''}` });
+    if (!res.ok || addFailed) totals.errors.push({ brand: entry.brand, incompleteLists: !ok, error: `${res.why || 'Есть незавершённые проверки'}${addFailed ? `; не удалось добавить карточек: ${addFailed}` : ''}` });
     totals.sold += soldHere;
     console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${unchecked} осталось в текущем круге, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
     await reportBrand(entry, res);
@@ -1475,6 +1478,8 @@ try {
       [cursor.startedAt])).rows[0].n;
   const { complete: circleClosed, cursor: nextCursor } = finishRefreshCycle(cursor, {
     remainingListings, remainingBrands, stopped,
+    unresolvedListings: unknown, failedNewListings: totals.addFailed,
+    incompleteLists: totals.errors.some(item => item.incompleteLists), skippedChecks: detailSkipped,
   });
   await saveCursor(nextCursor);
   console.log(
@@ -1506,6 +1511,7 @@ try {
     brandsCoveredThisRun: coveredBrands.size,
     brandsCoveredInCircle: nextCursor.brandsDone.length,
     circleClosed,
+    skippedProblemListings: circleClosed ? remainingListings + totals.addFailed : 0,
     cycleStartedAt: cursor.startedAt,
     remainingListings,
     remainingBrands,
@@ -1542,7 +1548,7 @@ try {
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
   // Only one result: a successful summary or detailed incomplete/error report.
-  if (circleClosed && !totals.addFailed) {
+  if (circleClosed) {
     if (!dryRun) await refreshAfterManualCatalog({ root: ROOT });
     await reportCircleDone(cursor.round || 1, {
       brands: doneNow.size,
@@ -1553,6 +1559,7 @@ try {
       sold: totals.sold,
       remaining: report.remainingActive,
       hours: Math.round((Date.now() - startedAt) / 360000) / 10,
+      skippedProblems: report.skippedProblemListings,
     });
   } else if (!tgQuiet) {
     const unfinished = allBrands.filter((item) => !doneNow.has(item.brand)).map((item) => item.brand);

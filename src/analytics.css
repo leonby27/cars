@@ -161,6 +161,8 @@ html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
 .analytics-visit-number.is-unread { background:var(--fresh-bg); color:var(--fresh-ink); font-weight:800; }
 .analytics-visit-source { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+.analytics-visit-source-trigger { padding:0; border:0; background:transparent; color:inherit; font:inherit; cursor:help; }
+.analytics-visit-source-trigger:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-source-logo { width:20px; height:20px; display:inline-grid; flex:none; place-items:center; font:900 17px/1 Arial,sans-serif; font-style:normal; }
 .analytics-source-logo.is-yandex { color:#fc3f1d; }
 .analytics-source-logo.is-google { background:conic-gradient(from -35deg,#4285f4 0 28%,#34a853 28% 46%,#fbbc05 46% 64%,#ea4335 64% 80%,#4285f4 80%); background-clip:text; -webkit-background-clip:text; color:transparent; }

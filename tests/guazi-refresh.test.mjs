@@ -73,7 +73,7 @@ test('new round refreshes existing FOB, adds discoveries, and removes only after
   assert.ok(f.writes.every(car => car.source === 'Guazi' && car.fobPort === 'Horgos' && car.fobPriceUsd === 28748));
   assert.equal(f.finalized, 1); assert.equal(f.releases, 1); assert.equal(f.closed, 1);
   assert.equal(f.messages.length, 1);
-  assert.match(f.messages[0], /^🏁 Каталог Guazi обновлён целиком/);
+  assert.match(f.messages[0], /^🏁 Круг обновления каталога Guazi завершён/);
   assert.match(f.messages[0], /В каталоге Guazi сейчас: 2/);
   assert.equal(state.summary.added, 1);
   assert.equal(state.summary.remaining, 2);
@@ -90,6 +90,34 @@ test('next round actually rereads lists and cards; completed round cannot be res
   assert.equal(f.writes.at(-1).fobPriceUsd, 29900); assert.equal(f.snapshots, 2);
   assert.equal(f.messages.length, 2);
   assert.match(f.messages.at(-1), /изменилось цен: 1/);
+});
+
+test('Guazi defers 100 individual malformed cards without altering them; 101 keeps the round incomplete', async t => {
+  for (const count of [100, 101]) {
+    const ids = Array.from({ length: count }, (_, i) => String(i).padStart(10, '0'));
+    const f = await fixture(t, { active: ids, listed: ids });
+    f.detail = async () => capture('wrong00000');
+    if (count === 100) {
+      const state = await f.run();
+      assert.equal(state.status, 'complete');
+      assert.equal(state.summary.skippedProblemListings, 100);
+      assert.equal(state.summary.checked, 0);
+      assert.equal(f.rows.get(ids[0]).status, 'active');
+      assert.match(f.messages[0], /пропущено до следующего круга: 100/);
+      f.detail = async id => capture(id);
+      const next = await f.run();
+      assert.equal(next.summary.skippedProblemListings, 0);
+      assert.equal(next.summary.checked, 100);
+    } else {
+      await assert.rejects(f.run(), /более 100/);
+      assert.equal((await f.state()).status, 'error');
+      assert.equal(f.finalized, 0);
+      f.detail = async id => capture(id);
+      const resumed = await f.run(false);
+      assert.equal(resumed.status, 'complete');
+      assert.equal(resumed.summary.skippedProblemListings, 0);
+    }
+  }
 });
 
 test('blocked card saves committed checks; resume keeps initial snapshot and skips only those successes', async t => {
@@ -353,14 +381,14 @@ test('minor FOB movement is tracked separately, with a $100 threshold for report
   assert.equal((await store.upsert({...car,fobPriceUsd:28800})).priceChanged,true);
 });
 
-test('missing photos or mileage are ordinary skips, while corrupt identities still fail the round',async t=>{
+test('missing photos or mileage are ordinary skips, while individual corrupt identities are deferred without writes',async t=>{
   for(const field of ['gallery','mileage']){
     const f=await fixture(t,{listed:[a]});
     f.detail=async id=>{const x=capture(id);if(field==='gallery')x.rawData.images=[];else x.rawData.vehicleDetails.find(d=>d.key==='mileage').value='';return x;};
     const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.counts.skipped,1);assert.equal(f.writes.length,0);
   }
   const f=await fixture(t,{listed:[a]});f.detail=async id=>{const x=capture(id);x.rawData.productId=b;x.rawData.images=[];return x;};
-  await assert.rejects(f.run(),/identity mismatch/);assert.equal((await f.state()).counts.checked,0);
+  const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.summary.skippedProblemListings,1);assert.equal(f.writes.length,0);assert.equal(f.rows.get(a).status,'active');
 });
 
 test('unfinished legacy review journals are automatically rechecked using their persisted discovery identity',async t=>{

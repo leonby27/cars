@@ -30,6 +30,14 @@ test('real SQL skips and restores cars, preserves quotes, scopes sales and audit
     }});
     assert.equal((await store.snapshot()).length,1);
     assert.deepEqual(await store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'updated'}],expectedRemaining:1}),{active:1,invalid:0,mismatches:0});
+    // Only explicitly deferred IDs may retain an earlier observation round.
+    await db.query("UPDATE listings SET source_payload=jsonb_set(source_payload,'{refreshRun}','\"previous\"')");
+    await store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'deferred'}],expectedRemaining:1});
+    await assert.rejects(store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'updated'}],expectedRemaining:1}),{code:'GUAZI_INTEGRITY_FAILED'});
+    await db.query('DELETE FROM listing_media');
+    await assert.rejects(store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'deferred'}],expectedRemaining:1}),{code:'GUAZI_INTEGRITY_FAILED'});
+    await db.query('INSERT INTO listing_media VALUES($1,$2)',[id,payload.images[0]]);
+    await db.query("UPDATE listings SET source_payload=jsonb_set(source_payload,'{refreshRun}','\"run\"')");
     await store.markSkipped(row,{run:'run',reason:'fob_price_range',observedAt:'2026-10-08T06:00:00Z'});
     const skipped=(await db.query('SELECT * FROM listings WHERE id=$1',[id])).rows[0];
     assert.equal(skipped.status,'skipped');assert.equal(skipped.sold_at,null);assert.equal(skipped.source_payload.fobPriceUsd,28748);

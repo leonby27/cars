@@ -220,11 +220,54 @@ test('a long Retry-After stops the shared source even on the final attempt',asyn
   assert.equal(client.requests,1);
 });
 
-test('geographic and HTML error pages cannot turn a live advertisement into a sale',async()=>{
-  for(const html of ['<html>has_been_cr_blocked_AWS.html</html>','<!doctype html><html>verification required</html>']){
-    const client=new EncarClient({pace:0,fetcher:async()=>response(404,html)});
-    await assert.rejects(client.car('123'),e=>['ENCAR_GEO_BLOCKED','ENCAR_UNAVAILABLE'].includes(e.code));
+const geoBlockPage='<html>has_been_cr_blocked_AWS.html</html>';
+
+test('a regional detail API 404 uses the matching public status and still reads available history',async()=>{
+  const id=String(sample.detail.vehicleId);
+  const state={cars:{base:{...sample.detail,queryCarId:id},detailFlags:{adStatus:'advertise'}}};
+  const record={ownerChangeCnt:2};
+  const client=new EncarClient({pace:0,fetcher:async url=>{
+    if(url.endsWith(`/detail/${id}`))return response(200,page(state));
+    if(url.endsWith('/detail/123'))return response(200,page(soldState('123',{vehicleId:456,dummyVehicleId:123})));
+    if(url.includes('/record/'))return response(200,record);
+    if(url.includes('/inspection/')||url.includes('/ev-battery/'))return response(204);
+    return response(404,geoBlockPage);
+  }});
+  const active=await client.car(id,{usdPerKrw:0.0007});
+  assert.equal(active.status,200);
+  assert.equal(active.availabilitySource,'public-detail');
+  assert.equal(active.apiStatus,404);
+  assert.equal(active.publicStatus,200);
+  assert.ok(active.car.sourcePrice>0);
+  assert.deepEqual(active.record,record);
+  assert.equal(active.historyUnavailable,false);
+  const sold=await client.car('123');
+  assert.equal(sold.status,200);
+  assert.equal(sold.detail.advertisement.status,'SOLD');
+  assert.equal(sold.availabilitySource,'public-sold');
+  assert.equal(sold.car,null);
+});
+
+test('regional 404 without verified public data leaves cards pending and stops repeated failures',async()=>{
+  const client=new EncarClient({pace:0,fetcher:async url=>url.startsWith('https://api.encar.com/')
+    ?response(404,geoBlockPage):response(200,page(soldState('999')))});
+  for(let i=0;i<14;i++){
+    const result=await client.car(String(i));
+    assert.equal(result.status,404);
+    assert.equal(result.error.code,'ENCAR_UNVERIFIED_STATUS');
+    assert.equal(result.unverifiedUnavailable,undefined);
+    assert.equal(result.car,null);
   }
+  await assert.rejects(client.car('14'),e=>e.code==='ENCAR_UNAVAILABLE'&&e.status===404);
+  const calls=client.requests;
+  await assert.rejects(client.car('15'),e=>e.code==='ENCAR_UNAVAILABLE');
+  assert.equal(client.requests,calls);
+});
+
+test('an unknown API HTML 404 still aborts the source immediately',async()=>{
+  const client=new EncarClient({pace:0,fetcher:async()=>response(404,'<!doctype html><html>verification required</html>')});
+  await assert.rejects(client.car('123'),e=>e.code==='ENCAR_UNAVAILABLE'&&e.status===404);
+  assert.equal(client.requests,1);
 });
 
 test('healthy detail/inspection requests do not mask a persistent optional-history outage',async()=>{
