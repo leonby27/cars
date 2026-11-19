@@ -3988,9 +3988,8 @@ function ChineseNameMark({ car }) {
 
 // Что делает кнопка «Узнать точную цену и наличие» в карточке: раньше она молча уводила
 // в кабинет, и человек попадал неизвестно куда. Теперь запрос уходит с самой страницы,
-// а окно подтверждает, что заявка принята. Собрано тем же набором, что и остальные
-// такие окна сайта: значок, заголовок, строка текста и кнопка.
-function AvailabilityRequestModal({ onClose, preview = false, russianPhone = false }) {
+// а окно подтверждает, что заявка принята, и показывает компанию-импортёра.
+function AvailabilityRequestModal({ car, onClose, preview = false, russianPhone = false }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -4008,6 +4007,15 @@ function AvailabilityRequestModal({ onClose, preview = false, russianPhone = fal
           ? "Кнопка показана для проверки интерфейса. Заявки по локальной тестовой карточке не отправляются."
           : russianPhone ? "Мы временно не принимаем заявки на автомобили с российским номером телефона."
             : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
+        {!preview && !russianPhone && carOrigin(car) === "china" && (
+          <div className="availability-request-importer">
+            <img src={appHref("/partners/dasdrive.png")} width="56" height="56" alt="" />
+            <div className="availability-request-importer-info">
+              <strong>Das Drive</strong>
+              <p>Партнёр сервиса, который обработает вашу заявку</p>
+            </div>
+          </div>
+        )}
         <div className="order-removal-actions availability-paused-actions">
           <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
         </div>
@@ -4530,7 +4538,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           ) : (
             <button ref={availabilityCtaRef} className={`primary report-order-cta availability-primary-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
               <span className="availability-primary-title">
-                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
+                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Оставить заявку"}
               </span>
             </button>
           )}
@@ -4539,7 +4547,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
               <button className={`primary availability-primary-cta${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
                 <span className="availability-primary-title">
-                  {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
+                  {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Оставить заявку"}
                 </span>
               </button>
             </div>
@@ -4552,7 +4560,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               onDone={setAvailabilityStatus}
             />
           ) : availabilityStatus ? (
-            <AvailabilityRequestModal preview={availabilityStatus === "preview"} russianPhone={availabilityStatus === "russian-phone"} onClose={() => setAvailabilityStatus("")} />
+            <AvailabilityRequestModal car={car} preview={availabilityStatus === "preview"} russianPhone={availabilityStatus === "russian-phone"} onClose={() => setAvailabilityStatus("")} />
           ) : null}
         </div>
       </div>

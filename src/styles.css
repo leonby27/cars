@@ -12729,10 +12729,9 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   font-size: 16px;
   line-height: 1.55;
 }
-/* Окно «заявка принята»: тот же набор, что у соседних окон-уведомлений — значок,
-   заголовок, текст, кнопка. Вторая строка поясняет, что именно мы проверим. */
+/* Окно «Заявка принята» с компанией, которая обработает запрос. */
 .lead-modal.availability-paused-modal.social-unavailable-modal.availability-request-modal {
-  width: min(460px, 100%);
+  width: min(560px, 100%);
 }
 .availability-request-icon {
   width: 80px;
@@ -12740,6 +12739,42 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   display: block;
   margin: 0 auto 14px;
   object-fit: contain;
+}
+.availability-request-importer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel-soft);
+  text-align: left;
+}
+:root[data-theme="dark"] .availability-request-importer {
+  background: color-mix(in srgb, var(--panel), #fff 6%);
+}
+.availability-request-importer > img, .availability-request-importer > picture > img {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.availability-request-importer-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.availability-request-importer-info > strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.4;
+}
+.availability-request-importer-info > p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
 }
 .availability-check-block {
   padding: 20px 22px;
