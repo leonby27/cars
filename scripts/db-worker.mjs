@@ -5,6 +5,7 @@ import { getCar, upsertCar } from "../server/repository.mjs";
 import { expireUnseenListings, scheduleStaleListings } from "../server/crawler-maintenance.mjs";
 import { normalizeDrive, normalizeEnergy, parseGuaziHtml, parseGuaziMarkdown } from "./lib/guazi-parser.mjs";
 import { fetchSourceText } from "./lib/source-client.mjs";
+import { assertImportSourceEnabled } from '../config/import-policy.mjs';
 
 const workerId = `${os.hostname()}-${process.pid}`;
 const runOnce = process.argv.includes("--once");
@@ -130,6 +131,9 @@ async function refreshGuazi(job) {
 }
 
 async function processJob(job) {
+  // Old queued jobs must obey the same policy as new imports. In particular,
+  // the legacy domestic Guazi reader cannot overwrite verified export FOB data.
+  assertImportSourceEnabled(job.source);
   if (job.source === "Guazi" && job.job_type === "refresh_listing") return refreshGuazi(job);
   throw new Error(`Unsupported job ${job.source}:${job.job_type}`);
 }

@@ -166,7 +166,11 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       try { result = await checkGuaziJob(job, { brand, active, segments, config, reader, retry, store, run: state.run, rechecked }); }
       catch (error) {
         checkStop();
-        if (!['read', 'parse'].includes(error.stage) || ['SOURCE_BLOCKED', 'GUAZI_PAUSED'].includes(error.code)) throw error;
+        if (!['read', 'parse'].includes(error.stage) || error.code === 'GUAZI_PAUSED') throw error;
+        const row = active.get(job.candidate.id);
+        if (row) await store.markSkipped(row, { run: state.run, reason: 'unverified-detail', unverified: true,
+          observedAt: new Date().toISOString() });
+        if (error.code === 'SOURCE_BLOCKED') throw error;
         const previous = results.get(job.candidate.id);
         result = { ...(previous || { id: job.candidate.id, brand, outcome: 'deferred', priorStatus: active.get(job.candidate.id)?.status,
           job: { candidate: job.candidate, listed: job.listed, segmentId: job.segment?.id, partition: job.partition } }),
@@ -289,7 +293,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     await store.finalize();
     const remainingActive = await store.countActive();
     state.phase = 'audit'; await save();
-    const expectedRemaining = [...results.values()].filter(r => ['updated','added'].includes(r.outcome) || (r.outcome === 'deferred' && r.priorStatus === 'active')).length;
+    const expectedRemaining = [...results.values()].filter(r => ['updated','added'].includes(r.outcome)).length;
     state.audit = await store.audit({ run: state.run, results: [...results.values()], expectedRemaining });
     state.summary = { brands: brands.length, checked: snapshot.filter(row => results.get(row.externalId)?.outcome !== 'deferred').length, skippedProblemListings,
       priceChanged: [...results.values()].filter(result => result.priceChanged).length,

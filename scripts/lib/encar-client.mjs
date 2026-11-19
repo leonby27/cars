@@ -14,6 +14,7 @@ import {
 } from "./encar-parser.mjs";
 import { request } from 'undici';
 import { encarEvidence } from './encar-result.mjs';
+import { positiveSourceAmount } from './source-money.mjs';
 
 import { applyKoreaSpecs } from "./korea-specs.mjs";
 
@@ -220,6 +221,9 @@ export class EncarClient {
     if (!detail.json.spec?.fuelName || !detail.json.category || !Array.isArray(detail.json.photos)
       || detail.json.category.formYear == null || detail.json.advertisement.price == null || detail.json.spec.mileage == null) {
       throw Object.assign(new Error('Encar: incomplete vehicle response'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
+    }
+    if (positiveSourceAmount(detail.json.advertisement.price) === null) {
+      throw Object.assign(new Error('Encar: invalid vehicle price'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
     }
     const vehicleId = detail.json.vehicleId;
     let record = null;

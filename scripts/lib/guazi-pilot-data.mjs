@@ -2,6 +2,7 @@
 import { isAllowedImportBrand, canonicalImportBrand } from '../../config/import-policy.mjs';
 import { normalizeGuaziSpecs } from './guazi-pilot-specs.mjs';
 import { chinaFields, chinaCondition } from './guazi-pilot-condition.mjs';
+import { positiveSourceAmount } from './source-money.mjs';
 
 export const CHINA_INDEX = 'https://www.guazi.com/guazisou/cardetail/pc_cardetail_md_index.xml';
 export const IMAGE_HOSTS = new Set(['global-image-pub.guazistatic-global.com', 'image-oversea.guazistatic-global.com', 'image-public.guazistatic.com', 'global-image1.guazistatic-global.com']);
@@ -119,7 +120,7 @@ export function normalizeCard(raw, url, observedAt = new Date().toISOString()) {
     manufactureDate: details.mfgDate ?? null, vin: details.vin ?? null, location: details.location ?? null,
     specifications: details, batteryHealth: raw.batteryHealth ?? null,
     ...normalizeGuaziSpecs(raw, details),
-    prices: (raw.prices || []).map(p => ({ amount: numeric(p.price), currency: 'USD', basis: 'FOB', port: p.enName, portCode: p.code, isDefault: p.isDefault === 1, sourceValue: p.price })),
+    prices: (raw.prices || []).map(p => ({ amount: positiveSourceAmount(p.price, { dollars: true }), currency: 'USD', basis: 'FOB', port: p.enName, portCode: p.code, isDefault: p.isDefault === 1, sourceValue: p.price })),
     inspection: { exportGrade: raw.reportDetailLite?.baseInfo?.level ?? null, lite: raw.reportDetailLite ?? null, full: { status: 'not_requested' } },
     images, china: { status: 'pending' }, conflicts: [],
     // Observing a page is not evidence that a car is active or was just listed.

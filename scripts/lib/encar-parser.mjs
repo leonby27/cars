@@ -12,6 +12,7 @@
 // Договор записи — IMPORTER.md, раздел Encar: цена в вонах в `sourcePrice` +
 // `sourceCurrency: "KRW"` + `usdPrice`, адрес `/cars/kr-<id>`, фото через наш кэш.
 import { canonicalImportBrand, canonicalImportName } from "../../config/import-policy.mjs";
+import { positiveSourceAmount } from './source-money.mjs';
 
 export const ENCAR_API = "https://api.encar.com";
 export const ENCAR_SITE = "https://fem.encar.com/cars/detail/";
@@ -209,6 +210,7 @@ const kstIso = (value) => {
 };
 
 const numeric = (value) => {
+  if (value == null || typeof value === 'boolean' || typeof value === 'object' || String(value).trim() === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 };
@@ -278,7 +280,7 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
   const spec = detail?.spec;
   const advertisement = detail?.advertisement;
   if (!category || !spec || !advertisement) return null;
-  if (advertisement.status && advertisement.status !== "ADVERTISE") return null;
+  if (advertisement.status !== "ADVERTISE") return null;
   // Лизинг и аренда отсеиваются ещё в списке (SellType.일반); в карточке это видно по
   // условиям лизинга — на всякий случай проверяем и здесь.
   if (advertisement.leaseRentInfo) return null;
@@ -290,7 +292,7 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
   const rawModel = String(category.modelGroupEnglishName || category.modelGroupName || "").trim();
   const model = canonicalImportName(brand, rawModel, fuel.type, { source: "Encar", rawSeries: category.modelName, rawModel: category.gradeEnglishName }).model;
   const year = numeric(category.formYear);
-  const priceMan = numeric(advertisement.price);
+  const priceMan = positiveSourceAmount(advertisement.price);
   const mileage = numeric(spec.mileage);
   const images = encarPhotos(detail);
   // Номера объявления в карточке нет — его знает тот, кто карточку запросил. У
@@ -298,7 +300,11 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
   // совпадает с vehicleId. Это не другая машина: импорт проверяет sourceVehicleId.
   // Здесь запасной путь, когда номер объявления не передали.
   const externalId = String(id || (detail.manage?.dummy ? detail.manage?.dummyVehicleId : detail.vehicleId) || "").trim();
-  if (!brand || !model || !year || !priceMan || mileage === null || images.length < 2 || !externalId) return null;
+  if (!brand || !model || !Number.isInteger(year) || !priceMan || mileage === null || mileage < 0 || images.length < 2 || !/^\d+$/.test(externalId)) return null;
+  if (![detail.vehicleId, detail.manage?.dummyVehicleId].some(value => String(value) === externalId)
+    || (detail.queryCarId != null && String(detail.queryCarId) !== externalId)) {
+    throw Object.assign(new Error('Encar: карточка принадлежит другому объявлению'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
+  }
 
   const won = Math.round(priceMan * 10_000);
   const usdPrice = Math.round(won * Number(usdPerKrw));
@@ -449,7 +455,7 @@ export function encarCandidate(item, { minYear = 2020 } = {}) {
     externalId,
     year,
     type: fuel.type,
-    priceMan: numeric(item.Price),
+    priceMan: positiveSourceAmount(item.Price),
     manufacturer: String(item.Manufacturer || ""),
     modelGroup: String(item.Model || ""),
     modifiedAt: item.ModifiedDate || null,

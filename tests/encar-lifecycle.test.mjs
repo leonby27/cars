@@ -67,8 +67,8 @@ test('one round handles the observed source states, a DB interruption and an acc
   await assert.rejects(runEncarRefresh({ ...options, client: makeClient() }), /DB disconnected/);
   assert.equal(rows.get('1').status, 'skipped', 'API 404 cannot turn public WAIT into a sale');
   assert.equal(rows.get('2').status, 'unavailable', 'matching explicit SOLD is a sale');
-  assert.equal(rows.get('3').status, 'unavailable', 'missing source data is removed by the owner policy');
-  assert.equal(rows.get('4').status, 'unavailable', 'structured absence is unavailable, not a confirmed sale');
+  assert.equal(rows.get('3').status, 'skipped', 'missing source data is hidden, preserving photos and the last quote');
+  assert.equal(rows.get('4').status, 'skipped', 'structured absence is hidden, not a confirmed sale');
   assert.equal(rows.get('1').source_payload.sourceAvailability.reason, 'source-wait');
   assert.equal(rows.get('1').source_payload.sourceAvailability.apiStatus, 404);
   assert.equal(rows.get('2').source_payload.sourceAvailability.reason, 'source-sold');
@@ -79,8 +79,8 @@ test('one round handles the observed source states, a DB interruption and an acc
   assert.equal(rows.get('7').status, 'active', 'an already known unavailable ad can return from current source lists');
   let checkpoint = await readEncarCheckpoint(options.checkpointPath);
   assert.deepEqual(checkpoint.pending, ['6']);
-  assert.equal(checkpoint.summary.sold, 3);
-  assert.equal(checkpoint.summary.unverifiedUnavailable, 2);
+  assert.equal(checkpoint.summary.sold, 1);
+  assert.equal(checkpoint.summary.unverifiedHidden, 2);
   assert.equal(checkpoint.summary.reactivated, 1);
   const previousWrites = [...writes];
   phase = 2;
@@ -95,8 +95,8 @@ test('one round handles the observed source states, a DB interruption and an acc
   const report = await runEncarRefresh({ ...options, client: makeClient(), resume: true });
   assert.deepEqual(reads, ['6']);
   assert.equal(report.complete, true);
-  assert.equal(report.sold, 3);
-  assert.equal(report.skipped, 1);
+  assert.equal(report.sold, 1);
+  assert.equal(report.skipped, 3);
   assert.equal(report.rewritten, 3);
   assert.equal(report.reactivated, 1);
   assert.equal(report.historyDeferred, 3);

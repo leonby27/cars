@@ -90,7 +90,10 @@ test("импорт из файла отбрасывает dummy до выгру�
     for (const dir of ["src", "config", "scripts/lib"]) {
       await symlink(path.join(root, dir), path.join(isolated, dir));
     }
-    const first = buildEncarCar(source.detail, { id: "42662037", usdPerKrw: 0.0007 });
+    const fixtureDetail = structuredClone(source.detail);
+    fixtureDetail.vehicleId = 42662037;
+    fixtureDetail.queryCarId = 42662037;
+    const first = buildEncarCar(fixtureDetail, { id: "42662037", usdPerKrw: 0.0007 });
     first.sourceVehicleId = 42662037;
     const duplicate = { ...first, id: "encar-42665950", externalId: "42665950" };
     const distinct = { ...first, id: "encar-42662038", externalId: "42662038", sourceVehicleId: 42662038 };

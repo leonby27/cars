@@ -454,19 +454,35 @@ test("полная техкарта: опции, лист осмотра по у
   assert.equal(record["Смен владельца"], "1");
   assert.deepEqual(car.optionCodes.slice(0, 3), ["001", "004", "005"]);
   // Без истории и осмотра техкарты нет, а машина есть.
-  const bare = buildEncarCar(sample("santafe_diesel").detail, { id: "1", usdPerKrw });
+  const bare = buildEncarCar(sample("santafe_diesel").detail, { id: sample("santafe_diesel").listItem.Id, usdPerKrw });
   assert.ok(bare && bare.technicalSpecs.groups.every((group) => group.name === "Опции"));
 });
 
 test("батарея электромобиля попадает в запись, когда площадка её отдаёт", () => {
   const battery = { ensolRawInfo: null, jatoBatteryInfo: { batteryCapacityKwh: 77.4, range: 458 }, encarComputedInfo: { soh: 96.5 } };
-  const car = buildEncarCar(sample("ioniq5").detail, { id: "1", usdPerKrw, battery });
+  const car = buildEncarCar(sample("ioniq5").detail, { id: sample("ioniq5").listItem.Id, usdPerKrw, battery });
   assert.equal(car.battery, 77.4);
   assert.equal(car.batteryHealth, 96.5);
   assert.equal(car.electricRange, 458);
   const group = car.technicalSpecs.groups.find((item) => item.name === "Батарея");
   assert.deepEqual(group.items.map((item) => item.value), ["96.5 %", "77.4 кВт·ч", "458 км"]);
-  const empty = buildEncarCar(sample("ioniq5").detail, { id: "1", usdPerKrw, battery: { ensolRawInfo: null, jatoBatteryInfo: null, encarComputedInfo: null } });
+  const empty = buildEncarCar(sample("ioniq5").detail, { id: sample("ioniq5").listItem.Id, usdPerKrw, battery: { ensolRawInfo: null, jatoBatteryInfo: null, encarComputedInfo: null } });
   assert.equal(empty.battery, null);
   assert.equal(empty.evBattery, null);
+});
+
+test('missing mileage, ambiguous price and a different ID cannot become an active Encar car', () => {
+  const original = sample('grandeur');
+  const options = { id: original.listItem.Id, usdPerKrw };
+  for (const mileage of [null, '', true, -1]) {
+    const detail = structuredClone(original.detail); detail.spec.mileage = mileage;
+    assert.equal(buildEncarCar(detail, options), null);
+  }
+  for (const price of [null, '', true, -1000, '1000-2000', '문의', Infinity]) {
+    const detail = structuredClone(original.detail); detail.advertisement.price = price;
+    assert.equal(buildEncarCar(detail, options), null);
+  }
+  const detail = structuredClone(original.detail); delete detail.advertisement.status;
+  assert.equal(buildEncarCar(detail, options), null);
+  assert.throws(() => buildEncarCar(original.detail, { ...options, id: '1' }), { code: 'ENCAR_INVALID_DETAIL' });
 });

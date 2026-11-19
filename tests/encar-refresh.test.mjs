@@ -54,6 +54,27 @@ test('completed refresh persists discoveries, success counts and an empty checkp
   assert.equal(encarImportPlan(discoveries, report, Date.parse(report.startedAt)).args.at(-1), '--limit=1');
 });
 
+test('a list card without a verified price requires a detail check instead of a fresh successful timestamp', async t => {
+  const f = await fixture(t, ['same']);
+  f.client.walk = async ({ onItem }) => { onItem({ externalId: 'same', priceMan: null }); return { slices: 1, broken: 0 }; };
+  const report = await runEncarRefresh(f.options);
+  assert.deepEqual(f.reads, ['same']);
+  assert.equal(report.seenSamePrice, 0);
+  assert.equal(f.queries.some(q => /SET last_seen_at=now\(\), last_checked_at=now\(\)/.test(q.sql)), false);
+});
+
+test('an unverified Encar card is hidden with its old price/check date intact and remains retryable', async t => {
+  const f = await fixture(t, ['missing']);
+  f.client.car = async () => ({ status: 407 });
+  const report = await runEncarRefresh(f.options);
+  assert.equal(report.skippedProblemListings, 1);
+  const hide = f.queries.find(q => q.sql.includes("SET status='skipped'"));
+  assert.deepEqual(hide.values.slice(0, 2), ['Encar', 'missing']);
+  assert.doesNotMatch(hide.sql, /last_checked_at=|price_cny=|sold_at=now/);
+  const checkpoint = await readEncarCheckpoint(f.options.checkpointPath);
+  assert.deepEqual(checkpoint.pending, ['missing']);
+});
+
 test('Encar defers up to 100 attempted problem cards, allows discovery import and retries them in a new round', async t => {
   for (const count of [100, 101]) {
     const ids = Array.from({ length: count }, (_, i) => `problem-${i}`);
@@ -133,13 +154,13 @@ test('an unavailable source card is removed without a sale date and no longer bl
   const report=await runEncarRefresh({...options,resume:true});
   assert.deepEqual(probes,['same'],'access control must be outside the unverified tail');
   assert.equal(report.complete,true);
-  assert.equal(report.sold,1);
-  assert.equal(report.unverifiedUnavailable,1);
+  assert.equal(report.sold,0);
+  assert.equal(report.unverifiedHidden,1);
   assert.equal(report.readFailed+report.parseFailed+report.writeFailed,0);
   assert.equal(report.remainingListings,0);
-  const update=queries.find(row=>row.sql.includes("status='unavailable'"));
+  const update=queries.find(row=>row.sql.includes("status='skipped'"));
   assert.ok(update.sql.includes('sold_at=NULL'));
-  assert.deepEqual(JSON.parse(update.values[1]),{state:'unavailable',reason:'source-unavailable',checkedAt:JSON.parse(update.values[1]).checkedAt,sourceState:null,source:'public-missing',apiStatus:407,publicStatus:200});
+  assert.deepEqual(JSON.parse(update.values[1]),{state:'hidden',reason:'source-unavailable',checkedAt:JSON.parse(update.values[1]).checkedAt,sourceState:null,source:'public-missing',apiStatus:407,publicStatus:200});
   const checkpoint=await readEncarCheckpoint(options.checkpointPath);
   assert.deepEqual(checkpoint.pending,[]);
   assert.deepEqual(checkpoint.failures,{});

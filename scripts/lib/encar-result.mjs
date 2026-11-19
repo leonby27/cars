@@ -1,7 +1,8 @@
-// A failed detail load is unavailable by owner policy; transport failures stay unknown.
+// A failed detail load is hidden, never evidence of a sale (owner, 2026-11-19).
 export function encarOutcome({ status, detail, car, error, unverifiedUnavailable }, policyViolation = () => null) {
   if (error || ![200, 404].includes(status)) return { state: 'unknown', reason: 'unverified' };
-  if (status === 404) return { state: 'unavailable', reason: unverifiedUnavailable ? 'source-unavailable' : 'not-found' };
+  if (status === 404) return unverifiedUnavailable
+    ? { state: 'hidden', reason: 'source-unavailable' } : { state: 'unavailable', reason: 'not-found' };
   const state = detail?.advertisement?.status;
   if (state === 'SOLD') return { state: 'sold', reason: 'source-sold' };
   if (state === 'WAIT') return { state: 'hidden', reason: 'source-wait' };

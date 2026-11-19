@@ -75,10 +75,10 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
       // A policy/data skip is neither a sale nor a deletion. Preserve the last
       // valid quote and its observation date, but remove it from public reads.
       await withTransaction(client => client.query(`UPDATE listings SET status='skipped', sold_at=NULL,
-        last_checked_at=$3, content_changed_at=now(), source_payload=source_payload ||
+        last_checked_at=CASE WHEN $4 THEN last_checked_at ELSE $3::timestamptz END, content_changed_at=now(), source_payload=source_payload ||
         jsonb_build_object('availabilityStatus','skipped','guaziSkip',$2::jsonb)
         WHERE id=$1 AND source='Guazi' AND status IN ('active','skipped')`,
-      [row.id, JSON.stringify(details), details.observedAt]));
+      [row.id, JSON.stringify(details), details.observedAt, details.unverified === true]));
     },
     async auditSelected({ run, results }) {
       const { rows } = await pool.query(`WITH expected AS (
@@ -95,7 +95,7 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
           OR l.source_payload->'guaziUnavailabilityEvidence'->>'run' IS DISTINCT FROM $2))
         OR (r.outcome='skipped' AND (l.status='active' OR (l.status='skipped'
           AND l.source_payload->'guaziSkip'->>'run' IS DISTINCT FROM $2)))
-        OR (r.outcome='rejected' AND l.status='active')
+        OR (r.outcome IN ('rejected','deferred') AND l.status='active')
       )::int AS mismatches FROM expected r LEFT JOIN listings l ON l.source='Guazi' AND l.external_id=r.id`,
       [JSON.stringify(results.map(({ id, outcome }) => ({ id, outcome }))), run]);
       if (rows[0].checked !== results.length || rows[0].mismatches) throw Object.assign(Error('Guazi selected-result integrity check failed'), { code: 'GUAZI_INTEGRITY_FAILED' });
@@ -111,7 +111,7 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
              OR l.source_payload->'guaziUnavailabilityEvidence'->>'run' IS DISTINCT FROM $2))
            OR (r.outcome='skipped' AND (l.status='active' OR (l.status='skipped'
              AND l.source_payload->'guaziSkip'->>'run' IS DISTINCT FROM $2)))
-           OR (r.outcome='rejected' AND l.status='active')
+           OR (r.outcome IN ('rejected','deferred') AND l.status='active')
       ) SELECT
         (SELECT count(*)::int FROM mismatches) AS mismatches,
         count(*)::int AS active,

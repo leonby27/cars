@@ -30,9 +30,9 @@ test('real SQL skips and restores cars, preserves quotes, scopes sales and audit
     }});
     assert.equal((await store.snapshot()).length,1);
     assert.deepEqual(await store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'updated'}],expectedRemaining:1}),{active:1,invalid:0,mismatches:0});
-    // Only explicitly deferred IDs may retain an earlier observation round.
+    // A deferred earlier observation must not remain public.
     await db.query("UPDATE listings SET source_payload=jsonb_set(source_payload,'{refreshRun}','\"previous\"')");
-    await store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'deferred'}],expectedRemaining:1});
+    await assert.rejects(store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'deferred'}],expectedRemaining:1}),{code:'GUAZI_INTEGRITY_FAILED'});
     await assert.rejects(store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'updated'}],expectedRemaining:1}),{code:'GUAZI_INTEGRITY_FAILED'});
     await db.query('DELETE FROM listing_media');
     await assert.rejects(store.audit({run:'run',results:[{id:'bbbbbbbbbb',outcome:'deferred'}],expectedRemaining:1}),{code:'GUAZI_INTEGRITY_FAILED'});

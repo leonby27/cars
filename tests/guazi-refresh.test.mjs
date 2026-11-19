@@ -92,7 +92,7 @@ test('next round actually rereads lists and cards; completed round cannot be res
   assert.match(f.messages.at(-1), /изменилось цен: 1/);
 });
 
-test('Guazi defers 100 individual malformed cards without altering them; 101 keeps the round incomplete', async t => {
+test('Guazi hides 100 individual malformed cards until a verified return; 101 keeps the round incomplete', async t => {
   for (const count of [100, 101]) {
     const ids = Array.from({ length: count }, (_, i) => String(i).padStart(10, '0'));
     const f = await fixture(t, { active: ids, listed: ids });
@@ -102,7 +102,7 @@ test('Guazi defers 100 individual malformed cards without altering them; 101 kee
       assert.equal(state.status, 'complete');
       assert.equal(state.summary.skippedProblemListings, 100);
       assert.equal(state.summary.checked, 0);
-      assert.equal(f.rows.get(ids[0]).status, 'active');
+      assert.equal(f.rows.get(ids[0]).status, 'skipped');
       assert.match(f.messages[0], /пропущено до следующего круга: 100/);
       f.detail = async id => capture(id);
       const next = await f.run();
@@ -254,6 +254,17 @@ test('missing Horgos quote retains existing FOB; unknown historical brand cannot
   assert.equal((await f.run()).counts.skipped, 1); assert.equal(f.removals.length, 0);
 });
 
+test('ambiguous Horgos prices preserve the last quote without writing a fake amount or sale', async t => {
+  for (const price of ['from $28,748', '$28,748–30,000', '-28748', 'CNY 28748', '$28,74']) {
+    const f = await fixture(t, { listed: [a] });
+    f.detail = async id => capture(id, price);
+    const result = await f.run();
+    assert.equal(result.counts.skipped, 1, price);
+    assert.equal(f.writes.length, 0, price);
+    assert.equal(f.removals.length, 0, price);
+  }
+});
+
 test('live process lock prevents a second collector without deleting the lock', async t => {
   const f = await fixture(t); await fs.mkdir(refreshPaths(f.root).base, { recursive: true });
   await fs.writeFile(refreshPaths(f.root).lock, String(process.pid));
@@ -381,14 +392,14 @@ test('minor FOB movement is tracked separately, with a $100 threshold for report
   assert.equal((await store.upsert({...car,fobPriceUsd:28800})).priceChanged,true);
 });
 
-test('missing photos or mileage are ordinary skips, while individual corrupt identities are deferred without writes',async t=>{
+test('missing facts and corrupt identities are hidden while preserving the last quote',async t=>{
   for(const field of ['gallery','mileage']){
     const f=await fixture(t,{listed:[a]});
     f.detail=async id=>{const x=capture(id);if(field==='gallery')x.rawData.images=[];else x.rawData.vehicleDetails.find(d=>d.key==='mileage').value='';return x;};
     const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.counts.skipped,1);assert.equal(f.writes.length,0);
   }
   const f=await fixture(t,{listed:[a]});f.detail=async id=>{const x=capture(id);x.rawData.productId=b;x.rawData.images=[];return x;};
-  const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.summary.skippedProblemListings,1);assert.equal(f.writes.length,0);assert.equal(f.rows.get(a).status,'active');
+  const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.summary.skippedProblemListings,1);assert.equal(f.writes.length,0);assert.equal(f.rows.get(a).status,'skipped');
 });
 
 test('unfinished legacy review journals are automatically rechecked using their persisted discovery identity',async t=>{

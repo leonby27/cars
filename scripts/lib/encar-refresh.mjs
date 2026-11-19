@@ -4,6 +4,7 @@ import { safeDiagnostic } from './circle-report.mjs';
 import { encarOutcome, encarEvidence, encarSourceProblem } from './encar-result.mjs';
 import { createEncarImportIdentity } from './encar-import-identity.mjs';
 import { canCompleteWithProblems } from './circle-completion.mjs';
+import { quarantineListing } from './catalog-quarantine.mjs';
 
 const accountedListings = (summary, pending) => summary.seenSamePrice + summary.stillAlive
   + summary.sold + (summary.skipped || 0) + pending;
@@ -101,7 +102,10 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     });
     return saveChain;
   };
-  const fail = (externalId, stage, error, status) => {
+  const fail = async (externalId, stage, error, status) => {
+    if (!dryRun && stage !== 'write') {
+      await quarantineListing(db, { source: 'Encar', externalId, reason: error?.code || 'unverified-detail' });
+    }
     const entry = { externalId, stage, status, code: error?.code || error?.cause?.code,
       error: safeDiagnostic(error?.message || error).slice(0, 240) };
     state.failures[externalId] = entry;
@@ -145,8 +149,8 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
         if (!seenPrice.has(externalId)) unseen.push(externalId);
         else {
           const won = seenPrice.get(externalId);
-          if (won !== null && Math.abs(won - listing.won) >= 10_000) changed.push(externalId);
-          else if (listing.status === 'skipped' || listing.historyUnavailable) recheck.push(externalId);
+          if (won !== null && won > 0 && won !== listing.won) changed.push(externalId);
+          else if (won === null || won <= 0 || listing.status === 'skipped' || listing.historyUnavailable) recheck.push(externalId);
           else same.push(listing.id);
         }
       }
@@ -209,9 +213,9 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
         try {
           const { status, car, detail, error, historyUnavailable, apiStatus, publicStatus, availabilitySource, unverifiedUnavailable } = await client.car(externalId, { usdPerKrw, history: true });
           if ((status !== 200 && status !== 404) || (status === 404 && error)) {
-            fail(externalId, 'read', error || `Encar: detail request failed (${status})`, status);
+            await fail(externalId, 'read', error || `Encar: detail request failed (${status})`, status);
           } else if (status === 200 && (!detail || error)) {
-            fail(externalId, 'parse', error || 'Encar: empty detail response', status);
+            await fail(externalId, 'parse', error || 'Encar: empty detail response', status);
           } else {
             stage = 'parse';
             let { state: outcome, reason } = encarOutcome({ status, car, detail, error, unverifiedUnavailable }, policyViolation);
@@ -228,6 +232,7 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
                 if (updated.rowCount !== 1) throw new Error('Encar: не подтверждена запись статуса объявления');
               }
               summary.skipped = (summary.skipped || 0) + 1;
+              if (unverifiedUnavailable) summary.unverifiedHidden = (summary.unverifiedHidden || 0) + 1;
               identity.release(externalId);
             } else if (outcome === 'sold' || outcome === 'unavailable') {
               if (!dryRun) {
@@ -253,12 +258,12 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
           if (activationClaimed) identity.release(externalId);
           if (error.code === 'ENCAR_GEO_BLOCKED') { fatal = error; break; }
           if (error.code === 'ENCAR_UNAVAILABLE') {
-            fail(externalId, error.stage || 'read', error, error.status ?? 0);
+            await fail(externalId, error.stage || 'read', error, error.status ?? 0);
             fatal = error;
             break;
           }
-          if (error.stage === 'parse') stage = 'parse';
-          fail(externalId, stage, error, error.status);
+          if (['parse', 'write'].includes(error.stage)) stage = error.stage;
+          await fail(externalId, stage, error, error.status);
           if (stage === 'write' && /^(?:08|53|57P0|ECONN|ETIMEDOUT|EPIPE)/.test(error.code || '')) { fatal = error; break; }
         }
         processedSinceSave += 1;
