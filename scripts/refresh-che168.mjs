@@ -24,16 +24,10 @@
 //    (`xvfb-run -a npm run refresh`). Никакой блокировки по адресу за этим не
 //    стояло: тот же сервер, тот же час — окно с экраном пускают.
 //
-// A card that vanished from every list slice is either sold or merely
-// unlisted; absence alone must never unpublish a card. Its own page is the
-// authority: a sold card still answers with a detail payload, just without a
-// price. All missing cards are checked, oldest first, even after an incomplete
-// list walk. Unknown answers remain pending in the SAME cycle.
-//
-// Each cycle stores a stable start timestamp. Successful checks are committed
-// immediately; after interruption only dates older than that timestamp remain
-// in its queue. A complete brand walk alone is not a complete catalog refresh.
-//
+// Lists discover cars. Only a verified public detail can update an existing
+// quote, confirm availability or authorize a sale. Unknowns stay pending and
+// are hidden. Transactions commit verified batches before acknowledging them.
+
 // Earlier volume/quota explanations were not established: browser/request
 // configuration caused the observed failures. Keep the proven transport and
 // failure handling, but do not truncate a healthy run to an assumed quota.
@@ -42,7 +36,7 @@
 //   npm run refresh                     # полный круг: списки + все оставшиеся карточки
 //   npm run refresh -- --shift=ev      # явная смена: ev | petrol-a | petrol-b | petrol-c
 //   npm run refresh -- --dry-run       # measure only, no database writes
-//   npm run refresh -- --skip-detail   # lists only (prices), leave missing cards alone
+//   npm run refresh -- --skip-detail   # discovery only, existing listings remain pending
 //   npm run refresh -- --detail-limit=500
 //   npm run refresh -- --pace=1200     # пауза каждого потока между запросами, мс
 //   npm run refresh -- --feeds=1 --brand-limit=2   # укороченный прогон для проверки
@@ -50,7 +44,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car, che168DetailMatchesListing } from "./lib/che168-parser.mjs";
+import { extractChe168ListPayload } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
@@ -60,10 +54,16 @@ import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, im
 import { sendTelegram } from "./lib/telegram.mjs";
 import { refreshAfterManualCatalog } from "./lib/sitemap-refresh.mjs";
 import { circleFailure } from "./lib/circle-report.mjs";
+import { positiveSourceAmount, sourceQuoteChange } from './lib/source-money.mjs';
+import { CHE168_VERIFICATION_VERSION, che168PriceCny } from './lib/che168-result.mjs';
+import { CHE168_CHECK_BATCH_SIZE, che168IdentityGuard, validateChe168CheckBatch } from './lib/che168-integrity.mjs';
+import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
+import { writeChe168Observations } from './lib/che168-write.mjs';
+import { quarantineListing } from './lib/catalog-quarantine.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ONLY_UNVERIFIED_RUN = process.argv.slice(2).some((arg) => arg === "--only-unverified" || arg === "--only-unverified=true");
-const REPORT_PATH = path.join(ROOT, "runtime", ONLY_UNVERIFIED_RUN ? "refresh-unverified-report.json" : "refresh-report.json");
+const REPORT_NAME = ONLY_UNVERIFIED_RUN ? "refresh-unverified" : "refresh";
 // Машины источника, которых у нас нет: обход списков всё равно проходит мимо
 // каждой, так что находки достаются даром. Отсюда их забирает пополнение вместо
 // собственного обхода — см. `scripts/lib/che168-discovery.mjs`.
@@ -89,11 +89,9 @@ const SLICE_MAX_PAGES = 250;
 // поменять очередь марок можно правкой config/refresh-order.json.
 const ORDER_PATH = "config/refresh-order.json";
 const CURSOR_PATH = ONLY_UNVERIFIED_RUN ? "runtime/refresh-unverified-cursor.json" : "runtime/refresh-cursor.json";
-const USD_TO_CNY = 7.15;
 // Day-to-day the source re-quotes yuan prices in dollars at the current rate,
-// which moves almost every card by $10–20. Those wiggles are noise: they would
-// rewrite the whole catalog and flood price_history daily. Only a move of at
-// least this many dollars counts as a real re-pricing.
+// which moves almost every card by $10–20. Persist the actual observed quote;
+// this threshold controls only the change badge and reported price movements.
 const PRICE_STEP_USD = 100;
 // Столько безответных запросов подряд значит «источник закрылся»: в здоровом
 // прогоне безответных нет вообще, а при блокировке они идут сплошной стеной.
@@ -107,7 +105,10 @@ const args = new Map(process.argv.slice(2).map((arg) => {
   return [key, value];
 }));
 const dryRun = args.get("dry-run") === "true";
+const REPORT_PATH = path.join(ROOT, "runtime", `${REPORT_NAME}${dryRun ? "-dry-run" : ""}-report.json`);
 const skipDetail = args.get("skip-detail") === "true";
+const verifyAllDetails = !skipDetail;
+if (skipDetail && args.get('verify-all-details') === 'true') throw Error('--verify-all-details нельзя совмещать с --skip-detail');
 // После большого импорта можно временно пройти только карточки, у которых дата
 // проверки всё ещё совпадает с днём добавления. Это в точности тот набор, где
 // сайт показывает только «Добавлено» без отдельной даты «Обновлено».
@@ -396,7 +397,7 @@ async function saveCursor(cursor) {
   if (dryRun) return;
   const target = path.join(ROOT, CURSOR_PATH);
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(`${target}.tmp`, JSON.stringify(cursor, null, 2));
+  await fs.writeFile(`${target}.tmp`, JSON.stringify({ ...cursor, verificationVersion: CHE168_VERIFICATION_VERSION }, null, 2));
   await fs.rename(`${target}.tmp`, target);
 }
 
@@ -576,7 +577,7 @@ async function reportBurst(reason, { force = false } = {}) {
   console.log(`[burst] ${bad ? "с заминкой" : "спокойно"}: ${reason} · ${lines.filter(Boolean).slice(2).join(" | ")}`);
 }
 
-async function safeFlight(url, expectMarker) {
+async function reserveSourceRead() {
   if (rotating) await rotating;
   // Норма подхода: набрали столько обращений — отдыхаем. Иначе источник
   // отвечает пустыми страницами и в конце ставит проверку «не робот».
@@ -588,7 +589,7 @@ async function safeFlight(url, expectMarker) {
       budgetSpent = true;
       console.log(`[burst] подходов за сессию сделано ${burstsDone} из ${burstsMax} — на сегодня всё, остаток возьмёт следующая сессия`);
       await reportBurst("норма подходов за сессию исчерпана");
-      return { status: 0, text: "" };
+      return false;
     }
     await reportBurst("подход завершён");
     console.log(`[burst] подход ${burstsDone} закончен (${burstLimit} обращений) — пауза ${restMinutes} мин`);
@@ -597,9 +598,16 @@ async function safeFlight(url, expectMarker) {
     // Окно после паузы не меняем: пропуск и куки в нём живые, а каждая новая
     // сессия — лишняя проверка «не робот», которые источник считает.
   }
+  if (stopped) return false;
   if (sessionRequests >= sessionMax) await rotateSession("плановая смена после " + sessionRequests + " запросов");
+  if (stopped) return false;
   sessionRequests += 1;
   burstRequests += 1;
+  return true;
+}
+
+async function safeFlight(url, expectMarker) {
+  if (!await reserveSourceRead()) return { status: 0, text: "" };
   try {
     return await flight(page, url, expectMarker);
   } catch {
@@ -681,15 +689,16 @@ async function noteAnswer(ok) {
 // 150 страниц, инкогнито — 125, наш браузер на сервере — 70+) метка была одна и та
 // же, а наш скрипт со сквозной нумерацией останавливали на 51–170. Ставим постоянную.
 const RSC_LIST = args.get("rsc") || "r2";
-const RSC_DETAIL = args.get("rsc-detail") || "d2";
 async function listFlight(params) {
-  const { status, text, answered } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
+  const { status, text } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
   const payload = status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
-  if (payload) return { ...payload, answered: true };
-  // Страница за последней и марка, у которой под фильтрами не осталось машин, —
-  // это ответ, а не молчание (см. flightInPage). Возвращаем пустую выдачу с
-  // отметкой «ответили», чтобы предохранитель не принял конец списка за стену.
-  return answered ? { items: [], answered: true } : null;
+  if (!payload) return null;
+  const expectedPage = Number(new URLSearchParams(params).get('page') || 1);
+  if (payload.pageIndex != null && payload.pageIndex !== expectedPage) return null;
+  const validItems = payload.items.every(item => /^\d+$/.test(String(item?.infoid)));
+  if (!validItems || (payload.items.length > 0 && !(payload.pageCount >= expectedPage && payload.totalCount >= payload.items.length))) return null;
+  if (!payload.items.length && !(expectedPage === 1 && payload.totalCount === 0 && payload.pageCount <= 1)) return null;
+  return payload;
 }
 
 const { pool, withTransaction } = await import("../server/db.mjs");
@@ -701,7 +710,11 @@ const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
 // --new-circle: начать круг заново со всех марок (команда «круг» в боте). Без
 // него прогон продолжает незакрытый круг с того места, где тот остановился.
 const newCircle = args.get("new-circle") === "true";
-let cursor = (newCircle ? startNewRefreshCycle : resumeRefreshCycle)(await loadCursor(), cycleNow);
+const savedCursor = await loadCursor();
+const startFresh = newCircle || savedCursor.verificationVersion !== CHE168_VERIFICATION_VERSION;
+const cursor = (startFresh ? startNewRefreshCycle : resumeRefreshCycle)(savedCursor, cycleNow);
+const failedDiscoveries = new Map((startFresh ? [] : savedCursor.failedDiscoveries || []).map(item => [String(item.externalId), item]));
+cursor.failedDiscoveries = [...failedDiscoveries.values()];
 await saveCursor(cursor);
 const unverifiedSql = onlyUnverified
   ? "AND (last_checked_at IS NULL OR date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at))"
@@ -709,7 +722,8 @@ const unverifiedSql = onlyUnverified
 // Порядок важен: очередь поштучных проверок берётся из этого же списка, и
 // «сначала самые давно не проверенные» превращает ограниченный ночной запас
 // проверок в честную карусель по всему каталогу.
-const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd, last_checked_at, first_seen_at,
+const { rows } = await pool.query(`SELECT id, external_id, status, price_cny,
+    estimated_total_usd, last_checked_at, first_seen_at,
     date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at) AS never_rechecked,
     (source_payload->>'usdPrice')::numeric AS usd_price,
     (source_payload->>'year')::int AS year,
@@ -724,7 +738,7 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     source_payload->>'dimensions' AS dimensions,
     (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
-  FROM listings WHERE source='Che168' AND status='active'
+  FROM listings WHERE source='Che168' AND status IN ('active','skipped')
     AND ${PENDING_CYCLE_SQL} ${unverifiedSql}
   ORDER BY last_checked_at ASC NULLS FIRST, id`, [cursor.startedAt]);
 console.log(`[db] ${rows.length} ожидают проверки в круге №${cursor.round} (начат ${cursor.startedAt})`);
@@ -754,7 +768,7 @@ const activeById = new Map(rows.map((row) => [row.id, row]));
 const popularRows = popular.map((p) => activeById.get(p.listing_id)).filter(Boolean);
 
 const seenPrices = new Map(); // externalId -> current USD price on the source
-const discoveries = new Map(); // externalId -> кандидат на скачивание, см. lib/che168-discovery.mjs
+const discoveries = new Map(failedDiscoveries); // externalId -> кандидат на скачивание, см. lib/che168-discovery.mjs
 let discoveriesSkipped = 0; // машины источника, которых у нас нет и которые не проходят правила
 let listPages = 0;
 let listPagesEmpty = 0;
@@ -804,8 +818,8 @@ function absorbList(payload, fuelType) {
   if (!payload?.items?.length) return false;
   for (const item of payload.items) {
     const id = String(item.infoid || "");
-    const price = Number(String(item.price).replace(/[^\d.]/g, "")) || null;
-    if (id && price && !seenPrices.has(id)) seenPrices.set(id, price);
+    const price = positiveSourceAmount(item.price);
+    if (/^\d+$/.test(id) && price && !seenPrices.has(id)) seenPrices.set(id, price);
     // Незнакомая машина попадается здесь бесплатно — страница всё равно
     // прочитана ради цен. Отбор идёт по списку, окончательное решение
     // остаётся за карточкой при скачивании.
@@ -855,16 +869,20 @@ function pageMaxUsd(payload) {
 // увиденную цену. Раньше каждый срез проходился дважды (перемешивание выдачи),
 // но источник с 27.08.2026 считает обращения — теперь один проход, остальное
 // добирает карусель поштучных проверок.
-async function walkSlice(baseParams, pageCount, fuelType, depthCap) {
+async function walkSlice(baseParams, firstPage, fuelType, depthCap) {
+  const { pageCount } = firstPage;
   let depth = Math.min(pageCount, depthCap);
   if (maxPages) depth = Math.min(depth, maxPages);
   let empties = 0;
   let walked = 0;
   let maxUsd = 0;
+  const fingerprints = new Set([firstPage.items.map(item => String(item.infoid)).sort().join(",")]);
   for (let pageIndex = 2; pageIndex <= depth && !stopped; pageIndex += 1) {
     const payload = await listFlight(`${baseParams}&page=${pageIndex}`);
-    const ok = absorbList(payload, fuelType);
-    await noteAnswer(ok || payload?.answered === true);
+    const fingerprint = payload?.items.map(item => String(item.infoid)).sort().join(',');
+    const ok = Boolean(fingerprint && !fingerprints.has(fingerprint) && absorbList(payload, fuelType));
+    if (ok) fingerprints.add(fingerprint);
+    await noteAnswer(ok);
     if (!ok) { listPagesEmpty += 1; empties += 1; }
     else maxUsd = Math.max(maxUsd, pageMaxUsd(payload));
     listPages += 1;
@@ -872,12 +890,9 @@ async function walkSlice(baseParams, pageCount, fuelType, depthCap) {
     if (listPages % 200 === 0) console.log(`[lists] ${listPages} pages, ${seenPrices.size} cars, ${discoveries.size} new`);
     await sleep(pace);
   }
-  // Обрыв посреди среза — «не дошли»: марка не получит отметку «обойдена», и её
-  // невиданные машины не поедут на поштучную проверку зря. Редкая пустая
-  // страница (до 5%) — не обрыв: пропавшие всё равно перепроверяются поштучно,
-  // прежде чем машина будет помечена проданной.
-  const complete = !stopped && empties <= Math.max(1, Math.round(walked * 0.05));
-  return { complete: walked > 0 ? complete : !stopped, maxUsd };
+  // Missing, repeated or truncated pages leave discovery incomplete.
+  const complete = !stopped && empties === 0 && walked === pageCount - 1;
+  return { complete, maxUsd };
 }
 
 // ---- Очередь марок ----------------------------------------------------------
@@ -926,7 +941,8 @@ async function brandQueue(ourCountByBrand) {
   // уходит сразу. Крупные иначе выели бы весь дневной запас источника.
   const smallestFirst = String(orderConfig?.order || "smallest-first") !== "largest-first";
   list.sort((a, b) => (smallestFirst ? a.ourCars - b.ourCars || a.sourceCount - b.sourceCount : b.ourCars - a.ourCars || b.sourceCount - a.sourceCount));
-  const left = list.filter((item) => !done.has(item.brand) || item.ourCars > 0);
+  const failedBrands = new Set([...failedDiscoveries.values()].map(item => canonicalImportBrand(item.brand)));
+  const left = list.filter((item) => !done.has(item.brand) || item.ourCars > 0 || failedBrands.has(item.brand));
   return { all: list, queue: left };
 }
 
@@ -979,15 +995,15 @@ async function standOn(params) {
 // только после следующей выкладки. Работает, когда прогон запущен от root (боевая
 // служба); иначе молча пропускаем. 31.08.2026 функция пропала при правках, и 98
 // новых машин не появлялись, пока кэш не сбросили руками — отсюда и тест на неё.
-async function purgePageCache(added) {
+async function purgePageCache() {
   try {
     const { execFile } = await import("node:child_process");
     await new Promise((resolve, reject) => {
       execFile("/bin/bash", ["-c", "find /var/cache/nginx/abcars -type f -delete && systemctl reload nginx"], (error) => (error ? reject(error) : resolve()));
     });
-    console.log(`[cache] кэш страниц сброшен: ${added} новых машин уже видны на сайте`);
+    console.log("[cache] кэш страниц каталога сброшен");
   } catch (error) {
-    console.log(`[cache] сбросить кэш не удалось (${String(error.message).slice(0, 60)}) — машины появятся после выкладки`);
+    console.warn(`[cache] сбросить кэш не удалось: ${String(error.message).slice(0, 100)}`);
   }
 }
 
@@ -1042,59 +1058,58 @@ async function writeDiscoveries() {
   console.log(`[new] записано в ${path.relative(ROOT, DISCOVERIES_PATH)}: ${payload.items.length}`);
 }
 
-// A card the lists no longer show gets one detail request. The sold page still
-// returns a full ssrCarDetail block — only without a price — so "detail without
-// a price" is the positive signal for sold. Anything else (404, no payload
-// after retries) stays untouched and is only counted: guessing here would
-// either hide a live car or keep advertising a sold one.
+// Missing/malformed card data is inconclusive. A generic Flight shell must
+// never authorize a sale (and irreversible sold-photo cleanup).
+const detailProblems = new Map();
+const checkIdentityPattern = che168IdentityGuard();
+let publicDetailPage = null;
+let publicDetailChecked = 0;
+let publicDetailConclusive = 0;
+let catalogChanged = false;
 async function checkDetail(externalId) {
-  const { status, text, answered } = await safeFlight(`/en/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
-  const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
-  // Машина, снятая с продажи, с начала сентября 2026 отдаётся не ошибкой, а
-  // обычной пустой страницей «ничего не найдено» (12 КБ вместо 88 КБ у живой).
-  // Пока мы этого не понимали, каждая такая машина считалась молчанием источника:
-  // тридцать подряд — и предохранитель объявлял стену там, где её не было.
-  if (!payload?.detail) return answered ? { verdict: "sold" } : { verdict: "unknown", status };
-  if (!che168DetailMatchesListing(payload, externalId)) return { verdict: "unknown", status, reason: "identity-mismatch" };
-  const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
-  return price ? { verdict: "alive", price } : { verdict: "sold" };
+  if (!await reserveSourceRead()) return { verdict: 'unknown', reason: 'stopped' };
+  if (!publicDetailPage || publicDetailPage.isClosed()) publicDetailPage = await context.newPage();
+  publicDetailChecked += 1;
+  const result = await checkChe168PublicPage(publicDetailPage, externalId);
+  if (stopped && result.verdict === 'unknown') return { verdict: 'unknown', reason: 'stopped' };
+  if (result.verdict === 'unknown') detailProblems.set(String(externalId), { externalId: String(externalId), ...result });
+  else {
+    publicDetailConclusive += 1;
+    detailProblems.delete(String(externalId));
+  }
+  return result;
 }
 
-// Заводим новую машину сразу, не откладывая на отдельную ночную службу: карточка
-// нужна ради фотографий и характеристик (в списке их нет), а посетитель должен
-// увидеть машину в тот же проход. Возвращает 'added' | 'rejected' | 'failed'.
 async function addNewCar(externalId) {
-  // Discovery keeps its proven RU session/pagination; specifications must come
-  // from EN. Che168 RU mistranslates FWD as RWD (verified 2026-09-10).
-  const { status, text, answered } = await safeFlight(`/en/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
-  const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
-  // Найденная в списке машина к моменту скачивания карточки бывает уже снята —
-  // это не сбой скачивания, а «её больше нет»: молчанием источника не считаем.
-  if (!payload?.detail) return answered ? "rejected" : "failed";
-  if (!che168DetailMatchesListing(payload, externalId)) return "failed";
+  const result = await checkDetail(externalId);
+  checkIdentityPattern(result, externalId);
+  await noteAnswer(result.verdict !== 'unknown');
+  if (result.verdict === 'sold') return 'rejected';
+  if (result.verdict === 'unknown') return 'failed';
   let car;
   try {
-    car = buildChe168Car(payload, { expectedLocale: "en" });
+    car = buildVerifiedChe168Car(result);
   } catch (error) {
-    if (error.code !== "CHE168_LOCALE_MISMATCH") throw error;
-    console.warn(`[new] ${externalId}: источник вернул характеристики не на английском; запись пропущена`);
-    return "failed";
+    detailProblems.set(externalId, { externalId, reason: 'invalid-specifications', code: error.code });
+    return 'failed';
   }
-  if (!car) return "rejected";
-  // Правила ввоза и потолок цены проверяем здесь же: список показывает цену в
-  // Китае, а решает стоимость под ключ.
-  if (importPolicyViolation(car)) return "rejected";
-  if (isAbovePriceCeiling(estimateLandedCost(car).totalUsd)) return "rejected";
-  if (knownIds.has(car.id)) return "rejected";
-  if (!dryRun) await importCars([car]);
+  if (!car) {
+    detailProblems.set(externalId, { externalId, reason: 'required-fields-missing' });
+    return 'failed';
+  }
+  if (importPolicyViolation(car) || isAbovePriceCeiling(estimateLandedCost(car).totalUsd) || knownIds.has(car.id)) return 'rejected';
+  if (!dryRun) {
+    await importCars([car]);
+    catalogChanged = true;
+  }
   knownIds.add(car.id);
-  return "added";
+  return 'added';
 }
 
 const landedTotal = (row, usd) => estimateLandedCost({
   source: "Che168",
   usdPrice: usd,
-  chinaPrice: Math.round((usd * USD_TO_CNY) / 100) * 100,
+  chinaPrice: che168PriceCny(usd),
   year: row.year,
   type: row.type,
   engine: row.engine,
@@ -1130,84 +1145,74 @@ try {
     throw new Error("entry-denied");
   }
 
-  const priceUpdates = []; // real re-pricings: new price + landed estimate + history point
-  const estimateUpdates = []; // price unchanged, but the stored landed estimate drifted
-  const touchIds = []; // seen and unchanged: just record the sighting
-  const soldIds = [];
-  const missing = [];
   let unknown = 0;
-
-  const classify = (row, liveUsd) => {
-    const oldUsd = Number(row.usd_price) || 0;
-    if (liveUsd && oldUsd && Math.abs(liveUsd - oldUsd) >= PRICE_STEP_USD) {
-      const est = landedTotal(row, liveUsd);
-      priceUpdates.push({
-        id: row.id,
-        usd: liveUsd,
-        cny: Math.round((liveUsd * USD_TO_CNY) / 100) * 100,
-        est: Number.isFinite(est) ? est : Number(row.estimated_total_usd) || null,
-        oldUsd,
-        title: row.title,
-      });
-      return;
-    }
-    const usd = oldUsd || liveUsd;
-    const est = usd ? landedTotal(row, usd) : null;
-    if (Number.isFinite(est) && Math.abs(est - Number(row.estimated_total_usd || 0)) >= 1) estimateUpdates.push({ id: row.id, est });
-    else touchIds.push(row.id);
-  };
-
-  const chunk = (list, size) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
-
-  // Totals survive across flushes; the working arrays are drained by each one.
   const stats = { rePriced: 0, priceUpdates: [], drops: [], estimateOnly: 0, unchanged: 0, sold: 0 };
-  const flushWrites = async () => {
-    // Снимок делаем синхронно: пока идёт запись, воркеры продолжают складывать
-    // сюда новые машины, и без снимка очистка в конце потеряла бы их.
-    const prices = priceUpdates.splice(0);
-    const estimates = estimateUpdates.splice(0);
-    const touches = touchIds.splice(0);
-    const sold = soldIds.splice(0);
-    if (!prices.length && !estimates.length && !touches.length && !sold.length) return;
-    if (!dryRun) await withTransaction(async (client) => {
-      for (const batch of chunk(prices, 1000)) {
-        // `content_changed_at` — дата настоящего изменения объявления, её берёт карта
-        // сайта. Двигаем её только здесь: цена у продавца действительно изменилась.
-        // Ниже, где меняется лишь наш расчёт (курс сдвинулся), дату не трогаем — иначе
-        // она станет одинаковой у всего каталога и снова перестанет что-то значить.
-        // `previous_price_usd` и `price_changed_at` — для стрелки изменения цены на
-        // карточке: карточка показывает прошлую цену и дату в подсказке. Прошлую
-        // цену пишем в долларах, как её отдал источник, без пересчёта через юани.
-        await client.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
-            source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
-            previous_price_usd=v.old_usd, price_changed_at=now(),
-            last_seen_at=now(), last_checked_at=now(), content_changed_at=now()
-          FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric, old_usd numeric)
-          WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est, oldUsd }) => ({ id, cny, usd, est, old_usd: oldUsd })))]);
-        await client.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
-          SELECT v.id, now(), v.cny FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer)
-          ON CONFLICT DO NOTHING`, [JSON.stringify(batch.map(({ id, cny }) => ({ id, cny })))]);
+  const persistChecks = async checks => {
+    try {
+      validateChe168CheckBatch(checks);
+    } catch (error) {
+      if (!dryRun && error.diagnostic?.listings) {
+        const suspectIds = new Set(error.diagnostic.listings.map(item => item.id));
+        await withTransaction(async client => {
+          for (const { row, result } of checks) {
+            if (suspectIds.has(String(row.external_id))) {
+              const written = await quarantineListing(client, { source: 'Che168', externalId: String(row.external_id),
+                reason: 'batch-price-anomaly', checkedFrom: result.attemptedAt });
+              if (written.rowCount !== 1) throw Error(`Che168: не удалось скрыть ценовую аномалию для ${row.id}`);
+            }
+          }
+        });
+        catalogChanged = true;
       }
-      for (const batch of chunk(estimates, 2000)) {
-        await client.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
-          FROM jsonb_to_recordset($1::jsonb) AS v(id text, est numeric) WHERE l.id = v.id`, [JSON.stringify(batch)]);
-      }
-      for (const batch of chunk(touches, 5000)) {
-        await client.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
-      }
-      for (const batch of chunk(sold, 5000)) {
-        await client.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now()), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
-      }
+      throw error;
+    }
+    const updates = checks.map(({ row, result }) => {
+      if (result.verdict === 'sold') return { id: row.id, sold: true, evidence: result.evidence };
+      const change = sourceQuoteChange(row.usd_price, result.price, PRICE_STEP_USD);
+      const est = landedTotal(row, result.price);
+      if (!Number.isFinite(est) || est <= 0) throw Error(`Che168: результат расчёта цены отсутствует для ${row.id}`);
+      return {
+        id: row.id, reactivated: row.status === 'skipped', usd: result.price, cny: che168PriceCny(result.price), est, old_usd: Number(row.usd_price) || 0,
+        title: row.title, changed: change.changed || Number(row.price_cny) !== che168PriceCny(result.price), significant: change.significant,
+        estimateChanged: Math.abs(est - Number(row.estimated_total_usd || 0)) >= 1, evidence: result.evidence,
+      };
     });
-    for (const item of [...prices, ...estimates]) verifiedThisRun.add(item.id);
-    for (const id of [...touches, ...sold]) verifiedThisRun.add(id);
-    stats.rePriced += prices.length;
-    stats.priceUpdates.push(...prices);
-    stats.drops.push(...prices.filter((u) => u.usd < u.oldUsd));
-    stats.estimateOnly += estimates.length;
-    stats.unchanged += touches.length;
-    stats.sold += sold.length;
+    if (!dryRun) {
+      await withTransaction(client => writeChe168Observations(client, updates));
+      catalogChanged ||= updates.some(update => update.sold || update.changed || update.reactivated || update.estimateChanged);
+    }
+    for (const update of updates) {
+      verifiedThisRun.add(update.id);
+      if (update.sold) stats.sold += 1;
+      else if (update.changed) {
+        const change = { ...update, oldUsd: update.old_usd };
+        stats.priceUpdates.push(change);
+        if (update.significant) stats.rePriced += 1;
+        if (update.significant && update.usd < update.old_usd) stats.drops.push(change);
+      } else if (update.estimateChanged) stats.estimateOnly += 1;
+      else stats.unchanged += 1;
+    }
     soldTotal = stats.sold;
+  };
+  const checkOptions = {
+    stopped: () => stopped,
+    check: checkDetail,
+    persistBatch: persistChecks,
+    batchSize: CHE168_CHECK_BATCH_SIZE,
+    quarantine: async (row, result) => {
+      if (result.reason === 'stopped') return;
+      if (!dryRun) {
+        const written = await quarantineListing(pool, { source: 'Che168', externalId: row.external_id, reason: result.reason || 'unverified', checkedFrom: result.attemptedAt });
+        if (written.rowCount !== 1) throw Object.assign(new Error('Che168: не удалось скрыть карточку с неподтверждённым статусом'), { code: 'CHE168_INTEGRITY_FAILED' });
+        catalogChanged ||= row.status === 'active';
+      }
+      checkIdentityPattern(result, row.external_id);
+    },
+    afterAttempt: async result => {
+      detailChecked += 1;
+      await noteAnswer(result.verdict !== 'unknown');
+      await sleep(pace);
+    },
   };
 
   // Priority pass: the cars visitors opened get their authoritative detail
@@ -1220,27 +1225,9 @@ try {
   const priorityFirst = args.get("priority-first") === "true";
   if (priorityFirst && !skipDetail && popularRows.length) {
     console.log(`[priority] ${popularRows.length} visitor-viewed cars go first`);
-    const result = await checkPendingListings(popularRows, {
-      limit: detailLimit,
-      stopped: () => stopped,
-      check: checkDetail,
-      persist: async (row, result) => {
-        if (result.verdict === "sold") soldIds.push(row.id);
-        else classify(row, result.price);
-        await flushWrites();
-        if (result.verdict === "sold") {
-          const brand = sourceBrandOf(row.brand);
-          activeCountByBrand.set(brand, Math.max(0, (activeCountByBrand.get(brand) || 0) - 1));
-        }
-      },
-      afterAttempt: async (result) => {
-        detailChecked += 1;
-        await noteAnswer(result.verdict !== "unknown");
-        await sleep(pace);
-      },
-    });
+    const result = await checkPendingListings(popularRows, { ...checkOptions, limit: detailLimit });
     unknown += result.unknown;
-    for (const id of result.verified) prioritized.add(id);
+    for (const row of popularRows) if (result.attemptedIds.has(row.id)) prioritized.add(row.id);
     console.log(`[priority] done: ${prioritized.size} checked · ${result.sold} sold`);
   }
 
@@ -1338,7 +1325,7 @@ try {
       const probe = await listFlight(brandParams);
       await noteAnswer(Boolean(probe));
       await sleep(pace);
-      if (!probe?.pageCount || !probe.totalCount) {
+      if (!probe?.pageCount || probe.totalCount === 0) {
         // Молчание на разведке — не «марка пустая», а закрытая дверь: отмечать её
         // пройденной нельзя, иначе её машины уйдут в проверку пропавших зря.
         if (!probe) { ok = false; why = "источник не ответил на разведку марки"; }
@@ -1349,50 +1336,38 @@ try {
       const wins = priceWindowsFor(entry.brand, ourPrices, probe.pageCount);
       if (wins.length > 1) windows += wins.length;
       if (wins.length > 1) console.log(`[brand] ${entry.brand}: ${probe.totalCount} машин, ${probe.pageCount} страниц — режу на ${wins.length} ценовых окон`);
-      for (const win of wins) {
+      const pendingWindows = [...wins];
+      const fullWindow = wins.length === 1 ? wins[0] : null;
+      for (const win of pendingWindows) {
         if (stopped) break;
         const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
-        let pageCount = probe.pageCount;
-        if (wins.length > 1) {
+        let head = probe;
+        if (win !== fullWindow) {
           if (args.get("stand-on-brand") === "true" && !(await standOn(base))) { ok = false; why = "не удалось открыть окно по цене"; continue; }
-          const head = await listFlight(base);
+          head = await listFlight(base);
           await noteAnswer(Boolean(head));
           await sleep(pace);
-          if (!head?.pageCount) { ok = false; why = "источник не отдал окно по цене"; continue; }
+          if (!head) { ok = false; why = "источник не отдал окно по цене"; continue; }
+          if (head.totalCount === 0) continue;
           absorbList(head, null);
-          pageCount = head.pageCount;
         }
-        const walked = await walkSlice(base, pageCount, null, SLICE_MAX_PAGES);
+        if (head.pageCount > SLICE_MAX_PAGES && win.maxPrice - win.minPrice > 1) {
+          const middle = Math.floor((win.maxPrice + win.minPrice) / 2);
+          pendingWindows.push({ ...win, maxPrice: middle }, { ...win, minPrice: middle });
+          windows += 2;
+          continue;
+        }
+        const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES);
         if (!walked.complete) { ok = false; why = "источник оборвал выдачу на середине"; }
       }
     }
 
-    // Цены и пропавшие — только по этой марке.
-    const missingHere = [];
-    for (const row of ourRows) {
-      const liveUsd = seenPrices.get(String(row.external_id));
-      if (liveUsd) { classify(row, liveUsd); verifiedThisBrand.add(row.id); }
-      else missingHere.push(row);
-    }
-    // Списочные подтверждения записываются до долгого поштучного прохода.
-    await flushWrites();
-    let soldHere = 0;
-    const checked = await checkPendingListings(missingHere, {
+    // The discovery list never refreshes an existing listing's status or quote.
+    const checked = await checkPendingListings(ourRows, {
+      ...checkOptions,
       limit: skipDetail ? 0 : Math.min(detailPerBrand, Math.max(0, detailLimit - detailChecked)),
-      stopped: () => stopped,
-      check: checkDetail,
-      persist: async (row, result) => {
-        if (result.verdict === "sold") soldIds.push(row.id);
-        else classify(row, result.price);
-        await flushWrites();
-      },
-      afterAttempt: async (result) => {
-        detailChecked += 1;
-        await noteAnswer(result.verdict !== "unknown");
-        await sleep(pace);
-      },
     });
-    soldHere = checked.sold;
+    const soldHere = checked.sold;
     unknown += checked.unknown;
     detailSkipped += checked.skipped;
     for (const id of checked.verified) verifiedThisBrand.add(id);
@@ -1406,24 +1381,38 @@ try {
     for (const item of fresh) {
       if (stopped) break;
       const verdict = await addNewCar(String(item.externalId));
-      if (verdict === "added") added += 1;
-      else if (verdict === "failed") addFailed += 1;
-      discoveries.delete(String(item.externalId));
+      const id = String(item.externalId);
+      if (verdict === 'failed') {
+        if (!stopped) {
+          addFailed += 1;
+          failedDiscoveries.set(id, item);
+        }
+      } else {
+        if (verdict === 'added') added += 1;
+        failedDiscoveries.delete(id);
+        discoveries.delete(id);
+      }
       await sleep(pace);
     }
 
     const unchecked = ourRows.length - verifiedThisBrand.size;
-    activeCountByBrand.set(entry.brand, Math.max(0, (activeCountByBrand.get(entry.brand) || 0) - soldHere + added));
+    const attemptedActive = ourRows.filter(row => row.status === 'active' && checked.attemptedIds.has(row.id)).length;
+    const conclusiveAlive = checked.verified.size - soldHere;
+    activeCountByBrand.set(entry.brand, Math.max(0, (activeCountByBrand.get(entry.brand) || 0) - attemptedActive + conclusiveAlive + added));
 
-    // Машина в базе — ещё не машина на сайте: каталог отдаётся из кэша.
-    if (added > 0 && !dryRun) await purgePageCache(added);
+    // Invalidate page caches after committed additions, removals or edits.
+    if (catalogChanged) {
+      await purgePageCache();
+      catalogChanged = false;
+    }
 
     const brandComplete = ok && !stopped && unchecked === 0;
     if (brandComplete) coveredBrands.add(entry.brand);
     const done = new Set(cursor.brandsDone);
-    if (brandComplete) done.add(entry.brand);
+    if (ok && !stopped) done.add(entry.brand);
     else done.delete(entry.brand);
     cursor.brandsDone = [...done];
+    cursor.failedDiscoveries = [...failedDiscoveries.values()];
     await saveCursor(cursor);
     allBrandsThisRun.add(entry.brand);
     const res = {
@@ -1456,8 +1445,6 @@ try {
   // оборвался до того, как дошёл до их марки.
   if (!dryRun && !onlyUnverified) await writeDiscoveries();
 
-  await flushWrites();
-
   // Проданные машины остаются в избранном на весь срок временной карточки.
   // Чистим только истёкшие продажи, в том числе отмеченные другим источником.
   // Заказы не трогаем: по ним человек уже общается с нами, там машина должна остаться.
@@ -1474,12 +1461,14 @@ try {
   const remainingListings = dryRun
     ? rows.filter((row) => !verifiedThisRun.has(row.id)).length
     : (await pool.query(`SELECT count(*)::int AS n FROM listings
-        WHERE source='Che168' AND status='active' AND ${PENDING_CYCLE_SQL} ${unverifiedSql}`,
+        WHERE source='Che168' AND status IN ('active','skipped') AND ${PENDING_CYCLE_SQL} ${unverifiedSql}`,
       [cursor.startedAt])).rows[0].n;
+  totals.addFailed = failedDiscoveries.size;
+  const detailLayerUnavailable = publicDetailChecked > 0 && publicDetailConclusive === 0;
   const { complete: circleClosed, cursor: nextCursor } = finishRefreshCycle(cursor, {
     remainingListings, remainingBrands, stopped,
     unresolvedListings: unknown, failedNewListings: totals.addFailed,
-    incompleteLists: totals.errors.some(item => item.incompleteLists), skippedChecks: detailSkipped,
+    incompleteLists: detailLayerUnavailable || remainingBrands > 0 || totals.errors.some(item => item.incompleteLists), skippedChecks: detailSkipped,
   });
   await saveCursor(nextCursor);
   console.log(
@@ -1517,6 +1506,8 @@ try {
     remainingBrands,
     checkedThisRun: verifiedThisRun.size,
     scope: onlyUnverified ? "only-unverified" : "catalog",
+    verifyAllDetails,
+    verificationVersion: CHE168_VERIFICATION_VERSION,
     activeBefore: rows.length,
     listPages,
     listPagesEmpty,
@@ -1532,14 +1523,19 @@ try {
     discoveriesSkipped,
     prioritized: prioritized.size,
     rePriced: stats.rePriced,
+    minorPriceChanges: stats.priceUpdates.filter(item => !item.significant).length,
     priceDrops: drops.length,
     priceRises: stats.rePriced - drops.length,
     estimateOnly: stats.estimateOnly,
     unchanged: stats.unchanged,
     detailChecked,
+    publicDetailChecked,
+    publicDetailConclusive,
+    detailLayerUnavailable,
     detailSkipped,
     sold: stats.sold,
     noAnswer: unknown,
+    detailProblems: [...detailProblems.values()],
     favoritesCleared,
     biggestDrops: [...drops].sort((a, b) => (a.usd - a.oldUsd) - (b.usd - b.oldUsd)).slice(0, 10)
       .map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })),
@@ -1580,6 +1576,10 @@ try {
     shift,
     entryDenied,
     note: entryDenied ? "источник не пустил: проверка «не робот» не пройдена" : error.message,
+    verificationVersion: CHE168_VERIFICATION_VERSION,
+    failureCode: error.code,
+    diagnostic: error.diagnostic,
+    detailProblems: [...detailProblems.values()],
     checkedThisRun: verifiedThisRun.size,
     added: runTotals.added, sold: soldTotal, errors: runTotals.errors,
   };
@@ -1588,6 +1588,7 @@ try {
   if (!tgQuiet) await sendTelegram(circleFailure('che', error, { report: failedReport, cursor, elapsedMs: Date.now() - startedAt,
     logTail: error.stack, logPath: '/tmp/circle.log' }), { root: ROOT, log: console.log }).catch(() => {});
 } finally {
+  if (catalogChanged) await purgePageCache();
   if (browser) await browser.close().catch(() => {});
   await pool.end();
 }

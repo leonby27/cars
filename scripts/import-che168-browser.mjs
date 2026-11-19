@@ -3,7 +3,12 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { IMPORT_BRANDS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
-import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload, parseChe168ListJsonLd } from "./lib/che168-parser.mjs";
+import { extractChe168ListPayload, parseChe168ListJsonLd } from "./lib/che168-parser.mjs";
+
+import { buildVerifiedChe168Car, verifyChe168Observation, CHE168_ACTIVE_TITLE, CHE168_DETAIL_READY,
+  CHE168_SOLD_HEADING, CHE168_SOLD_MESSAGE } from './lib/che168-public-check.mjs';
+import { che168IdentityGuard } from './lib/che168-integrity.mjs';
+import { CHE168_VERIFICATION_VERSION, assertVerifiedChe168Car, che168DetailUrl } from './lib/che168-result.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
@@ -145,11 +150,29 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
     return { pagesScanned, feeds:seedOnly ? 0 : listUrls.length, targetBrand, sourceTotalCount, sourcePageCount, discovered:candidates.length, byBrand:Object.fromEntries([...Map.groupBy(candidates, (item) => item.brand)].map(([brand, cars]) => [brand, cars.length])), errors:discoveryErrors };
   }
 
+  const checkIdentityPattern = che168IdentityGuard();
+  let integrityFailure;
   async function parseCandidate(candidate, tab) {
-    await tab.goto(`https://global.che168.com/en/detail/${encodeURIComponent(candidate.externalId)}`);
-    await wait(250);
-    const payload = extractChe168DetailPayload(await scriptTexts(tab));
-    const car = buildChe168Car(payload, { expectedLocale: "en" });
+    const url = che168DetailUrl(candidate.externalId);
+    if (!url) throw Error('invalid-id');
+    await tab.goto(url);
+    const page = tab.playwright;
+    await page.locator(CHE168_DETAIL_READY).first().waitFor({ state: 'visible', timeoutMs: 10_000 });
+    const navigation = () => page.evaluate(() => ({
+      url: location.href, status: performance.getEntriesByType('navigation')[0]?.responseStatus,
+    }));
+    const before = await navigation();
+    const visibleText = text => page.getByText(text, { exact: true }).filter({ visible: true }).first().isVisible();
+    const [scripts, active, soldHeading, soldMessage] = await Promise.all([
+      scriptTexts(tab), page.locator(CHE168_ACTIVE_TITLE).first().isVisible(),
+      visibleText(CHE168_SOLD_HEADING), visibleText(CHE168_SOLD_MESSAGE),
+    ]);
+    const after = await navigation();
+    if (before.url !== after.url || before.status !== after.status) throw Error('public-navigation-changed');
+    const result = verifyChe168Observation(candidate.externalId, { ...after, scripts, active, soldHeading, soldMessage });
+    checkIdentityPattern(result, candidate.externalId);
+    if (result.verdict !== 'alive') throw Error(result.reason || 'source-sold');
+    const car = buildVerifiedChe168Car(result);
     if (!car) throw new Error("detail page lacks required structured fields or gallery");
     const violation = importPolicyViolation(car);
     if (violation) throw new Error(`Import policy: ${violation}`);
@@ -159,7 +182,7 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
   async function importNext(batchSize = 20) {
     const target = Math.min(limit, imported.length + Math.max(1, batchSize));
     async function worker(tab, workerId) {
-      while (detailCursor < orderedCandidates.length && imported.length < target && imported.length < limit) {
+      while (!integrityFailure && detailCursor < orderedCandidates.length && imported.length < target && imported.length < limit) {
         const candidate = orderedCandidates[detailCursor++];
         try {
           const car = await parseCandidate(candidate, tab);
@@ -167,23 +190,28 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
           // a batch boundary is a progress checkpoint, never a reason to drop a card.
           if (imported.length < limit) imported.push(car);
         } catch (error) {
+          if (error.code === 'CHE168_INTEGRITY_FAILED') integrityFailure = error;
           rejected.push({ externalId:candidate.externalId, brand:candidate.brand, workerId, error:error.message });
         }
       }
     }
     await Promise.all(workerTabs.map((tab, index) => worker(tab, index + 1)));
+    if (integrityFailure) throw integrityFailure;
     return { imported:imported.length, requested:limit, attempted:detailCursor, remaining:orderedCandidates.length - detailCursor, rejected:rejected.length };
   }
 
   async function finalize({ allowPartial = false } = {}) {
+    if (integrityFailure) throw integrityFailure;
     if (!imported.length || (!allowPartial && imported.length < limit)) throw new Error(`Only ${imported.length}/${limit} eligible Che168 cards were parsed; catalog was not changed`);
     const finishedAt = new Date().toISOString();
     const selected = imported.slice(0, limit);
+    for (const car of selected) assertVerifiedChe168Car(car);
     const merged = [...new Map([...(current.cars || []), ...selected].map((car) => [car.id, car])).values()];
     const report = {
       startedAt,
       finishedAt,
       source:"Che168 Global",
+      verificationVersion: CHE168_VERIFICATION_VERSION,
       layer:"Incomplete Reports",
       targetBrand,
       requested:limit,

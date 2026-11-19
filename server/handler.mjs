@@ -752,6 +752,7 @@ export async function handleApiRequest(request, response) {
     return json(response, 404, { error:"not_found" });
   } catch (error) {
     console.error(error);
+    if (error.code === 'LISTING_UNAVAILABLE') return json(response, 409, { error: 'listing_unavailable' });
     if (isDatabaseUnavailable(error)) return json(response, 503, { error:"service_unavailable" });
     return json(response, 500, { error:"internal_error" });
   } finally {

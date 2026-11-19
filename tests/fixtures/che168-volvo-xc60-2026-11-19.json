@@ -1,0 +1,264 @@
+{
+  "observationDate": "2026-11-19",
+  "sourceObservationWindowUtc": [
+    "2026-11-19T11:06:40.156Z",
+    "2026-11-19T11:07:20.800Z"
+  ],
+  "catalogUrl": "https://abcars.by/catalog/volvo/xc60?sort=price_asc",
+  "scope": "All 21 displayed XC60 below 80000 BYN; ordinary XC60, excluding the separate XC60 PHEV model. Public browser observations, not stored database status.",
+  "soldHeading": "The vehicle has been sold",
+  "soldMessage": "This vehicle has already been sold. You can contact our car buying consultant to help you find a similar vehicle.",
+  "duplicateDomObservedOn": "60350436",
+  "duplicateCopies": [
+    "hidden-ssr",
+    "visible-desktop",
+    "hidden-mobile"
+  ],
+  "listings": [
+    {
+      "rank": 1,
+      "externalId": "60360246",
+      "title": "Volvo XC60 2024",
+      "catalogPriceByn": 57400,
+      "previousSourcePriceUsd": 22220,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60360246"
+    },
+    {
+      "rank": 2,
+      "externalId": "60259835",
+      "title": "Volvo XC60 2025",
+      "catalogPriceByn": 57700,
+      "previousSourcePriceUsd": 23550,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60259835"
+    },
+    {
+      "rank": 3,
+      "externalId": "60424178",
+      "title": "Volvo XC60 2025",
+      "catalogPriceByn": 57700,
+      "previousSourcePriceUsd": 24420,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60424178"
+    },
+    {
+      "rank": 4,
+      "externalId": "60451086",
+      "title": "Volvo XC60 2025",
+      "catalogPriceByn": 57700,
+      "previousSourcePriceUsd": 23520,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60451086"
+    },
+    {
+      "rank": 5,
+      "externalId": "59011973",
+      "title": "Volvo XC60 2026",
+      "catalogPriceByn": 58000,
+      "previousSourcePriceUsd": 34410,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/59011973"
+    },
+    {
+      "rank": 6,
+      "externalId": "60350436",
+      "title": "Volvo XC60 2025",
+      "catalogPriceByn": 58000,
+      "previousSourcePriceUsd": 19310,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60350436"
+    },
+    {
+      "rank": 7,
+      "externalId": "60354703",
+      "title": "Volvo XC60 2024",
+      "catalogPriceByn": 58000,
+      "previousSourcePriceUsd": 23290,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60354703"
+    },
+    {
+      "rank": 8,
+      "externalId": "60241648",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 59700,
+      "previousSourcePriceUsd": 21730,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60241648"
+    },
+    {
+      "rank": 9,
+      "externalId": "60339420",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 59700,
+      "previousSourcePriceUsd": 22800,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60339420"
+    },
+    {
+      "rank": 10,
+      "externalId": "60379815",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 59700,
+      "previousSourcePriceUsd": 19890,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60379815"
+    },
+    {
+      "rank": 11,
+      "externalId": "60414641",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 59700,
+      "previousSourcePriceUsd": 20020,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60414641"
+    },
+    {
+      "rank": 12,
+      "externalId": "60153054",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 20410,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60153054"
+    },
+    {
+      "rank": 13,
+      "externalId": "60238591",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 19680,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60238591"
+    },
+    {
+      "rank": 14,
+      "externalId": "60243042",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 21670,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60243042"
+    },
+    {
+      "rank": 15,
+      "externalId": "60302325",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 19030,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60302325"
+    },
+    {
+      "rank": 16,
+      "externalId": "60369231",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 19780,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60369231"
+    },
+    {
+      "rank": 17,
+      "externalId": "60409082",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 22590,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60409082"
+    },
+    {
+      "rank": 18,
+      "externalId": "60425975",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 60000,
+      "previousSourcePriceUsd": 19910,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60425975"
+    },
+    {
+      "rank": 19,
+      "externalId": "59931856",
+      "title": "Volvo XC60 2023",
+      "catalogPriceByn": 60300,
+      "previousSourcePriceUsd": 17510,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/59931856"
+    },
+    {
+      "rank": 20,
+      "externalId": "60291225",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 60300,
+      "previousSourcePriceUsd": 22450,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/60291225"
+    },
+    {
+      "rank": 21,
+      "externalId": "59355604",
+      "title": "Volvo XC60 2022",
+      "catalogPriceByn": 74200,
+      "previousSourcePriceUsd": 17700,
+      "incidentSourcePriceUsd": 9000,
+      "catalogSourcePriceCny": 64400,
+      "sourceState": "sold",
+      "sourceUrl": "https://global.che168.com/en/detail/59355604"
+    }
+  ],
+  "control": {
+    "rank": 22,
+    "externalId": "60305719",
+    "catalogPriceByn": 80400,
+    "sourcePriceUsd": 15890,
+    "visibleSourceTitle": "Volvo Volvo XC60 2023 B5 AWD Smart Luxury Edition",
+    "sourceUrl": "https://global.che168.com/en/detail/60305719",
+    "observation": "Public page renders this vehicle, quote and mileage 100000 km; no sale panel. This does not verify seller/export readiness or every remaining listing."
+  },
+  "limitations": [
+    "No source sale dates are shown.",
+    "Original raw responses that wrote the incident prices are not retained.",
+    "No production catalog mutations or server deployment were performed."
+  ]
+}

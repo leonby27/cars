@@ -1,3 +1,4 @@
+import { verifyChe168Observation } from "../scripts/lib/che168-public-check.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { canonicalImportModel, canonicalImportName } from "../config/import-policy.mjs";
@@ -50,9 +51,11 @@ test("Che168 import separates Type R before saving and refresh cannot merge it b
   assert.equal(car.model, "Civic Type R");
   assert.equal(car.title, "Honda Civic Type R 2023");
   const queries = [];
-  const client = { query:async (sql, values) => { queries.push({ sql, values }); return { rows:[] }; } };
+  const client = { query:async (sql, values) => { queries.push({ sql, values }); return { rows:[], rowCount:1 }; } };
   // Simulate an older importer / refresh still providing the source's base model.
-  const saved = await upsertCar({ ...car, model:"Civic" }, client);
+  const script = `[1,${JSON.stringify("20:" + JSON.stringify({ ssrCarDetail: detail }))}])`;
+  const { evidence } = verifyChe168Observation(car.externalId, { url: car.sourceUrl, status: 200, active: true, scripts: [script] });
+  const saved = await upsertCar({ ...car, model:"Civic", sourceAvailability: evidence, checkedAt: evidence.observedAt }, client);
   assert.equal(saved.model, "Civic Type R");
   assert.equal(queries.find((q) => q.sql.startsWith("INSERT INTO vehicles")).values[2], "Civic Type R");
   const listing = queries.find((q) => q.sql.startsWith("INSERT INTO listings"));

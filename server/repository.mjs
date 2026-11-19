@@ -1,3 +1,4 @@
+import { assertVerifiedChe168Car } from '../scripts/lib/che168-result.mjs';
 import {cachedCatalogRead,cachedCatalogValue,readyCatalogValue,clearCatalogReadCache} from "./catalog-read-cache.mjs";
 import {CATALOG_PAGE_SIZE, CATALOG_MAX_PAGES} from '../src/catalog-landings.js';
 import { readFileSync } from "node:fs";
@@ -89,6 +90,11 @@ export const vehicleSpecifications = (item) => ({ bodyType:item.bodyType,bodyStr
 // когда в объявлении нет `usdPrice`. Импортёр Encar обязан писать `usdPrice` — тогда и
 // стрелка цены на карточке, и прошлая цена считаются точно.
 export async function upsertCar(car, client = pool) {
+  const isChe168 = car.source === 'Che168' || String(car.id).startsWith('che168-');
+  if (isChe168) {
+    assertVerifiedChe168Car(car);
+    if (client === pool) return withTransaction(db => upsertCar(car, db));
+  }
   const item = normalizeCar(car);
   // Distances can be fractional in source/spec data. PostgreSQL integer columns
   // store whole kilometres; keep the precise originals in source_payload/specs.
@@ -113,10 +119,15 @@ export async function upsertCar(car, client = pool) {
         IS DISTINCT FROM ROW(EXCLUDED.brand,EXCLUDED.model,EXCLUDED.model_year,EXCLUDED.powertrain,EXCLUDED.drivetrain,EXCLUDED.battery_kwh,EXCLUDED.electric_range_km,EXCLUDED.combined_range_km,EXCLUDED.specifications)
         THEN now() ELSE vehicles.updated_at END`,
     [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,electricRangeKm,combinedRangeKm,JSON.stringify(vehicleSpecifications(item))]);
-  await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
+  const listingWrite = await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()),NULL)
-    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash OR listings.status IS DISTINCT FROM 'active' THEN now() ELSE listings.content_changed_at END`,
+    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash OR listings.status IS DISTINCT FROM 'active' THEN now() ELSE listings.content_changed_at END
+    WHERE EXCLUDED.source <> 'Che168' OR (listings.source='Che168' AND listings.external_id=EXCLUDED.external_id
+      AND COALESCE(listings.last_checked_at, '-infinity') <= EXCLUDED.last_checked_at
+      AND COALESCE(listings.sold_at, '-infinity') <= EXCLUDED.last_checked_at
+      AND COALESCE((listings.source_payload->'catalogQuarantine'->>'observedAt')::timestamptz, '-infinity') <= EXCLUDED.last_checked_at)`,
     [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.sourcePrice ?? item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,importedContentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
+  if (isChe168 && listingWrite.rowCount !== 1) throw new Error(`Che168: запись не применена для ${car.externalId}`);
   await client.query("DELETE FROM listing_media WHERE listing_id=$1", [item.id]);
   const images = (item.images || [item.image]).filter(Boolean);
   if (images.length) await client.query(`INSERT INTO listing_media (listing_id, position, url)
@@ -129,6 +140,9 @@ export async function upsertCar(car, client = pool) {
 }
 
 export async function importCars(cars, batchSize = 250) {
+  for (const car of cars) {
+    if (car.source === 'Che168' || String(car.id).startsWith('che168-')) assertVerifiedChe168Car(car);
+  }
   for (let offset = 0; offset < cars.length; offset += batchSize) {
     const batch = cars.slice(offset, offset + batchSize);
     await withTransaction(async (client) => { for (const car of batch) await upsertCar(car, client); });
@@ -997,7 +1011,12 @@ export async function getModelFacts() {
 }
 
 export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {
-  const result = await pool.query("INSERT INTO order_drafts (listing_id, customer_name, contact, calculation) VALUES ($1,$2,$3,$4) RETURNING id, listing_id, status, created_at", [listingId,name,contact,JSON.stringify(calculation)]);
+  // Check at submission too: an already open browser tab can outlive a hide/sale.
+  const result = await pool.query(`INSERT INTO order_drafts (listing_id, customer_name, contact, calculation)
+    SELECT $1,$2,$3,$4 WHERE $1::text IS NULL OR EXISTS (
+      SELECT 1 FROM catalog_listings WHERE id=$1 AND status='active'
+    ) RETURNING id, listing_id, status, created_at`, [listingId,name,contact,JSON.stringify(calculation)]);
+  if (!result.rowCount) throw Object.assign(new Error('listing_unavailable'), { code: 'LISTING_UNAVAILABLE' });
   // Сообщение в телеграм уходит своим ходом: посетитель получает ответ сразу, не
   // дожидаясь доставки.
   notifyLead({

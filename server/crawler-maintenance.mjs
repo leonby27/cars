@@ -16,14 +16,13 @@ export async function scheduleStaleListings(limit = 1000) {
   return result.rowCount;
 }
 
-// Корейские объявления (Encar) правило не трогает, пока у них нет своей проверки
-// наличия: иначе ручная актуализация Che168 через 30 дней сняла бы все корейские
-// машины как «недоступные», хотя их никто не проверял (29.09.2026).
-const EXPIRY_EXEMPT_SOURCES = ['Encar'];
+// Age is not evidence of a sale. Hide stale records of any source, keeping
+// their facts, check dates and photographs for the next verified refresh.
 export async function expireUnseenListings(days = 30) {
   const safeDays=Math.max(7,Number(days) || 30);
-  const result=await pool.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now())
-    WHERE status='active' AND last_seen_at < now() - make_interval(days => $1) AND NOT (source = ANY($2))
-    RETURNING id`, [safeDays, EXPIRY_EXEMPT_SOURCES]);
+  const result=await pool.query(`UPDATE listings SET status='skipped', sold_at=NULL, content_changed_at=now(),
+    source_payload=source_payload || jsonb_build_object('catalogQuarantine', jsonb_build_object('reason','stale-observation','observedAt',now()))
+    WHERE status='active' AND COALESCE(last_seen_at,'epoch'::timestamptz) < now() - make_interval(days => $1)
+    RETURNING id`, [safeDays]);
   return result.rowCount;
 }

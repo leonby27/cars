@@ -28,8 +28,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload } from "./lib/che168-parser.mjs";
+import { extractChe168ListPayload } from "./lib/che168-parser.mjs";
 import { ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
+import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
+import { writeChe168Observations } from './lib/che168-write.mjs';
+import { quarantineListing } from './lib/catalog-quarantine.mjs';
+import { che168IdentityGuard } from './lib/che168-integrity.mjs';
+import { CHE168_VERIFICATION_VERSION, assertVerifiedChe168Car } from './lib/che168-result.mjs';
 import { estimateLandedCost } from "../src/pricing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -233,7 +238,7 @@ if (writeDatabase) {
     for (const row of rows) knownIds.add(row.id);
     console.log(`[skip] ${knownIds.size} listings already known (static + database)`);
   } catch (error) {
-    console.warn(`[skip] database ids unavailable: ${error.message}`);
+    throw new Error("Каталог недоступен перед импортом Che168", { cause: error });
   }
 }
 const accepted = [];
@@ -247,6 +252,25 @@ function reject(reason, externalId) {
   if (rejectionExamples.length < 30) rejectionExamples.push({ externalId, reason });
 }
 
+async function hideUnverifiedRepair(externalId, result) {
+  if (!repairField || !writeDatabase) return;
+  try {
+    const { pool, withTransaction } = await import('../server/db.mjs');
+    if (result.verdict === 'sold') {
+      await withTransaction(async db => {
+        const { rows } = await db.query(`SELECT id FROM listings WHERE source='Che168' AND external_id=$1
+          AND status IN ('active','skipped') FOR UPDATE`, [externalId]);
+        if (rows.length) await writeChe168Observations(db, [{ id: rows[0].id, sold: true, evidence: result.evidence }]);
+      });
+    } else {
+      await quarantineListing(pool, { source: 'Che168', externalId, reason: result.reason, checkedFrom: result.attemptedAt });
+    }
+  } catch (error) {
+    error.stage = 'write';
+    throw error;
+  }
+}
+
 function report(extra = {}) {
   return {
     startedAt,
@@ -258,6 +282,7 @@ function report(extra = {}) {
     concurrency,
     pace,
     detailReads,
+    verificationVersion: CHE168_VERIFICATION_VERSION,
     imported: accepted.length,
     importedByBrand: Object.fromEntries([...Map.groupBy(accepted, (car) => car.brand)].map(([brand, cars]) => [brand, cars.length])),
     rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
@@ -275,7 +300,10 @@ function report(extra = {}) {
 // overlapping writes would re-send rows that are already checkpointed.
 let checkpointChain = Promise.resolve();
 const checkpoint = (final = false) => {
-  checkpointChain = checkpointChain.then(() => writeBatch(final), () => writeBatch(final));
+  checkpointChain = checkpointChain.then(() => writeBatch(final)).catch(error => {
+    error.stage = 'write';
+    throw error;
+  });
   return checkpointChain;
 };
 
@@ -287,17 +315,18 @@ async function writeBatch(final = false) {
   const upto = accepted.length;
   const fresh = accepted.slice(checkpointed, upto);
   if (!fresh.length && !final) return;
-  const cars = [...catalogById.values()];
-  const finishedAt = new Date().toISOString();
-  if (writeStatic) {
-    await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...catalog, generatedAt: finishedAt, count: cars.length, cars }, null, 2)}\n`);
-  } else {
-    await fs.writeFile(PENDING_PATH, `${JSON.stringify({ generatedAt: finishedAt, count: accepted.length, cars: accepted }, null, 2)}\n`);
-  }
+  for (const car of fresh) assertVerifiedChe168Car(car);
+  const cars = [...new Map([...(catalog.cars || []), ...accepted.slice(0, upto)].map(car => [car.id, car])).values()];
   let databaseRows = null;
   if (writeDatabase && fresh.length) {
     const { importCars } = await import("../server/repository.mjs");
     databaseRows = await importCars(fresh);
+  }
+  const finishedAt = new Date().toISOString();
+  if (writeStatic) {
+    await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...catalog, generatedAt: finishedAt, count: cars.length, cars }, null, 2)}\n`);
+  } else {
+    await fs.writeFile(PENDING_PATH, `${JSON.stringify({ generatedAt: finishedAt, count: upto, cars: accepted.slice(0, upto) }, null, 2)}\n`);
   }
   checkpointed = upto;
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
@@ -460,6 +489,7 @@ try {
     let wallPauses = 0;
     let successesSinceWall = 0;
     let givenUp = false;
+    const checkIdentityPattern = che168IdentityGuard();
     const restIfNeeded = async (reason) => {
       console.warn(`[pause] ${reason} — отдыхаю ${burstPauseMin} мин`);
       const until = Date.now() + burstPauseMin * 60_000;
@@ -486,14 +516,13 @@ try {
         }
         const candidate = candidates[cursor++];
         try {
-          const { text, status } = await flight(workerPage, `/en/detail/${candidate.externalId}?_rsc=d${candidate.externalId}`, "ssrCarDetail");
+          const result = await checkChe168PublicPage(workerPage, candidate.externalId);
           detailReads += 1;
           burstRequests += 1;
-          const payload = status === 200 && text ? extractChe168DetailPayload([`[1,${JSON.stringify(text)}])`]) : null;
-          if (!payload) {
-            // Пустой ответ — почти всегда стена источника, а не беда карточки.
-            // Возвращаем карточку в очередь: после отдыха она прочитается.
-            reject(status === 200 ? "payload lacks ssrCarDetail" : `detail request failed (${status})`, candidate.externalId);
+          if (result.verdict !== 'alive') await hideUnverifiedRepair(candidate.externalId, result);
+          checkIdentityPattern(result, candidate.externalId);
+          if (result.verdict === 'unknown') {
+            reject(result.reason, candidate.externalId);
             consecutiveFailures += 1;
             if (consecutiveFailures >= wallLimit) {
               if (wallPauses >= 2 && successesSinceWall < 20) {
@@ -511,7 +540,11 @@ try {
           }
           consecutiveFailures = 0;
           successesSinceWall += 1;
-          const car = buildChe168Car(payload, { expectedLocale: "en" });
+          if (result.verdict === 'sold') {
+            reject('source-sold', candidate.externalId);
+            continue;
+          }
+          const car = buildVerifiedChe168Car(result);
           if (!car) {
             reject("detail page lacks required structured fields or gallery", candidate.externalId);
             continue;
@@ -539,8 +572,9 @@ try {
               reject(`source still has no ${repairField}`, candidate.externalId);
               continue;
             }
-            catalogById.set(car.id, { ...existing, ...car });
-            accepted.push({ ...existing, ...car });
+            const merged = { ...existing, ...car, catalogQuarantine: undefined, sourcePrice: car.chinaPrice };
+            catalogById.set(car.id, merged);
+            accepted.push(merged);
             if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
             continue;
           }
@@ -548,9 +582,14 @@ try {
           accepted.push(car);
           if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
         } catch (error) {
+          if (error.code === 'CHE168_INTEGRITY_FAILED' || error.stage === 'write') {
+            givenUp = true;
+            throw error;
+          }
           reject(`detail error: ${error.message.slice(0, 80)}`, candidate.externalId);
+        } finally {
+          await sleep(pace);
         }
-        await sleep(pace);
       }
     };
     // Первое окно обхода — уже открытое, остальные докрываются по `--lister`.
@@ -559,13 +598,7 @@ try {
       await extra.goto("https://global.che168.com/en", { waitUntil: "domcontentloaded", timeout: 60_000 });
       return extra;
     }))];
-    // Every worker fetches relative URLs, so its page has to sit on the site's
-    // own origin; the challenge cookie is already shared through the context.
-    const workerPages = await Promise.all(Array.from({ length: concurrency }, async () => {
-      const workerPage = await context.newPage();
-      await workerPage.goto("https://global.che168.com/en", { waitUntil: "domcontentloaded", timeout: 60_000 });
-      return workerPage;
-    }));
+    const workerPages = await Promise.all(Array.from({ length: concurrency }, () => context.newPage()));
     await Promise.all([
       discover().finally(() => { discovering = false; }),
       ...workerPages.map(worker),

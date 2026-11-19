@@ -4,7 +4,7 @@ import { purgeExpiredRateLimits } from "../server/rate-limit.mjs";
 
 const days = Math.max(7, Number(process.argv.find((value) => value.startsWith("--days="))?.split("=")[1]) || 30);
 const expired=await expireUnseenListings(days);
-console.log(`Marked ${expired} listings unavailable after ${days} days without a successful sighting`);
+console.log(`Hidden ${expired} unverified listings after ${days} days without a successful sighting`);
 // Просроченные счётчики частоты и мёртвые сессии копятся сами по себе: за ними никто
 // не возвращается, а лишняя строка сессии — это лишний живой ключ доступа в базе.
 const rateLimits=await purgeExpiredRateLimits();

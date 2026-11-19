@@ -48,26 +48,40 @@ export function oldestChecksFirst(rows) {
 // Persist each conclusive result BEFORE acknowledging it or waiting. If a
 // process is killed later, a restarted cycle selects only the outstanding rows.
 export async function checkPendingListings(rows, {
-  check, persist, afterAttempt = async () => {}, stopped = () => false, limit = Infinity,
+  check, persist, persistBatch, batchSize = 1, quarantine = async () => {}, afterAttempt = async () => {}, stopped = () => false, limit = Infinity,
 }) {
   const verified = new Set();
+  const attemptedIds = new Set();
   let attempted = 0;
   let unknown = 0;
   let sold = 0;
+  const pending = [];
+  const flush = async () => {
+    if (!pending.length) return;
+    if (persistBatch) await persistBatch(pending);
+    else for (const { row, result } of pending) await persist(row, result);
+    for (const { row, result } of pending) {
+      verified.add(row.id);
+      if (result.verdict === "sold") sold += 1;
+    }
+    pending.length = 0;
+  };
   for (const row of oldestChecksFirst(rows)) {
     if (stopped() || attempted >= limit) break;
     const result = await check(row.external_id);
     attempted += 1;
+    attemptedIds.add(row.id);
     if (result.verdict === "sold" || (result.verdict === "alive" && result.price > 0)) {
-      await persist(row, result);
-      verified.add(row.id);
-      if (result.verdict === "sold") sold += 1;
+      pending.push({ row, result });
+      if (pending.length >= batchSize) await flush();
     } else {
+      await quarantine(row, result);
       unknown += 1;
     }
     await afterAttempt(result);
   }
-  return { verified, attempted, unknown, sold, skipped: rows.length - attempted };
+  await flush();
+  return { verified, attemptedIds, attempted, unknown, sold, skipped: rows.length - attempted };
 }
 
 export function finishRefreshCycle(cursor, { remainingListings, remainingBrands, stopped = false,

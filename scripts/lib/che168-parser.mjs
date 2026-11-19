@@ -1,6 +1,7 @@
 import { repairVerifiedDrive, driveConflicts } from "../../src/vehicle-spec-integrity.js";
 import { canonicalImportBrand, canonicalImportModel, canonicalImportName, photoIdentity, uniquePhotos } from "../../config/import-policy.mjs";
 import { normalizeDrive } from "./guazi-parser.mjs";
+import { positiveSourceAmount } from './source-money.mjs';
 
 const numeric = (value) => {
   // Запятая значит разное на разных версиях сайта источника: по-английски она
@@ -15,8 +16,9 @@ const numeric = (value) => {
 function balancedJson(text, marker, open, close) {
   const markerIndex = text.indexOf(marker);
   if (markerIndex < 0) return null;
-  const start = text.indexOf(open, markerIndex + marker.length);
-  if (start < 0) return null;
+  const start = markerIndex + marker.length + (text.slice(markerIndex + marker.length).match(/^\s*/)?.[0].length || 0);
+  // null/malformed data must not borrow the next object (often a recommendation).
+  if (text[start] !== open) return null;
   let depth = 0;
   let quoted = false;
   let escaped = false;
@@ -71,7 +73,10 @@ export function extractChe168ListPayload(scripts) {
     if (!json) continue;
     try {
       const items = JSON.parse(json);
-      const value = (name) => Number(decoded.match(new RegExp(`"${name}":(\\d+)`))?.[1]) || null;
+      const value = (name) => {
+        const match = decoded.match(new RegExp(`"${name}":(\\d+)`));
+        return match ? Number(match[1]) : null;
+      };
       return {
         items: Array.isArray(items) ? items : [],
         totalCount: value("ssrTotalCount"),
@@ -324,21 +329,24 @@ export function countExteriorPhotos(pictureGroups, images, raw = []) {
   return count;
 }
 
-export function buildChe168Car(payload, { importedAt = new Date().toISOString(), usdToCny = 7.15, expectedLocale } = {}) {
+export function buildChe168Car(payload, { importedAt = new Date().toISOString(), usdToCny = 7.15, expectedLocale, expectedId } = {}) {
   const detail = payload?.detail;
-  if (!detail?.infoid) return null;
+  if (!/^\d+$/.test(String(detail?.infoid))) return null;
+  if (expectedId !== undefined && !che168DetailMatchesListing(payload, expectedId)) {
+    throw Object.assign(new Error('Che168: карточка принадлежит другому объявлению'), { code: 'CHE168_IDENTITY_MISMATCH' });
+  }
   const specs = flattenedSpecs(payload.specGroups);
   const brand = canonicalImportBrand(detail.brandname);
   const type = normalizeChe168Energy(detail, specs);
   const model = cleanModel(detail.seriesname, brand, { rawModel:detail.specname }, type);
   const year = numeric(String(detail.specname || "").match(/\b(20\d{2})\b/)?.[1]
     || String(detail.carname || "").match(/\b(20\d{2})\b/)?.[1]);
-  const sourcePriceUsd = numeric(detail.price);
+  const sourcePriceUsd = positiveSourceAmount(detail.price);
   const mileage = numeric(detail.mileage);
   const pictureGroups = (detail.catepiclist || []).map((group) => (group.list || []).filter(Boolean));
   const images = uniquePhotos(pictureGroups.flat());
   const exteriorPhotos = countExteriorPhotos(pictureGroups, images);
-  if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
+  if (!brand || !model || !year || !sourcePriceUsd || mileage === null || mileage < 0 || images.length < 2) return null;
 
   const {
     battery, electricRange, combinedRange, horsepower, batteryType, batteryBrand, acceleration,

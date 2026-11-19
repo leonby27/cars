@@ -42,10 +42,11 @@ test("unknown responses remain pending; sold and alive results persist before th
         : id === "4" ? { verdict: "alive", price: null } : alive();
     },
     persist: async (row) => events.push(`save:${row.external_id}`),
+    quarantine: async row => events.push(`hide:${row.external_id}`),
     afterAttempt: async () => events.push("pause"),
   });
-  assert.deepEqual(events, ["check:1", "save:1", "pause", "check:2", "pause",
-    "check:3", "save:3", "pause", "check:4", "pause"]);
+  assert.deepEqual(events, ["check:1", "save:1", "pause", "check:2", "hide:2", "pause",
+    "check:3", "save:3", "pause", "check:4", "hide:4", "pause"]);
   assert.equal(result.unknown, 2);
   assert.equal(result.sold, 1);
   assert.deepEqual([...result.verified], ["che168-1", "che168-3"]);
@@ -142,8 +143,7 @@ test('Che168 closes with 100 individual problems, carries unchanged dates into t
 test("production wiring persists the cycle before selecting rows and checks leftovers after an incomplete list", () => {
   const source = readFileSync(new URL("../scripts/refresh-che168.mjs", import.meta.url), "utf8");
   assert.ok(source.indexOf("await saveCursor(cursor)") < source.indexOf("const { rows } = await pool.query"));
-  assert.match(source, /else missingHere.push\(row\)/);
-  assert.match(source, /await checkPendingListings\(missingHere,/);
+  assert.match(source, /await checkPendingListings\(ourRows,/);
   assert.doesNotMatch(source, /if \(!skipDetail && ok/);
   assert.match(source, /remainingListings, remainingBrands, stopped/);
   assert.match(source, /await withTransaction/);

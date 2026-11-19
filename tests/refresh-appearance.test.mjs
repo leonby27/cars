@@ -24,7 +24,7 @@ test("метка кэша постоянная, а не нумерованная
   // прямо в адресе. У приложения сайта метка одна на весь раздел.
   assert.doesNotMatch(source, /_rsc=\$\{[^}]*(Seq|seq|\+\+|index|Index)/, "метка _rsc снова считается от запроса к запросу");
   assert.match(source, /const RSC_LIST\s*=/, "постоянная метка списков пропала");
-  assert.match(source, /const RSC_DETAIL\s*=/, "постоянная метка карточек пропала");
+  assert.match(source, /await checkChe168PublicPage\(publicDetailPage, externalId\)/);
 });
 
 test("неудачный запрос повторяется не больше двух раз", () => {
@@ -60,11 +60,10 @@ test("новые характеристики во всех импортерах
   const fallback = readFileSync(new URL("../scripts/import-che168-browser.mjs", import.meta.url), "utf8");
   for (const text of [source, importer, fallback]) {
     assert.doesNotMatch(text, /\/ru\/detail\//);
-    assert.match(text, /\/en\/detail\//);
-    assert.match(text, /buildChe168Car\(payload, \{ expectedLocale: "en" \}\)/);
+    assert.match(text, /buildVerifiedChe168Car\(result\)/);
   }
-  assert.match(source, /error\.code !== "CHE168_LOCALE_MISMATCH"/,
-    "неправильный язык одной карточки не должен прерывать весь обход");
+  const checker = readFileSync(new URL("../scripts/lib/che168-public-check.mjs", import.meta.url), "utf8");
+  assert.match(checker, /expectedLocale: 'en', expectedId: evidence.externalId/);
 });
 
 test("страницу каждой марки по умолчанию не открываем", () => {
@@ -98,7 +97,7 @@ test("не долбим закрытую дверь: две попытки вх�
 
 test("новые машины показываются сразу: кэш страниц сбрасывается из прогона", () => {
   assert.match(source, /async function purgePageCache/, "сброс кэша страниц пропал из прогона");
-  assert.match(source, /await purgePageCache\(added\)/, "сброс кэша больше не вызывается после заведения машин");
+  assert.match(source, /await purgePageCache\(\)/, "сброс кэша не вызывается после изменения каталога");
 });
 
 test("тип двигателя понимается и по-русски, и по-английски", async () => {

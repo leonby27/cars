@@ -174,6 +174,7 @@ export async function updateCustomerOrder(request, orderId, action, values = {})
       `UPDATE customer_orders
         SET availability_status='requested',availability_comment=$3,availability_requested_at=now(),lead_attribution=coalesce($4,lead_attribution),updated_at=now()
         WHERE id=$1 AND customer_id=$2 AND availability_status='decision'
+          AND EXISTS (SELECT 1 FROM catalog_listings l WHERE l.id=customer_orders.listing_id AND l.status='active')
         RETURNING id`,
       [orderId,account.id,comment || null,normalizeLeadAttribution(values.attribution)],
     );

@@ -1,3 +1,4 @@
+import { verifyChe168Observation } from "../scripts/lib/che168-public-check.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -107,9 +108,12 @@ test("all populated source rows survive import and Russian rendering without cha
 
 test("English import reaches storage without losing gallery, price, registration or original specs", async () => {
   for (const payload of payloads) {
-    const car = buildChe168Car(payload, options);
+    const url = `https://global.che168.com/en/detail/${payload.detail.infoid}`;
+    const script = `[1,${JSON.stringify("20:" + JSON.stringify({ ssrCarDetail: payload.detail, ssrSpecParam: payload.specGroups }))}])`;
+    const { evidence } = verifyChe168Observation(payload.detail.infoid, { url, status: 200, active: true, scripts: [script] });
+    const car = { ...buildChe168Car(payload, options), sourceAvailability: evidence, checkedAt: evidence.observedAt };
     const queries = [];
-    const client = { query: async (sql, values) => { queries.push({ sql, values }); return { rows: [] }; } };
+    const client = { query: async (sql, values) => { queries.push({ sql, values }); return { rows: [], rowCount: 1 }; } };
     const saved = await upsertCar(car, client);
     const listing = queries.find(q => q.sql.startsWith("INSERT INTO listings"));
     const stored = JSON.parse(listing.values[17]);
