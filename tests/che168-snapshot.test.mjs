@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from '../scripts/lib/che168-snapshot.mjs';
+import { acceptsChe168ListTail, collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from '../scripts/lib/che168-snapshot.mjs';
 import { circleFailure } from '../scripts/lib/circle-report.mjs';
 
 const row = (external_id, usd_price, sourceBrand = 'Volvo') => ({ id: `che168-${external_id}`, external_id, usd_price, sourceBrand });
@@ -40,20 +40,24 @@ test('Che168 reconciles existing quotes, invalid currencies, conflicts and absen
   assert.equal(plan.candidates.length, 0);
 });
 
-test('Che168 stops at 100 changed prices, counting each ID once across brands', () => {
-  const prices = Array.from({ length: 101 }, (_, index) => quote(100 + index, 9000));
+test('matching Che168 prices across brands do not block ordinary changes or protect individual outliers', () => {
+  const prices = Array.from({ length: 118 }, (_, index) => quote(100 + index, 19780));
   const known = new Map(prices.map(item => [String(item.infoid), 'active']));
   const snapshots = new Map([
     ['Volvo', snapshot(prices.slice(0, 55))], ['BMW', snapshot(prices.slice(54))],
   ]);
-  const oldRows = prices.map((item, index) => row(String(item.infoid), index < 98 ? '9100' : index === 98 ? '18000' : '9000', index < 55 ? 'Volvo' : 'BMW'));
-  const belowThreshold = planChe168Snapshot(snapshots, oldRows, known, options);
-  assert.equal(belowThreshold.counts.priceChanged, 98);
-  assert.equal(belowThreshold.counts.hiddenPrice, 1);
-  oldRows[99].usd_price = '9100';
-  assert.throws(() => planChe168Snapshot(snapshots, oldRows, known, options), {
-    code: 'CHE168_REPEATED_LIST_PRICE', diagnostic: { price: 9000, total: 100, ids: prices.slice(0, 20).map(item => String(item.infoid)) },
-  });
+  const oldRows = prices.map((item, index) => row(String(item.infoid), index < 115 ? '19850' : '18000', index < 55 ? 'Volvo' : 'BMW'));
+  const plan = planChe168Snapshot(snapshots, oldRows, known, options);
+  assert.equal(plan.counts.priceChanged, 115);
+  assert.equal(plan.counts.hiddenPrice, 3);
+  assert.deepEqual(plan.updates.filter(update => update.outcome === 'hidden').map(update => update.externalId), ['215', '216', '217']);
+});
+
+test('Che168 accepts a stuck tail within five page numbers of the advertised end', () => {
+  assert.equal(acceptsChe168ListTail(190, 196), false);
+  for (const page of [191, 192, 196]) assert.equal(acceptsChe168ListTail(page, 196), true);
+  assert.equal(acceptsChe168ListTail(197, 196), false);
+  assert.equal(acceptsChe168ListTail(1, 4), false);
 });
 
 test('Li Auto list diagnostics distinguish HTTP, timeout, page index, counts and malformed rows', () => {

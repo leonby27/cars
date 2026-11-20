@@ -3,8 +3,13 @@ import { extractChe168ListPayload } from './che168-parser.mjs';
 import { positiveSourceAmount, sourceQuoteChange } from './source-money.mjs';
 
 const MAX_PRICE_CHANGE_USD = 1000;
-const REPEATED_PRICE_LIMIT = 100;
+const TOLERATED_DISTANCE_FROM_LAST_PAGE = 5;
 const PAGE_RETRY_DELAYS_MS = [0, 0, 5 * 60_000, 0, 15 * 60_000];
+
+export function acceptsChe168ListTail(failedPage, pageCount) {
+  return failedPage > 1 && failedPage <= pageCount
+    && pageCount - failedPage <= TOLERATED_DISTANCE_FROM_LAST_PAGE;
+}
 
 export function inspectChe168ListResponse({ status, text, timedOut, failure }, expectedPage) {
   const rejected = error => ({ payload: null, error });
@@ -107,7 +112,6 @@ export function planChe168Snapshot(snapshots, rows, knownStatuses, { estimate, n
   for (const snapshot of snapshots.values()) {
     for (const observation of snapshot.quotes) mergeObservation(quotes, observation);
   }
-  const prices = new Map();
   const updates = [];
   const counts = { priceChanged: 0, rePriced: 0, hiddenMissing: 0, hiddenPrice: 0, conflictingPrice: 0, unmapped: 0 };
   for (const row of rows) {
@@ -137,9 +141,6 @@ export function planChe168Snapshot(snapshots, rows, knownStatuses, { estimate, n
       updates.push({ ...update, outcome: 'seen' });
       continue;
     }
-    const converged = prices.get(price) || [];
-    converged.push(externalId);
-    prices.set(price, converged);
     if (previous === null || Math.abs(Math.round(price * 100) - Math.round(previous * 100)) > MAX_PRICE_CHANGE_USD * 100) {
       counts.hiddenPrice += 1;
       updates.push({ ...update, outcome: 'hidden', reason: 'list-price-outlier', observedUsd: price });
@@ -153,12 +154,6 @@ export function planChe168Snapshot(snapshots, rows, knownStatuses, { estimate, n
     if (significant) counts.rePriced += 1;
     updates.push({ ...update, outcome: 'price', usd: price, cny, est, significant });
   }
-  for (const [price, ids] of prices) {
-    if (ids.length < REPEATED_PRICE_LIMIT) continue;
-    throw Object.assign(Error(`Che168: у ${ids.length} карточек цена изменилась на одинаковую — $${price}. Круг остановлен до записи цен.`),
-      { code: 'CHE168_REPEATED_LIST_PRICE', stage: 'сверка цен', diagnostic: { price, total: ids.length, ids: ids.slice(0, 20) } });
-  }
-
   const seen = new Set();
   const candidates = [];
   for (const [brand, snapshot] of snapshots) {

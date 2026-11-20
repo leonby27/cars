@@ -60,7 +60,7 @@ import { positiveSourceAmount, sourceQuoteChange } from './lib/source-money.mjs'
 import { CHE168_VERIFICATION_VERSION, che168PriceCny } from './lib/che168-result.mjs';
 import { CHE168_CHECK_BATCH_SIZE, che168IdentityGuard, validateChe168CheckBatch } from './lib/che168-integrity.mjs';
 import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
-import { assertChe168Running, collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from "./lib/che168-snapshot.mjs";
+import { acceptsChe168ListTail, assertChe168Running, collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from "./lib/che168-snapshot.mjs";
 import { canCompleteWithProblems } from "./lib/circle-completion.mjs";
 import { writeChe168ListSnapshot, writeChe168Observations } from './lib/che168-write.mjs';
 import { quarantineListing } from './lib/catalog-quarantine.mjs';
@@ -87,6 +87,7 @@ const FUEL_TYPES = [7, 5, 6, 1];
 // то же (замерено на марках в несколько сотен страниц). Марка глубже порога
 // идёт в разрез по моделям.
 const SLICE_MAX_PAGES = 250;
+const SNAPSHOT_LIST_POLICY_VERSION = 1;
 // Порядок обхода и норма одного подхода живут в настройке, а не в программе:
 // поменять очередь марок можно правкой config/refresh-order.json.
 const ORDER_PATH = "config/refresh-order.json";
@@ -925,6 +926,10 @@ async function walkSlice(baseParams, firstPage, fuelType, depthCap, observe, fai
     const { payload, error, fingerprint, history } = await readListPage(
       `${baseParams}&page=${pageIndex}`, `${label}, страница ${pageIndex}`, failFast, fingerprints);
     const ok = Boolean(payload && observe(payload, fuelType));
+    if (!ok && failFast && acceptsChe168ListTail(pageIndex, pageCount)) {
+      console.log(`[snapshot] ${label}: принят диапазон без страниц ${pageIndex}–${pageCount} (${error || 'пустая страница'})`);
+      return { complete: true, maxUsd, acceptedTail: { firstUnreadPage: pageIndex, lastPage: pageCount } };
+    }
     if (ok) fingerprints.set(fingerprint, pageIndex);
     if (!ok) { listPagesEmpty += 1; empties += 1; }
     else maxUsd = Math.max(maxUsd, pageMaxUsd(payload));
@@ -1041,6 +1046,7 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
   let why = null;
   let windows = 0;
   let history;
+  const acceptedTails = [];
 
   for (const brandId of entry.ids) {
     if (failFast && !ok) break;
@@ -1094,6 +1100,7 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
         continue;
       }
       const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES, observe, failFast, `${entry.brand}, ${range}`);
+      if (walked.acceptedTail) acceptedTails.push({ brandId, minPrice: win.minPrice, maxPrice: win.maxPrice, ...walked.acceptedTail });
       if (!walked.complete) {
         ok = false;
         why = walked.failedPage ? `страница ${walked.failedPage}, ${range}: ${walked.reason}` : "выдача прочитана не полностью";
@@ -1102,7 +1109,7 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
     }
   }
 
-  return { ok: ok && !stopped, why, windows, history };
+  return { ok: ok && !stopped, why, windows, history, acceptedTails };
 }
 
 // Сброс кэша готовых страниц: без него заведённая машина появится на витрине
@@ -1251,11 +1258,19 @@ const landedTotal = (row, usd) => estimateLandedCost({
 }).totalUsd;
 
 async function loadSnapshotState(brands) {
-  const initial = { startedAt: cursor.startedAt, brands, snapshots: [], failures: [] };
+  const initial = { startedAt: cursor.startedAt, brands, snapshots: [], failures: [], listPolicyVersion: SNAPSHOT_LIST_POLICY_VERSION };
   if (startFresh) return initial;
   try {
     const saved = JSON.parse(await fs.readFile(SNAPSHOT_PATH, 'utf8'));
-    if (saved.startedAt === cursor.startedAt) return saved;
+    if (saved.startedAt === cursor.startedAt) {
+      // A brand rejected under the old list policy can be read again before
+      // applying a plan. Keep all the completed brand snapshots.
+      if (!saved.plan && saved.listPolicyVersion !== SNAPSHOT_LIST_POLICY_VERSION) {
+        saved.failures = [];
+        saved.listPolicyVersion = SNAPSHOT_LIST_POLICY_VERSION;
+      }
+      return saved;
+    }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
@@ -1312,6 +1327,7 @@ async function runListSnapshot(brands, ourPricesByBrand) {
   latestSnapshotReport = {
     mode: 'list-snapshot', circleRound: cursor.round, cycleStartedAt: cursor.startedAt,
     brandsCoveredThisRun: snapshots.size, remainingBrands: skipped.size, skippedBrands,
+    acceptedListTails: [...snapshots].flatMap(([brand, snapshot]) => (snapshot.acceptedTails || []).map(tail => ({ brand, ...tail }))),
     errors: [...skipped].map(([brand, failure]) => ({ brand, stage: 'read', error: failure.reason, history: failure.history })),
   };
   const skippedBrandsError = () => Object.assign(
