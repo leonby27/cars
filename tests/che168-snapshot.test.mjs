@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectChe168ListPage, collectChe168Snapshots, planChe168Snapshot } from '../scripts/lib/che168-snapshot.mjs';
+import { collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from '../scripts/lib/che168-snapshot.mjs';
 import { circleFailure } from '../scripts/lib/circle-report.mjs';
 
 const row = (external_id, usd_price, sourceBrand = 'Volvo') => ({ id: `che168-${external_id}`, external_id, usd_price, sourceBrand });
@@ -40,18 +40,34 @@ test('Che168 reconciles existing quotes, invalid currencies, conflicts and absen
   assert.equal(plan.candidates.length, 0);
 });
 
-test('Che168 stops at ten changed prices converging across brands, counting each ID once', () => {
-  const prices = Array.from({ length: 11 }, (_, index) => quote(100 + index, 9000));
+test('Che168 stops at 100 changed prices, counting each ID once across brands', () => {
+  const prices = Array.from({ length: 101 }, (_, index) => quote(100 + index, 9000));
   const known = new Map(prices.map(item => [String(item.infoid), 'active']));
   const snapshots = new Map([
-    ['Volvo', snapshot(prices.slice(0, 6))], ['BMW', snapshot(prices.slice(5))],
+    ['Volvo', snapshot(prices.slice(0, 55))], ['BMW', snapshot(prices.slice(54))],
   ]);
-  const oldRows = prices.map((item, index) => row(String(item.infoid), index < 9 ? '9100' : '9000', index < 6 ? 'Volvo' : 'BMW'));
-  assert.equal(planChe168Snapshot(snapshots, oldRows, known, options).counts.priceChanged, 9);
-  oldRows[9].usd_price = '18000';
+  const oldRows = prices.map((item, index) => row(String(item.infoid), index < 98 ? '9100' : index === 98 ? '18000' : '9000', index < 55 ? 'Volvo' : 'BMW'));
+  const belowThreshold = planChe168Snapshot(snapshots, oldRows, known, options);
+  assert.equal(belowThreshold.counts.priceChanged, 98);
+  assert.equal(belowThreshold.counts.hiddenPrice, 1);
+  oldRows[99].usd_price = '9100';
   assert.throws(() => planChe168Snapshot(snapshots, oldRows, known, options), {
-    code: 'CHE168_REPEATED_LIST_PRICE', diagnostic: { price: 9000, total: 10, ids: prices.slice(0, 10).map(item => String(item.infoid)) },
+    code: 'CHE168_REPEATED_LIST_PRICE', diagnostic: { price: 9000, total: 100, ids: prices.slice(0, 20).map(item => String(item.infoid)) },
   });
+});
+
+test('Li Auto list diagnostics distinguish HTTP, timeout, page index, counts and malformed rows', () => {
+  const response = (items, pageIndex, pageCount, totalCount) => ({
+    status: 200, text: `20:${JSON.stringify({ ssrCars: items, ssrPageCount: pageCount, ssrTotalCount: totalCount, ssrPageIndex: pageIndex })}`,
+  });
+  assert.match(inspectChe168ListResponse({ status: 0, timedOut: true }, 168).error, /тайм-аут/);
+  assert.equal(inspectChe168ListResponse({ status: 429 }, 168).error, 'HTTP 429');
+  assert.match(inspectChe168ListResponse({ status: 200, text: '<html>' }, 168).error, /нет разбираемого списка/);
+  assert.match(inspectChe168ListResponse(response([quote(42, 9000)], 1, 168, 4009), 168).error, /номер страницы 1/);
+  assert.match(inspectChe168ListResponse(response([quote(42, 9000)], 169, 168, 4009), 169).error, /некорректные счётчики/);
+  assert.match(inspectChe168ListResponse(response([], 168, 168, 4009), 168).error, /пустая страница/);
+  assert.match(inspectChe168ListResponse(response([quote(0, 9000)], 168, 168, 4009), 168).error, /некорректный ID/);
+  assert.equal(inspectChe168ListResponse(response([quote(42, 9000)], 168, 168, 4009), 168).payload.items.length, 1);
 });
 
 test('hidden Che168 IDs are import candidates with a fresh quote, under the existing per-brand cap', () => {
@@ -63,30 +79,69 @@ test('hidden Che168 IDs are import candidates with a fresh quote, under the exis
   ]);
 });
 
-test('a broken brand restarts at page one once; a second failure survives resume and reports the reason', async () => {
+test('a failed page gets two attempts, two after five minutes, and one after fifteen minutes', async () => {
+  const pauses = [], notices = [];
+  let calls = 0;
+  const deps = {
+    read: async () => { calls++; return { payload: null, error: `HTTP ${calls === 5 ? 429 : 502}` }; },
+    pause: async ms => pauses.push([calls, ms]),
+    stopped: () => false,
+    retry: ({ attempt }) => notices.push(attempt),
+  };
+  const result = await retryChe168ListPage(deps);
+  assert.equal(calls, 5);
+  assert.deepEqual(pauses, [[2, 300000], [4, 900000]]);
+  assert.deepEqual(notices, [2, 3, 4, 5]);
+  assert.equal(result.error, 'после 5 попыток: HTTP 429');
+  assert.deepEqual(result.history, ['HTTP 502', 'HTTP 502', 'HTTP 502', 'HTTP 502', 'HTTP 429']);
+});
+
+test('a successful page retry proceeds without further pauses and a manual stop cancels the next attempt', async () => {
+  let calls = 0;
+  const success = await retryChe168ListPage({
+    read: async () => ++calls === 1 ? { error: 'те же ID, что на странице 1' } : { payload: 'correct page' },
+    pause: () => assert.fail('success should not wait'),
+    stopped: () => false,
+    retry: () => {},
+  });
+  assert.equal(success.payload, 'correct page');
+  let stopped = false;
+  calls = 0;
+  await assert.rejects(retryChe168ListPage({
+    read: async () => { calls++; return { error: 'HTTP 503' }; },
+    pause: async () => { stopped = true; },
+    stopped: () => stopped,
+    retry: () => {},
+  }), { code: 'ABCARS_STOPPED' });
+  assert.equal(calls, 2);
+});
+
+test('a brand with an exhausted page is omitted, the next brand is saved, and the report names the failure', async () => {
   const brands = [{ brand: 'Volvo' }, { brand: 'BMW' }, { brand: 'Audi' }];
-  const saved = new Map(), failures = new Map(), reads = [], notices = [];
+  const saved = new Map(), failures = new Map(), reads = [];
   const deps = {
     brands, snapshots: saved, failures, stopped: () => false,
     async readBrand({ brand }) {
       reads.push(brand);
-      return brand === 'BMW' ? { ok: false, why: 'страница 40', quotes: ['partial'] } : { ok: true, quotes: ['complete'] };
+      return brand === 'BMW'
+        ? { ok: false, why: 'страница 40: после 5 попыток: HTTP 503', history: ['HTTP 503'], quotes: ['partial'] }
+        : { ok: true, quotes: ['complete'] };
     },
     async saveBrand(brand, result) { assert.equal(result.quotes[0], 'complete'); },
-    async saveFailure(brand, failure) { assert.equal(brand, 'BMW'); assert.equal(failure.reason, 'страница 40'); },
-    retry: (brand, reason) => notices.push([brand, reason]),
+    async saveFailure(brand, failure) { assert.equal(brand, 'BMW'); assert.equal(failure.exhausted, true); },
   };
-  const expected = { code: 'CHE168_BRAND_WALK_FAILED', diagnostic: { brand: 'BMW', attempts: 2, reason: 'страница 40' } };
-  await assert.rejects(collectChe168Snapshots(deps), expected);
-  await assert.rejects(collectChe168Snapshots(deps), expected);
-  assert.deepEqual(reads, ['Volvo', 'BMW', 'BMW']);
-  assert.deepEqual([...saved.keys()], ['Volvo']);
-  assert.deepEqual(notices, [['BMW', 'страница 40']]);
+  await collectChe168Snapshots(deps);
+  await collectChe168Snapshots(deps);
+  assert.deepEqual(reads, ['Volvo', 'BMW', 'Audi']);
+  assert.deepEqual([...saved.keys()], ['Volvo', 'Audi']);
+  assert.equal(failures.get('BMW').reason, 'страница 40: после 5 попыток: HTTP 503');
   const telegram = circleFailure('che', Error('код 1'), {
-    report: { failureCode: expected.code, note: 'Che168: два сбоя обхода марки BMW. страница 40' },
+    report: { failureCode: 'CHE168_SKIPPED_BRANDS', note: 'Che168: не завершён обход марок (1)',
+      skippedBrands: ['BMW'], errors: [{ brand: 'BMW', error: failures.get('BMW').reason }] },
     cursor: { startedAt: '2026-11-20T04:00:00Z' },
   });
-  assert.match(telegram, /Причина: Che168: два сбоя обхода марки BMW\. страница 40/);
+  assert.match(telegram, /Пропущены марки: BMW/);
+  assert.match(telegram, /BMW: страница 40: после 5 попыток: HTTP 503/);
   assert.doesNotMatch(telegram, /Продолжить/);
 });
 
@@ -98,6 +153,5 @@ test('an interrupted attempt is discarded before applying its observations', asy
     readBrand: async () => { stopped = true; return { ok: true }; },
     saveBrand: () => assert.fail('interrupted result written'),
     saveFailure: () => assert.fail('manual stop counted as a source failure'),
-    retry: () => assert.fail('interrupted brand retried'),
   }), { code: 'ABCARS_STOPPED' });
 });

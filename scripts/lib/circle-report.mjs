@@ -63,7 +63,7 @@ export function circleFailure(source, error, { report, state, importReport, curs
   const sourceReason = source === 'encar' ? importReport?.fatal || report?.fatal : source === 'che' ? report?.note : null;
   const reason = !stopped && sourceReason || error.message || error;
   const code = report?.failureCode || error.code;
-  const restartChe = ['CHE168_BRAND_WALK_FAILED', 'CHE168_REPEATED_LIST_PRICE', 'CHE168_SNAPSHOT_WRITE_CONFLICT', 'CHE168_EMPTY_SNAPSHOT'].includes(code);
+  const restartChe = ['CHE168_BRAND_WALK_FAILED', 'CHE168_SKIPPED_BRANDS', 'CHE168_REPEATED_LIST_PRICE', 'CHE168_SNAPSHOT_WRITE_CONFLICT', 'CHE168_EMPTY_SNAPSHOT'].includes(code);
   const paused = !stopped && source === 'encar' && encarCanRetry(importReport?.fatal ? importReport : report);
   return safeDiagnostic([
     `${stopped ? '⏹' : paused ? '⏸' : '❌'} ${labels[source]} ${stopped ? 'остановлен по команде' : paused ? 'приостановлен: источник не дал подтвердить данные' : 'не завершён'}`,
@@ -85,6 +85,7 @@ export function circleFailure(source, error, { report, state, importReport, curs
     source === 'encar' ? count('Скрыто до следующей проверки', report?.skipped) : null,
     source === 'encar' ? count('Историю/осмотр обновить не удалось', report?.historyDeferred) : null,
     count('Незавершённых марок', report?.remainingBrands),
+    source === 'che' && report?.skippedBrands?.length ? `Пропущены марки: ${report.skippedBrands.join(', ')}` : null,
     count(attempt ? 'Ошибок чтения за этот запуск' : source === 'encar' && Number.isFinite(report?.readFailed) ? 'Ошибок чтения карточек' : 'Карточек без ответа', failures?.readFailed ?? report?.unknown ?? report?.noAnswer),
     count('Ошибок разбора карточек', failures?.parseFailed),
     count('Ошибок записи в базу', failures?.writeFailed),

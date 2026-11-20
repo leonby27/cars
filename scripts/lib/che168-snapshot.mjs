@@ -1,8 +1,31 @@
 import { che168PriceCny, isChe168ListingId } from './che168-result.mjs';
+import { extractChe168ListPayload } from './che168-parser.mjs';
 import { positiveSourceAmount, sourceQuoteChange } from './source-money.mjs';
 
 const MAX_PRICE_CHANGE_USD = 1000;
-const REPEATED_PRICE_LIMIT = 10;
+const REPEATED_PRICE_LIMIT = 100;
+const PAGE_RETRY_DELAYS_MS = [0, 0, 5 * 60_000, 0, 15 * 60_000];
+
+export function inspectChe168ListResponse({ status, text, timedOut, failure }, expectedPage) {
+  const rejected = error => ({ payload: null, error });
+  if (timedOut) return rejected('тайм-аут запроса');
+  if (failure) return rejected(failure);
+  if (!status) return rejected('источник не ответил');
+  if (status !== 200) return rejected(`HTTP ${status}`);
+  if (!text) return rejected('HTTP 200, пустой ответ');
+  const payload = extractChe168ListPayload([`[1,${JSON.stringify(text)}])`]);
+  if (!payload) return rejected('HTTP 200, в ответе нет разбираемого списка машин');
+  const { pageIndex, pageCount, totalCount, items } = payload;
+  if (pageIndex != null && pageIndex !== expectedPage) return rejected(`источник вернул номер страницы ${pageIndex}`);
+  if (items.some(item => !isChe168ListingId(item?.infoid))) return rejected('некорректный ID в выдаче');
+  if (items.length === 0 && !(expectedPage === 1 && totalCount === 0 && pageCount <= 1)) {
+    return rejected(`пустая страница (заявлено страниц: ${pageCount ?? '?'}, машин: ${totalCount ?? '?'})`);
+  }
+  if (items.length > 0 && !(pageCount >= expectedPage && totalCount >= items.length)) {
+    return rejected(`некорректные счётчики выдачи (страниц: ${pageCount ?? '?'}, машин: ${totalCount ?? '?'}, получено: ${items.length})`);
+  }
+  return { payload, error: null };
+}
 
 function listPrice(item) {
   const currency = item.currency ?? item.currencyCode ?? item.priceCurrency;
@@ -43,28 +66,39 @@ export function assertChe168Running(stopped) {
   if (stopped()) throw Object.assign(Error('Остановлено по команде; прогресс сохранён'), { code: 'ABCARS_STOPPED' });
 }
 
-export async function collectChe168Snapshots({ brands, snapshots, failures, readBrand, saveBrand, saveFailure, stopped, retry }) {
+export async function retryChe168ListPage({ read, pause, stopped, retry }) {
+  const history = [];
+  for (const delay of PAGE_RETRY_DELAYS_MS) {
+    assertChe168Running(stopped);
+    if (history.length) retry({ delay, attempt: history.length + 1, previousError: history.at(-1) });
+    if (delay) await pause(delay);
+    assertChe168Running(stopped);
+    const result = await read();
+    assertChe168Running(stopped);
+    if (result.payload) return result;
+    history.push(result.error);
+  }
+  return {
+    payload: null,
+    error: `после ${history.length} попыток: ${history.at(-1)}`,
+    history,
+  };
+}
+
+export async function collectChe168Snapshots({ brands, snapshots, failures, readBrand, saveBrand, saveFailure, stopped }) {
   for (const entry of brands) {
-    if (snapshots.has(entry.brand)) continue;
-    while (true) {
-      assertChe168Running(stopped);
-      const failure = failures.get(entry.brand);
-      if (failure?.attempts >= 2) {
-        throw Object.assign(Error(`Che168: два сбоя обхода марки ${entry.brand}. ${failure.reason}`),
-          { code: 'CHE168_BRAND_WALK_FAILED', stage: 'обход выдачи', diagnostic: { brand: entry.brand, ...failure } });
-      }
-      const result = await readBrand(entry);
-      assertChe168Running(stopped);
-      if (result.ok) {
-        await saveBrand(entry.brand, result);
-        snapshots.set(entry.brand, result);
-        break;
-      }
-      const nextFailure = { attempts: (failure?.attempts || 0) + 1, reason: result.why };
-      await saveFailure(entry.brand, nextFailure);
-      failures.set(entry.brand, nextFailure);
-      if (nextFailure.attempts === 1) retry(entry.brand, result.why);
+    if (snapshots.has(entry.brand) || failures.get(entry.brand)?.exhausted) continue;
+    assertChe168Running(stopped);
+    const result = await readBrand(entry);
+    assertChe168Running(stopped);
+    if (result.ok) {
+      await saveBrand(entry.brand, result);
+      snapshots.set(entry.brand, result);
+      continue;
     }
+    const failure = { exhausted: true, reason: result.why, history: result.history };
+    await saveFailure(entry.brand, failure);
+    failures.set(entry.brand, failure);
   }
 }
 

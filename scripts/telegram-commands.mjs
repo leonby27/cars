@@ -119,6 +119,9 @@ async function handle(text) {
       .then((raw) => JSON.parse(raw))
       .catch(() => null);
     if (!cursor?.startedAt) return say("Прошлый круг закрыт, доделывать нечего. Напишите «круг», чтобы начать новый.");
+    if (cursor.snapshotImport?.finishedWithSkippedBrands) {
+      return say("Прошлый круг закончился с пропущенными марками. Напишите «круг», чтобы начать новый.");
+    }
     await startRun(null);
     const done = cursor.brandsDone?.length || 0;
     return say(`Продолжаю круг №${cursor.round}: доделаны ${done} марок, беру остальные и непроверенные машины.`);

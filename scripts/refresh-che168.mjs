@@ -47,7 +47,6 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import pg from "pg";
 import "../config/load-env.mjs";
-import { extractChe168ListPayload } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
@@ -58,10 +57,10 @@ import { sendTelegram } from "./lib/telegram.mjs";
 import { refreshAfterManualCatalog } from "./lib/sitemap-refresh.mjs";
 import { circleFailure } from "./lib/circle-report.mjs";
 import { positiveSourceAmount, sourceQuoteChange } from './lib/source-money.mjs';
-import { CHE168_VERIFICATION_VERSION, che168PriceCny, isChe168ListingId } from './lib/che168-result.mjs';
+import { CHE168_VERIFICATION_VERSION, che168PriceCny } from './lib/che168-result.mjs';
 import { CHE168_CHECK_BATCH_SIZE, che168IdentityGuard, validateChe168CheckBatch } from './lib/che168-integrity.mjs';
 import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
-import { assertChe168Running, collectChe168ListPage, collectChe168Snapshots, planChe168Snapshot } from "./lib/che168-snapshot.mjs";
+import { assertChe168Running, collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from "./lib/che168-snapshot.mjs";
 import { canCompleteWithProblems } from "./lib/circle-completion.mjs";
 import { writeChe168ListSnapshot, writeChe168Observations } from './lib/che168-write.mjs';
 import { quarantineListing } from './lib/catalog-quarantine.mjs';
@@ -202,7 +201,6 @@ const filterParams = (brandCanon, { minPrice = null, maxPrice = null } = {}) => 
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = Date.now();
-const asFlightScript = (text) => `[1,${JSON.stringify(text)}])`;
 
 // Same in-page fetch as import-v2: the request must run inside the challenged
 // page so it carries the anti-bot cookies. 429 and the quieter empty-shell
@@ -226,13 +224,11 @@ async function flight(page, url, expectMarker) {
 }
 
 async function flightInPage(page, url, expectMarker) {
-  return page.evaluate(async ([target, marker, flightShape, minLength]) => {
+  return page.evaluate(async ([target, marker, flightShape, minLength, attempts]) => {
     const looksLikeFlight = (text) => Boolean(text) && text.length > minLength && new RegExp(flightShape).test(text);
     let last = { status: 0, text: "" };
-    // Одна повторная попытка вместо четырёх: четыре обращения к одному адресу
-    // подряд — картина сборщика, а рядом со стеной ещё и трата запаса впустую.
-    // Пропущенную страницу подберёт следующий круг (31.08.2026).
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    // Snapshot mode handles all page retries outside the transport.
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       // Сорванное соединение — обычное дело на длинном прогоне. Раньше такая
       // ошибка выбрасывалась наружу и роняла весь скрипт вместе с несохранёнными
       // результатами; теперь это просто ещё одна попытка.
@@ -241,13 +237,17 @@ async function flightInPage(page, url, expectMarker) {
         // Свой лимит времени обязателен: придержанный источником запрос иначе
         // висит минутами, и предохранитель не успевает заметить стену молчания.
         response = await fetch(target, { credentials: "include", headers: { RSC: "1" }, signal: AbortSignal.timeout(20_000) });
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+      } catch (error) {
+        last = error.name === 'TimeoutError'
+          ? { status: 0, text: "", timedOut: true }
+          : { status: 0, text: "", failure: 'сетевая ошибка при запросе страницы' };
+        if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
         continue;
       }
       if (!response.ok) {
-        if (response.status !== 429) return { status: response.status, text: "" };
-        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        last = { status: response.status, text: "" };
+        if (response.status !== 429) return last;
+        if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
         continue;
       }
       last = { status: response.status, text: await response.text() };
@@ -258,10 +258,10 @@ async function flightInPage(page, url, expectMarker) {
       // Это окончательный ответ: повторять запрос незачем, а считать его
       // молчанием — прямая дорога к выдуманной стене (06.09.2026).
       if (looksLikeFlight(last.text)) return { ...last, answered: true };
-      await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
+      if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
     }
     return last;
-  }, [url, expectMarker, FLIGHT_SHAPE, FLIGHT_MIN_LENGTH]);
+  }, [url, expectMarker, FLIGHT_SHAPE, FLIGHT_MIN_LENGTH, useListSnapshot ? 1 : 2]);
 }
 
 // ---- Сессия к источнику -----------------------------------------------------
@@ -620,7 +620,7 @@ async function safeFlight(url, expectMarker) {
   try {
     return await flight(page, url, expectMarker);
   } catch {
-    return { status: 0, text: "" };
+    return { status: 0, text: "", failure: 'браузер не смог выполнить запрос страницы' };
   }
 }
 
@@ -699,15 +699,36 @@ async function noteAnswer(ok) {
 // же, а наш скрипт со сквозной нумерацией останавливали на 51–170. Ставим постоянную.
 const RSC_LIST = args.get("rsc") || "r2";
 async function listFlight(params) {
-  const { status, text } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
-  const payload = status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
-  if (!payload) return null;
+  const response = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
   const expectedPage = Number(new URLSearchParams(params).get('page') || 1);
-  if (payload.pageIndex != null && payload.pageIndex !== expectedPage) return null;
-  const validItems = payload.items.every(item => isChe168ListingId(item?.infoid));
-  if (!validItems || (payload.items.length > 0 && !(payload.pageCount >= expectedPage && payload.totalCount >= payload.items.length))) return null;
-  if (!payload.items.length && !(expectedPage === 1 && payload.totalCount === 0 && payload.pageCount <= 1)) return null;
-  return payload;
+  return inspectChe168ListResponse(response, expectedPage);
+}
+
+const listPageFingerprint = payload => payload.items.map(item => String(item.infoid)).sort().join(',');
+
+async function readListPage(params, label, retryPage, fingerprints = null) {
+  const read = async () => {
+    const result = await listFlight(params);
+    const fingerprint = result.payload && listPageFingerprint(result.payload);
+    const repeatedPage = fingerprints?.get(fingerprint);
+    const response = repeatedPage
+      ? { payload: null, error: `те же ID, что на странице ${repeatedPage}` }
+      : { ...result, fingerprint };
+    await noteAnswer(Boolean(response.payload));
+    await sleep(pace);
+    return response;
+  };
+  if (!retryPage) return read();
+  return retryChe168ListPage({
+    read,
+    stopped: () => stopped,
+    pause: async ms => {
+      const end = Date.now() + ms;
+      while (!stopped && Date.now() < end) await sleep(Math.min(1000, end - Date.now()));
+    },
+    retry: ({ delay, attempt, previousError }) => console.log(
+      `[snapshot] ${label}: ${previousError}. Попытка ${attempt}${delay ? ` через ${delay / 60_000} мин` : ''}`),
+  });
 }
 
 const { pool, withTransaction, DATABASE_URL } = await import("../server/db.mjs");
@@ -732,7 +753,8 @@ const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
 // него прогон продолжает незакрытый круг с того места, где тот остановился.
 const newCircle = args.get("new-circle") === "true";
 const savedCursor = await loadCursor();
-const startFresh = newCircle || dryRun || savedCursor.verificationVersion !== CHE168_VERIFICATION_VERSION
+const startFresh = newCircle || dryRun || savedCursor.snapshotImport?.finishedWithSkippedBrands
+  || savedCursor.verificationVersion !== CHE168_VERIFICATION_VERSION
   || (savedCursor.snapshotScope ?? null) !== snapshotScope;
 const cursor = (startFresh ? startNewRefreshCycle : resumeRefreshCycle)(savedCursor, cycleNow);
 const failedDiscoveries = new Map((startFresh ? [] : savedCursor.failedDiscoveries || []).map(item => [String(item.externalId), item]));
@@ -891,27 +913,27 @@ function pageMaxUsd(payload) {
 // увиденную цену. Раньше каждый срез проходился дважды (перемешивание выдачи),
 // но источник с 27.08.2026 считает обращения — теперь один проход, остальное
 // добирает карусель поштучных проверок.
-async function walkSlice(baseParams, firstPage, fuelType, depthCap, observe, failFast) {
+async function walkSlice(baseParams, firstPage, fuelType, depthCap, observe, failFast, label) {
   const { pageCount } = firstPage;
   let depth = Math.min(pageCount, depthCap);
   if (maxPages) depth = Math.min(depth, maxPages);
   let empties = 0;
   let walked = 0;
   let maxUsd = 0;
-  const fingerprints = new Set([firstPage.items.map(item => String(item.infoid)).sort().join(",")]);
+  const fingerprints = new Map([[listPageFingerprint(firstPage), 1]]);
   for (let pageIndex = 2; pageIndex <= depth && !stopped; pageIndex += 1) {
-    const payload = await listFlight(`${baseParams}&page=${pageIndex}`);
-    const fingerprint = payload?.items.map(item => String(item.infoid)).sort().join(',');
-    const ok = Boolean(fingerprint && !fingerprints.has(fingerprint) && observe(payload, fuelType));
-    if (ok) fingerprints.add(fingerprint);
-    await noteAnswer(ok);
+    const { payload, error, fingerprint, history } = await readListPage(
+      `${baseParams}&page=${pageIndex}`, `${label}, страница ${pageIndex}`, failFast, fingerprints);
+    const ok = Boolean(payload && observe(payload, fuelType));
+    if (ok) fingerprints.set(fingerprint, pageIndex);
     if (!ok) { listPagesEmpty += 1; empties += 1; }
     else maxUsd = Math.max(maxUsd, pageMaxUsd(payload));
     listPages += 1;
     walked += 1;
     if (listPages % 200 === 0) console.log(`[lists] ${listPages} pages, ${seenPrices.size} cars, ${discoveries.size} new`);
-    await sleep(pace);
-    if (!ok && failFast) return { complete: false, failedPage: pageIndex };
+    if (!ok && failFast) {
+      return { complete: false, failedPage: pageIndex, reason: error || 'пустая страница', history };
+    }
   }
   // Missing, repeated or truncated pages leave discovery incomplete.
   const complete = !stopped && empties === 0 && walked === pageCount - 1;
@@ -1018,6 +1040,7 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
   let ok = true;
   let why = null;
   let windows = 0;
+  let history;
 
   for (const brandId of entry.ids) {
     if (failFast && !ok) break;
@@ -1034,13 +1057,12 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
       if (failFast) break;
       continue;
     }
-    const probe = await listFlight(brandParams);
-    await noteAnswer(Boolean(probe));
-    await sleep(pace);
+    const first = await readListPage(brandParams, `${entry.brand}, страница 1`, failFast);
+    const probe = first.payload;
     if (!probe?.pageCount || probe.totalCount === 0) {
       // Молчание на разведке — не «марка пустая», а закрытая дверь: отмечать её
       // пройденной нельзя, иначе её машины уйдут в проверку пропавших зря.
-      if (!probe) { ok = false; why = "источник не ответил, страница 1"; }
+      if (!probe) { ok = false; why = `страница 1: ${first.error}`; history = first.history; }
       if (failFast && !ok) break;
       continue;
     }
@@ -1055,13 +1077,13 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
       if (failFast && !ok) break;
       if (stopped) break;
       const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
+      const range = `диапазон $${win.minPrice}–${win.maxPrice} тыс.`;
       let head = probe;
       if (win !== fullWindow) {
         if (args.get("stand-on-brand") === "true" && !(await standOn(base))) { ok = false; why = "не удалось открыть окно по цене"; continue; }
-        head = await listFlight(base);
-        await noteAnswer(Boolean(head));
-        await sleep(pace);
-        if (!head) { ok = false; why = "источник не отдал страницу 1 ценового диапазона"; continue; }
+        const response = await readListPage(base, `${entry.brand}, ${range}, страница 1`, failFast);
+        head = response.payload;
+        if (!head) { ok = false; why = `страница 1, ${range}: ${response.error}`; history = response.history; continue; }
         if (head.totalCount === 0) continue;
         observe(head, null);
       }
@@ -1071,12 +1093,16 @@ async function walkBrand(entry, ourPrices, observe = absorbList, failFast = fals
         windows += 2;
         continue;
       }
-      const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES, observe, failFast);
-      if (!walked.complete) { ok = false; why = walked.failedPage ? `ошибка выдачи, страница ${walked.failedPage}, диапазон $${win.minPrice}–${win.maxPrice} тыс.` : "выдача прочитана не полностью"; }
+      const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES, observe, failFast, `${entry.brand}, ${range}`);
+      if (!walked.complete) {
+        ok = false;
+        why = walked.failedPage ? `страница ${walked.failedPage}, ${range}: ${walked.reason}` : "выдача прочитана не полностью";
+        history = walked.history;
+      }
     }
   }
 
-  return { ok: ok && !stopped, why, windows };
+  return { ok: ok && !stopped, why, windows, history };
 }
 
 // Сброс кэша готовых страниц: без него заведённая машина появится на витрине
@@ -1257,7 +1283,6 @@ async function runListSnapshot(brands, ourPricesByBrand) {
     snapshots,
     failures,
     stopped: () => stopped,
-    retry: (brand, reason) => console.log(`[snapshot] ${brand}: ${reason}. Повторяю с первой страницы`),
     readBrand: async entry => {
       const quotes = new Map();
       const walk = await walkBrand(entry, ourPricesByBrand.get(entry.brand) || [], (payload, fuelType) => {
@@ -1269,6 +1294,7 @@ async function runListSnapshot(brands, ourPricesByBrand) {
     },
     saveBrand: async (brand, snapshot) => {
       state.snapshots.push([brand, snapshot]);
+      state.failures = state.failures.filter(([name]) => name !== brand);
       await saveSnapshotState(state);
       cursor.brandsDone.push(brand);
       await saveCursor(cursor);
@@ -1277,18 +1303,40 @@ async function runListSnapshot(brands, ourPricesByBrand) {
     saveFailure: async (brand, failure) => {
       state.failures = [...new Map(state.failures).set(brand, failure)];
       await saveSnapshotState(state);
+      console.warn(`[snapshot] ${brand}: марка пропущена, ${failure.reason}. Перехожу к следующей`);
     },
   });
   assertChe168Running(() => stopped);
+  const skipped = new Map([...failures].filter(([brand, failure]) => failure.exhausted && !snapshots.has(brand)));
+  const skippedBrands = [...skipped.keys()];
+  latestSnapshotReport = {
+    mode: 'list-snapshot', circleRound: cursor.round, cycleStartedAt: cursor.startedAt,
+    brandsCoveredThisRun: snapshots.size, remainingBrands: skipped.size, skippedBrands,
+    errors: [...skipped].map(([brand, failure]) => ({ brand, stage: 'read', error: failure.reason, history: failure.history })),
+  };
+  const skippedBrandsError = () => Object.assign(
+    Error(`Che168: не завершён обход марок (${skipped.size})`), { code: 'CHE168_SKIPPED_BRANDS', stage: 'обход выдачи' });
   if (!state.plan) {
+    if (skipped.size && ![...snapshots.values()].some(snapshot => snapshot.covered)) {
+      cursor.snapshotImport = { finishedWithSkippedBrands: true };
+      await saveCursor(cursor);
+      throw skippedBrandsError();
+    }
     if (!scopedSnapshot && rows.length && ![...snapshots.values()].some(snapshot => snapshot.quotes.length)) {
       throw Object.assign(Error('Che168: все выдачи пусты при действующем каталоге; снимок отклонён'),
         { code: 'CHE168_EMPTY_SNAPSHOT', stage: 'сверка выдачи' });
     }
     const selected = new Set(state.brands.map(entry => entry.brand));
-    const active = rows.map(row => ({ ...row, sourceBrand: sourceBrandOf(row.brand) }));
-    state.plan = planChe168Snapshot(snapshots, scopedSnapshot ? active.filter(row => selected.has(row.sourceBrand)) : active,
-      knownStatuses, { estimate: landedTotal, newPerBrand, reportingThreshold: PRICE_STEP_USD });
+    const active = rows.map(row => ({ ...row, sourceBrand: sourceBrandOf(row.brand) }))
+      .filter(row => !skipped.has(row.sourceBrand) && (!scopedSnapshot || selected.has(row.sourceBrand)));
+    const candidateStatuses = new Map(knownStatuses);
+    for (const row of knownRows) {
+      if (skipped.has(sourceBrandOf(row.brand))) candidateStatuses.set(String(row.external_id), 'active');
+    }
+    const plan = planChe168Snapshot(snapshots, active, candidateStatuses,
+      { estimate: landedTotal, newPerBrand, reportingThreshold: PRICE_STEP_USD });
+    plan.candidates = plan.candidates.filter(({ candidate }) => !skipped.has(sourceBrandOf(candidate.brand)));
+    state.plan = plan;
     await saveSnapshotState(state);
   }
 
@@ -1312,7 +1360,7 @@ async function runListSnapshot(brands, ourPricesByBrand) {
   }
 
   const results = new Map(progress.results);
-  const queuedByBrand = new Map(state.brands.map(({ brand }) => [brand, []]));
+  const queuedByBrand = new Map([...snapshots.keys()].map(brand => [brand, []]));
   for (const candidate of candidates) if (candidate.queued) queuedByBrand.get(candidate.brand).push(candidate);
   for (const [brand, queue] of queuedByBrand) {
     assertChe168Running(() => stopped);
@@ -1340,12 +1388,13 @@ async function runListSnapshot(brands, ourPricesByBrand) {
   const remainingListings = counts.hiddenPrice + counts.conflictingPrice + counts.unmapped;
   const problems = remainingListings + addFailed;
   const detailLayerUnavailable = publicDetailChecked > 0 && publicDetailConclusive === 0;
-  const circleClosed = !detailLayerUnavailable && canCompleteWithProblems({ problems });
+  const circleClosed = !detailLayerUnavailable && canCompleteWithProblems({ problems, incompleteLists: skipped.size > 0 });
   const remainingActive = (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n;
   latestSnapshotReport = {
+    ...latestSnapshotReport,
     startedAt: new Date(startedAt).toISOString(), cycleStartedAt: cursor.startedAt, finishedAt: new Date().toISOString(),
     scope: scopedSnapshot ? 'brands' : 'catalog', dryRun, verifyAllDetails: false, mode: 'list-snapshot',
-    circleRound: cursor.round, circleClosed, brandsCoveredThisRun: snapshots.size, remainingBrands: 0,
+    circleRound: cursor.round, circleClosed,
     checkedThisRun: updates.length, skippedProblemListings: problems, remainingListings, addFailed,
     added, reactivated, sold: 0, remainingActive, ...counts, pricedByLists, publicDetailChecked, publicDetailConclusive,
     detailLayerUnavailable, listPages, sourceRequests, detailProblems: [...detailProblems.values()],
@@ -1359,6 +1408,11 @@ async function runListSnapshot(brands, ourPricesByBrand) {
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(latestSnapshotReport, null, 2)}\n`);
   if (!circleClosed) {
+    if (skipped.size) {
+      progress.finishedWithSkippedBrands = true;
+      await saveCursor(cursor);
+      throw skippedBrandsError();
+    }
     throw Error(detailLayerUnavailable ? 'Che168: не удалось прочитать ни одной карточки для импорта'
       : `Che168: ${problems} проблемных карточек, допустимо до 100`);
   }
@@ -1780,7 +1834,7 @@ try {
     stoppedEarly: stopped && !budgetSpent,
     checkedThisRun: latestSnapshotReport?.checkedThisRun ?? verifiedThisRun.size,
     added: latestSnapshotReport?.added ?? runTotals.added, sold: latestSnapshotReport?.sold ?? soldTotal,
-    errors: runTotals.errors,
+    errors: latestSnapshotReport?.errors ?? runTotals.errors,
   };
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(failedReport, null, 2)}\n`);
   console.error(error.stack || error.message);

@@ -27,12 +27,9 @@ test("метка кэша постоянная, а не нумерованная
   assert.match(source, /await checkChe168PublicPage\(publicDetailPage, externalId\)/);
 });
 
-test("неудачный запрос повторяется не больше двух раз", () => {
-  // Четыре обращения к одному адресу подряд — долбёж, и рядом со стеной он ещё и
-  // тратит запас впустую.
-  const loop = source.match(/for \(let attempt = 0; attempt < (\d+); attempt \+= 1\)/);
-  assert.ok(loop, "цикл повторов в запросе к источнику не найден");
-  assert.ok(Number(loop[1]) <= 2, `повторов снова ${loop[1]}, а можно не больше двух`);
+test("обход снимка задаёт повторы страницы без вложенных повторов в запросе", () => {
+  assert.match(source, /FLIGHT_MIN_LENGTH, useListSnapshot \? 1 : 2\]/);
+  assert.match(source, /return retryChe168ListPage\(/);
 });
 
 test("работаем в постоянном профиле браузера, а не в чистом окне", () => {
