@@ -14,10 +14,12 @@ const errorExamples = report => {
   return [...firstByStage, ...errors.filter(item => !firstByStage.includes(item))].slice(0, 5);
 };
 export function circleSummary(source, { report, state, importReport, elapsedMs } = {}) {
-  let checked, changed, added, sold, remaining, rejected, skipped, reactivated;
+  let checked, changed, added, sold, remaining, rejected, skipped, reactivated, hidden;
   if (source === 'che') {
-    checked = report?.checkedThisRun; changed = report?.rePriced; added = report?.added;
+    checked = report?.checkedThisRun; changed = report?.priceChanged ?? report?.rePriced; added = report?.added;
     sold = report?.sold; remaining = report?.remainingActive;
+    reactivated = report?.reactivated;
+    if (report?.mode === 'list-snapshot') hidden = report.hiddenMissing + report.hiddenPrice;
   } else if (source === 'guazi') {
     checked = state?.summary?.checked ?? state?.snapshotTotal;
     changed = state?.summary?.priceChanged; added = state?.counts?.added;
@@ -36,9 +38,11 @@ export function circleSummary(source, { report, state, importReport, elapsedMs }
     : (report?.skippedProblemListings || 0) + (source === 'encar' ? encarImportReadFailures(importReport) : 0);
   return [
     `✅ ${labels[source]} завершён`,
-    source === 'guazi' || (source === 'encar' && report?.resumedAt) ? 'Итоги всего круга:' : 'Итоги этого запуска:',
+    source === 'guazi' || (source === 'che' && report?.mode === 'list-snapshot') || (source === 'encar' && report?.resumedAt)
+      ? 'Итоги всего круга:' : 'Итоги этого запуска:',
     count('Проверено объявлений', checked), count(source === 'guazi' && state?.summary?.priceChangeThresholdUsd === 100 ? 'Изменилось цен (от $100)' : 'Изменилось цен', changed),
     count('Добавлено', added), count('Снято с продажи', sold),
+    hidden ? count('Скрыто с витрины', hidden) : null,
     source === 'encar' && report?.unverifiedUnavailable ? count('Из них недоступные карточки', report.unverifiedUnavailable) : null,
     reactivated ? count('Вернулось в продажу', reactivated) : null,
     count('Осталось в каталоге источника', remaining),
@@ -56,18 +60,21 @@ export function circleFailure(source, error, { report, state, importReport, curs
   const attempt = source === 'encar' ? report?.attempt : null;
   const failures = attempt || report;
   const stopped = error.code === 'ABCARS_STOPPED';
-  const reason = !stopped && source === 'encar' && (importReport?.fatal || report?.fatal) || error.message || error;
+  const sourceReason = source === 'encar' ? importReport?.fatal || report?.fatal : source === 'che' ? report?.note : null;
+  const reason = !stopped && sourceReason || error.message || error;
+  const code = report?.failureCode || error.code;
+  const restartChe = ['CHE168_BRAND_WALK_FAILED', 'CHE168_REPEATED_LIST_PRICE', 'CHE168_SNAPSHOT_WRITE_CONFLICT', 'CHE168_EMPTY_SNAPSHOT'].includes(code);
   const paused = !stopped && source === 'encar' && encarCanRetry(importReport?.fatal ? importReport : report);
   return safeDiagnostic([
     `${stopped ? '⏹' : paused ? '⏸' : '❌'} ${labels[source]} ${stopped ? 'остановлен по команде' : paused ? 'приостановлен: источник не дал подтвердить данные' : 'не завершён'}`,
     `Причина: ${String(reason).slice(0, 650)}`,
-    error.code ? `Код ошибки: ${error.code}` : null,
+    code ? `Код ошибки: ${code}` : null,
     error.stage ? `Этап запуска: ${error.stage}` : null,
     state?.phase ? `Этап обхода: ${phases[state.phase] || state.phase}` : null,
     state?.brand ? `Последняя марка: ${state.brand}` : null,
     state?.error && !String(error.message).includes(state.error) ? `Ошибка источника: ${state.error}` : null,
     state?.accessFailure?.requestId ? `Guazi EO-LOG-UUID: ${state.accessFailure.requestId}` : null,
-    report?.note || (reason !== report?.fatal ? report?.fatal : null),
+    report?.note !== reason && report?.note || (reason !== report?.fatal ? report?.fatal : null),
     state && (Array.isArray(state.brandsDone) || Number.isFinite(state.brandsTotal)) ? `Марок завершено: ${state.brandsDone?.length || 0} из ${state.brandsTotal ?? '?'}` : null,
     count('Сохранено проверок', counts?.checked ?? report?.checkedThisRun),
     count('Добавлено', counts?.added ?? importReport?.imported ?? report?.added),
@@ -87,7 +94,9 @@ export function circleFailure(source, error, { report, state, importReport, curs
     failures?.errors?.length ? `Ошибки: ${errorExamples(failures).map(item => `${item.externalId || item.brand}: ${item.code ? `${item.code} · ` : ''}${item.error}`).join('; ')}` : null,
     duration(elapsedMs),
     source === 'guazi' && state?.status !== 'complete' ? 'Прогресс круга сохранён. Продолжение: «Продолжить 2».' : null,
-    source === 'che' && cursor?.startedAt ? 'Прогресс круга сохранён. Продолжение: «Продолжить».' : null,
+    source === 'che' && cursor?.startedAt ? (restartChe
+      ? 'После проверки причины запустите новый круг.'
+      : 'Прогресс круга сохранён. Продолжение: «Продолжить».') : null,
     source === 'encar' && report?.remainingListings && report?.checkpointPath ? 'Очередь сохранена. Следующий запуск продолжит незавершённые карточки.' : null,
     logPath ? `Полный журнал: ${logPath}` : null,
     logTail ? `Последние записи текущего запуска:\n${safeDiagnostic(logTail).slice(-1500)}` : null,

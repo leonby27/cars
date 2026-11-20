@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { verifyChe168Observation } from '../scripts/lib/che168-public-check.mjs';
 import { che168DetailUrl, che168PriceCny } from '../scripts/lib/che168-result.mjs';
-import { writeChe168Observations } from '../scripts/lib/che168-write.mjs';
+import { writeChe168ListSnapshot, writeChe168Observations } from '../scripts/lib/che168-write.mjs';
 import { quarantineListing } from '../scripts/lib/catalog-quarantine.mjs';
 
 test('Che168 SQL preserves hidden data, commits verified price and sale, and rejects a stale replay', {
@@ -66,6 +66,39 @@ test('Che168 SQL preserves hidden data, commits verified price and sale, and rej
     ]), { code: 'CHE168_INTEGRITY_FAILED' });
     await db.query('ROLLBACK TO SAVEPOINT stale_update');
     assert.equal((await db.query('SELECT * FROM price_history')).rowCount, 1);
+
+    const at = new Date(Date.now() + 2000).toISOString();
+    await db.query(`INSERT INTO listings (id, source, external_id, status, source_payload, price_cny, last_seen_at, last_checked_at)
+      SELECT 'che168-' || id, 'Che168', id, 'active', '{"usdPrice": 18000, "facts": "preserve"}', 128700, '2026-11-18', '2026-11-18'
+      FROM unnest(ARRAY['103','104','105']) id;`);
+    const updates = [
+      { id: 'che168-103', externalId: '103', previous: '18000', outcome: 'price', usd: 19000, cny: 135900, est: 24500, significant: true },
+      { id: 'che168-104', externalId: '104', previous: '18000', outcome: 'hidden', reason: 'absent-from-list' },
+      { id: 'che168-105', externalId: '105', previous: '18000', outcome: 'seen', reason: 'conflicting-list-prices' },
+    ];
+    await writeChe168ListSnapshot(db, updates, at);
+    await writeChe168ListSnapshot(db, updates, at);
+    const { rows: [repriced, absent, conflict] } = await db.query("SELECT * FROM listings WHERE external_id IN ('103','104','105') ORDER BY id");
+    assert.equal(repriced.source_payload.usdPrice, 19000);
+    assert.equal(repriced.source_payload.facts, 'preserve');
+    assert.equal(repriced.estimated_total_usd, '24500');
+    assert.equal(repriced.previous_price_usd, '18000');
+    assert.equal(repriced.last_checked_at.toISOString(), '2026-11-18T00:00:00.000Z');
+    assert.equal(repriced.last_seen_at.toISOString(), at);
+    assert.equal(absent.status, 'skipped');
+    assert.equal(absent.sold_at, null);
+    assert.equal(absent.source_payload.usdPrice, 18000);
+    assert.equal(absent.last_seen_at.toISOString(), '2026-11-18T00:00:00.000Z');
+    assert.equal(conflict.status, 'active');
+    assert.equal(conflict.source_payload.usdPrice, 18000);
+    assert.equal((await db.query("SELECT * FROM price_history WHERE listing_id='che168-103'")).rowCount, 1);
+    assert.equal((await db.query("SELECT * FROM price_history WHERE listing_id IN ('che168-104','che168-105')")).rowCount, 0);
+
+    await db.query('SAVEPOINT stale_snapshot');
+    await assert.rejects(writeChe168ListSnapshot(db, [{
+      ...updates[0], previous: '19000',
+    }], '2026-11-18T01:00:00.000Z'), { code: 'CHE168_SNAPSHOT_WRITE_CONFLICT' });
+    await db.query('ROLLBACK TO SAVEPOINT stale_snapshot');
   } finally {
     await db.query('ROLLBACK').finally(() => db.end());
   }

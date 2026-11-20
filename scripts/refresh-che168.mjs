@@ -24,16 +24,17 @@
 //    (`xvfb-run -a npm run refresh`). Никакой блокировки по адресу за этим не
 //    стояло: тот же сервер, тот же час — окно с экраном пускают.
 //
-// Lists discover cars. Only a verified public detail can update an existing
-// quote, confirm availability or authorize a sale. Unknowns stay pending and
-// are hidden. Transactions commit verified batches before acknowledging them.
+// The default refresh uses a complete list snapshot. Existing cards are
+// reconciled by ID and only new or returning cards need a detail request.
+// --legacy-refresh keeps the previous detail-based workflow available.
 
 // Earlier volume/quota explanations were not established: browser/request
 // configuration caused the observed failures. Keep the proven transport and
 // failure handling, but do not truncate a healthy run to an assumed quota.
 //
 // Usage:
-//   npm run refresh                     # полный круг: списки + все оставшиеся карточки
+//   npm run refresh                     # полный круг по снимку выдачи
+//   npm run refresh -- --legacy-refresh --new-circle
 //   npm run refresh -- --shift=ev      # явная смена: ev | petrol-a | petrol-b | petrol-c
 //   npm run refresh -- --dry-run       # measure only, no database writes
 //   npm run refresh -- --skip-detail   # discovery only, existing listings remain pending
@@ -44,6 +45,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import pg from "pg";
+import "../config/load-env.mjs";
 import { extractChe168ListPayload } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
@@ -55,15 +58,15 @@ import { sendTelegram } from "./lib/telegram.mjs";
 import { refreshAfterManualCatalog } from "./lib/sitemap-refresh.mjs";
 import { circleFailure } from "./lib/circle-report.mjs";
 import { positiveSourceAmount, sourceQuoteChange } from './lib/source-money.mjs';
-import { CHE168_VERIFICATION_VERSION, che168PriceCny } from './lib/che168-result.mjs';
+import { CHE168_VERIFICATION_VERSION, che168PriceCny, isChe168ListingId } from './lib/che168-result.mjs';
 import { CHE168_CHECK_BATCH_SIZE, che168IdentityGuard, validateChe168CheckBatch } from './lib/che168-integrity.mjs';
 import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
-import { writeChe168Observations } from './lib/che168-write.mjs';
+import { assertChe168Running, collectChe168ListPage, collectChe168Snapshots, planChe168Snapshot } from "./lib/che168-snapshot.mjs";
+import { canCompleteWithProblems } from "./lib/circle-completion.mjs";
+import { writeChe168ListSnapshot, writeChe168Observations } from './lib/che168-write.mjs';
 import { quarantineListing } from './lib/catalog-quarantine.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ONLY_UNVERIFIED_RUN = process.argv.slice(2).some((arg) => arg === "--only-unverified" || arg === "--only-unverified=true");
-const REPORT_NAME = ONLY_UNVERIFIED_RUN ? "refresh-unverified" : "refresh";
 // Машины источника, которых у нас нет: обход списков всё равно проходит мимо
 // каждой, так что находки достаются даром. Отсюда их забирает пополнение вместо
 // собственного обхода — см. `scripts/lib/che168-discovery.mjs`.
@@ -88,7 +91,6 @@ const SLICE_MAX_PAGES = 250;
 // Порядок обхода и норма одного подхода живут в настройке, а не в программе:
 // поменять очередь марок можно правкой config/refresh-order.json.
 const ORDER_PATH = "config/refresh-order.json";
-const CURSOR_PATH = ONLY_UNVERIFIED_RUN ? "runtime/refresh-unverified-cursor.json" : "runtime/refresh-cursor.json";
 // Day-to-day the source re-quotes yuan prices in dollars at the current rate,
 // which moves almost every card by $10–20. Persist the actual observed quote;
 // this threshold controls only the change badge and reported price movements.
@@ -105,14 +107,21 @@ const args = new Map(process.argv.slice(2).map((arg) => {
   return [key, value];
 }));
 const dryRun = args.get("dry-run") === "true";
-const REPORT_PATH = path.join(ROOT, "runtime", `${REPORT_NAME}${dryRun ? "-dry-run" : ""}-report.json`);
-const skipDetail = args.get("skip-detail") === "true";
-const verifyAllDetails = !skipDetail;
-if (skipDetail && args.get('verify-all-details') === 'true') throw Error('--verify-all-details нельзя совмещать с --skip-detail');
-// После большого импорта можно временно пройти только карточки, у которых дата
-// проверки всё ещё совпадает с днём добавления. Это в точности тот набор, где
-// сайт показывает только «Добавлено» без отдельной даты «Обновлено».
 const onlyUnverified = args.get("only-unverified") === "true";
+const skipDetail = args.get("skip-detail") === "true";
+if (skipDetail && args.get('verify-all-details') === 'true') throw Error('--verify-all-details нельзя совмещать с --skip-detail');
+// Explicit diagnostic filters can intentionally produce incomplete lists.
+const useListSnapshot = process.env.ABCARS_CHE168_REFRESH_MODE !== 'legacy'
+  && !['legacy-refresh', 'verify-all-details', 'priority-first'].some(key => args.get(key) === 'true')
+  && !skipDetail && !onlyUnverified
+  && !['feeds', 'shift', 'max-pages', 'detail-limit', 'detail-per-brand'].some(key => args.has(key));
+const verifyAllDetails = !useListSnapshot && !skipDetail;
+const snapshotScope = useListSnapshot ? JSON.stringify([args.get('brands') ?? null, args.get('brand-limit') ?? null]) : null;
+const scopedSnapshot = useListSnapshot && (args.has('brands') || args.has('brand-limit'));
+const REPORT_NAME = onlyUnverified ? "refresh-unverified" : scopedSnapshot ? "refresh-scoped" : "refresh";
+const CURSOR_PATH = `runtime/${REPORT_NAME}-cursor.json`;
+const SNAPSHOT_PATH = path.join(ROOT, 'runtime', `${REPORT_NAME}-list-snapshot.json`);
+const REPORT_PATH = path.join(ROOT, "runtime", `${REPORT_NAME}${dryRun ? "-dry-run" : ""}-report.json`);
 // Без явного ограничения проверяются все карточки. Числовой лимит — только
 // для сокращённых запусков; остаток сохраняется в текущем круге.
 const detailLimit = readCheckLimit(args.get("detail-limit"));
@@ -397,7 +406,7 @@ async function saveCursor(cursor) {
   if (dryRun) return;
   const target = path.join(ROOT, CURSOR_PATH);
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(`${target}.tmp`, JSON.stringify({ ...cursor, verificationVersion: CHE168_VERIFICATION_VERSION }, null, 2));
+  await fs.writeFile(`${target}.tmp`, JSON.stringify({ ...cursor, snapshotScope, verificationVersion: CHE168_VERIFICATION_VERSION }, null, 2));
   await fs.rename(`${target}.tmp`, target);
 }
 
@@ -695,15 +704,27 @@ async function listFlight(params) {
   if (!payload) return null;
   const expectedPage = Number(new URLSearchParams(params).get('page') || 1);
   if (payload.pageIndex != null && payload.pageIndex !== expectedPage) return null;
-  const validItems = payload.items.every(item => /^\d+$/.test(String(item?.infoid)));
+  const validItems = payload.items.every(item => isChe168ListingId(item?.infoid));
   if (!validItems || (payload.items.length > 0 && !(payload.pageCount >= expectedPage && payload.totalCount >= payload.items.length))) return null;
   if (!payload.items.length && !(expectedPage === 1 && payload.totalCount === 0 && payload.pageCount <= 1)) return null;
   return payload;
 }
 
-const { pool, withTransaction } = await import("../server/db.mjs");
+const { pool, withTransaction, DATABASE_URL } = await import("../server/db.mjs");
+const runLock = new pg.Client({ connectionString: DATABASE_URL });
+let lockFailure;
+await runLock.connect();
+if (!(await runLock.query("SELECT pg_try_advisory_lock(hashtext('abcars-che168-refresh')) AS acquired")).rows[0].acquired) {
+  await runLock.end();
+  throw Error('Круг Che168 уже запущен');
+}
+runLock.on('error', error => {
+  lockFailure = error;
+  stopped = true;
+  console.error('[lock] потеряно подключение блокировки Che168:', error.message);
+});
 // Запись новых машин: та же функция, которой пользуется пополнение каталога.
-const { importCars, purgeExpiredSoldFavorites } = await import("../server/repository.mjs");
+const { importCars, upsertCar, purgeExpiredSoldFavorites } = await import("../server/repository.mjs");
 // Use the database clock, which also writes last_checked_at. Persist BEFORE
 // checking any card; an abrupt exit then cannot lose the cycle boundary.
 const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
@@ -711,10 +732,12 @@ const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
 // него прогон продолжает незакрытый круг с того места, где тот остановился.
 const newCircle = args.get("new-circle") === "true";
 const savedCursor = await loadCursor();
-const startFresh = newCircle || savedCursor.verificationVersion !== CHE168_VERIFICATION_VERSION;
+const startFresh = newCircle || dryRun || savedCursor.verificationVersion !== CHE168_VERIFICATION_VERSION
+  || (savedCursor.snapshotScope ?? null) !== snapshotScope;
 const cursor = (startFresh ? startNewRefreshCycle : resumeRefreshCycle)(savedCursor, cycleNow);
 const failedDiscoveries = new Map((startFresh ? [] : savedCursor.failedDiscoveries || []).map(item => [String(item.externalId), item]));
 cursor.failedDiscoveries = [...failedDiscoveries.values()];
+if (useListSnapshot && !startFresh) cursor.snapshotImport = savedCursor.snapshotImport;
 await saveCursor(cursor);
 const unverifiedSql = onlyUnverified
   ? "AND (last_checked_at IS NULL OR date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at))"
@@ -725,7 +748,7 @@ const unverifiedSql = onlyUnverified
 const { rows } = await pool.query(`SELECT id, external_id, status, price_cny,
     estimated_total_usd, last_checked_at, first_seen_at,
     date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at) AS never_rechecked,
-    (source_payload->>'usdPrice')::numeric AS usd_price,
+    source_payload->>'usdPrice' AS usd_price,
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
     source_payload->>'brand' AS brand,
@@ -738,15 +761,14 @@ const { rows } = await pool.query(`SELECT id, external_id, status, price_cny,
     source_payload->>'dimensions' AS dimensions,
     (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
-  FROM listings WHERE source='Che168' AND status IN ('active','skipped')
-    AND ${PENDING_CYCLE_SQL} ${unverifiedSql}
+  FROM listings WHERE source='Che168' AND ${useListSnapshot ? "status='active' AND first_seen_at <= $1::timestamptz" : `status IN ('active','skipped') AND ${PENDING_CYCLE_SQL} ${unverifiedSql}`}
   ORDER BY last_checked_at ASC NULLS FIRST, id`, [cursor.startedAt]);
 console.log(`[db] ${rows.length} ожидают проверки в круге №${cursor.round} (начат ${cursor.startedAt})`);
 
 // Все наши идентификаторы, вместе с проданными: машина, снятая с витрины, иногда
 // ещё мелькает в списках, и без этого списка находки предлагали бы качать её
 // каждую ночь заново.
-const { rows: knownRows } = await pool.query(`SELECT id, status, source_payload->>'brand' AS brand FROM listings WHERE source='Che168'`);
+const { rows: knownRows } = await pool.query(`SELECT id, external_id, status, source_payload->>'brand' AS brand FROM listings WHERE source='Che168'`);
 const knownIds = new Set(knownRows.map((row) => row.id));
 const activeCountByBrand = new Map();
 for (const row of knownRows) {
@@ -758,7 +780,7 @@ for (const row of knownRows) {
 // Cards visitors actually opened in the last month jump the queue: each gets a
 // detail-page check and a database write before the list sweep even starts, so
 // the cars people look at are fresh within the first minutes of a run.
-const { rows: popular } = await pool.query(`SELECT listing_id, count(*)::int AS views
+const { rows: popular } = useListSnapshot ? { rows: [] } : await pool.query(`SELECT listing_id, count(*)::int AS views
   FROM analytics_events
   WHERE listing_id IS NOT NULL
     AND created_at >= now() - interval '30 days'
@@ -869,7 +891,7 @@ function pageMaxUsd(payload) {
 // увиденную цену. Раньше каждый срез проходился дважды (перемешивание выдачи),
 // но источник с 27.08.2026 считает обращения — теперь один проход, остальное
 // добирает карусель поштучных проверок.
-async function walkSlice(baseParams, firstPage, fuelType, depthCap) {
+async function walkSlice(baseParams, firstPage, fuelType, depthCap, observe, failFast) {
   const { pageCount } = firstPage;
   let depth = Math.min(pageCount, depthCap);
   if (maxPages) depth = Math.min(depth, maxPages);
@@ -880,7 +902,7 @@ async function walkSlice(baseParams, firstPage, fuelType, depthCap) {
   for (let pageIndex = 2; pageIndex <= depth && !stopped; pageIndex += 1) {
     const payload = await listFlight(`${baseParams}&page=${pageIndex}`);
     const fingerprint = payload?.items.map(item => String(item.infoid)).sort().join(',');
-    const ok = Boolean(fingerprint && !fingerprints.has(fingerprint) && absorbList(payload, fuelType));
+    const ok = Boolean(fingerprint && !fingerprints.has(fingerprint) && observe(payload, fuelType));
     if (ok) fingerprints.add(fingerprint);
     await noteAnswer(ok);
     if (!ok) { listPagesEmpty += 1; empties += 1; }
@@ -889,6 +911,7 @@ async function walkSlice(baseParams, firstPage, fuelType, depthCap) {
     walked += 1;
     if (listPages % 200 === 0) console.log(`[lists] ${listPages} pages, ${seenPrices.size} cars, ${discoveries.size} new`);
     await sleep(pace);
+    if (!ok && failFast) return { complete: false, failedPage: pageIndex };
   }
   // Missing, repeated or truncated pages leave discovery incomplete.
   const complete = !stopped && empties === 0 && walked === pageCount - 1;
@@ -955,7 +978,7 @@ function priceWindowsFor(brandCanon, ourPrices, pageCount) {
   const own = filterFor(brandCanon);
   if (pageCount <= SLICE_MAX_PAGES) return [{ minPrice: own.minPrice, maxPrice: own.maxPrice }];
   const parts = Math.min(8, Math.ceil(pageCount / 150));
-  const prices = ourPrices.filter((usd) => usd > 0).sort((a, b) => a - b);
+  const prices = ourPrices.filter(usd => usd >= own.minPrice * 1000 && usd <= own.maxPrice * 1000).sort((a, b) => a - b);
   if (prices.length < parts * 10) {
     // Своих машин мало — делим диапазон цен ровно, без квантилей.
     const step = (own.maxPrice - own.minPrice) / parts;
@@ -967,7 +990,7 @@ function priceWindowsFor(brandCanon, ourPrices, pageCount) {
   const bounds = [own.minPrice];
   for (let i = 1; i < parts; i += 1) {
     const usd = prices[Math.floor((prices.length * i) / parts)];
-    const thousands = Math.max(bounds[bounds.length - 1] + 1, Math.round(usd / 1000));
+    const thousands = Math.min(own.maxPrice - (parts - i), Math.max(bounds.at(-1) + 1, Math.round(usd / 1000)));
     bounds.push(thousands);
   }
   bounds.push(own.maxPrice);
@@ -989,6 +1012,71 @@ async function standOn(params) {
   } catch {
     return false;
   }
+}
+
+async function walkBrand(entry, ourPrices, observe = absorbList, failFast = false) {
+  let ok = true;
+  let why = null;
+  let windows = 0;
+
+  for (const brandId of entry.ids) {
+    if (failFast && !ok) break;
+    if (stopped) break;
+    const brandParams = `brandid=${brandId}&${filterParams(entry.brand)}&sort=2`;
+    // Вставать на страницу каждой марки оказалось вредно: загрузка страницы стоит
+    // 113 обращений на холодном профиле, а потолок источника считается по всем
+    // обращениям. Замеры 31.08.2026: со «своей» страницей 113 прочитанных страниц,
+    // без неё 107 — разницы нет, а половина запаса уходила на саму загрузку.
+    // `--stand-on-brand=true` включает прежнее поведение для опытов.
+    if (args.get("stand-on-brand") === "true" && !(await standOn(brandParams))) {
+      ok = false;
+      why = "не удалось открыть страницу марки";
+      if (failFast) break;
+      continue;
+    }
+    const probe = await listFlight(brandParams);
+    await noteAnswer(Boolean(probe));
+    await sleep(pace);
+    if (!probe?.pageCount || probe.totalCount === 0) {
+      // Молчание на разведке — не «марка пустая», а закрытая дверь: отмечать её
+      // пройденной нельзя, иначе её машины уйдут в проверку пропавших зря.
+      if (!probe) { ok = false; why = "источник не ответил, страница 1"; }
+      if (failFast && !ok) break;
+      continue;
+    }
+    observe(probe, null);
+    brandsWalked += 1;
+    const wins = priceWindowsFor(entry.brand, ourPrices, probe.pageCount);
+    if (wins.length > 1) windows += wins.length;
+    if (wins.length > 1) console.log(`[brand] ${entry.brand}: ${probe.totalCount} машин, ${probe.pageCount} страниц — режу на ${wins.length} ценовых окон`);
+    const pendingWindows = [...wins];
+    const fullWindow = wins.length === 1 ? wins[0] : null;
+    for (const win of pendingWindows) {
+      if (failFast && !ok) break;
+      if (stopped) break;
+      const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
+      let head = probe;
+      if (win !== fullWindow) {
+        if (args.get("stand-on-brand") === "true" && !(await standOn(base))) { ok = false; why = "не удалось открыть окно по цене"; continue; }
+        head = await listFlight(base);
+        await noteAnswer(Boolean(head));
+        await sleep(pace);
+        if (!head) { ok = false; why = "источник не отдал страницу 1 ценового диапазона"; continue; }
+        if (head.totalCount === 0) continue;
+        observe(head, null);
+      }
+      if (head.pageCount > SLICE_MAX_PAGES && win.maxPrice - win.minPrice > 1) {
+        const middle = Math.floor((win.maxPrice + win.minPrice) / 2);
+        pendingWindows.push({ ...win, maxPrice: middle }, { ...win, minPrice: middle });
+        windows += 2;
+        continue;
+      }
+      const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES, observe, failFast);
+      if (!walked.complete) { ok = false; why = walked.failedPage ? `ошибка выдачи, страница ${walked.failedPage}, диапазон $${win.minPrice}–${win.maxPrice} тыс.` : "выдача прочитана не полностью"; }
+    }
+  }
+
+  return { ok: ok && !stopped, why, windows };
 }
 
 // Сброс кэша готовых страниц: без него заведённая машина появится на витрине
@@ -1034,6 +1122,8 @@ async function reportCircleDone(round, totals) {
     `За эту сессию проверено наших объявлений: ${totals.checked} · изменилось цен: ${totals.rePriced}`,
     `За эту сессию новых заведено: ${totals.added}`,
     `За эту сессию снято с продажи: ${totals.sold}`,
+    ...(totals.hidden ? [`Скрыто с витрины: ${totals.hidden}`] : []),
+    ...(totals.reactivated ? [`Возвращено на витрину: ${totals.reactivated}`] : []),
     ...(totals.skippedProblems ? [`Проблемных карточек пропущено до следующего круга: ${totals.skippedProblems}`] : []),
     `В каталоге сейчас: ${totals.remaining}`,
     `Заняло: ${totals.hours} ч`,
@@ -1080,7 +1170,7 @@ async function checkDetail(externalId) {
   return result;
 }
 
-async function addNewCar(externalId) {
+async function addNewCar(externalId, fromSnapshot = false) {
   const result = await checkDetail(externalId);
   checkIdentityPattern(result, externalId);
   await noteAnswer(result.verdict !== 'unknown');
@@ -1097,9 +1187,20 @@ async function addNewCar(externalId) {
     detailProblems.set(externalId, { externalId, reason: 'required-fields-missing' });
     return 'failed';
   }
-  if (importPolicyViolation(car) || isAbovePriceCeiling(estimateLandedCost(car).totalUsd) || knownIds.has(car.id)) return 'rejected';
+  if (importPolicyViolation(car) || isAbovePriceCeiling(estimateLandedCost(car).totalUsd) || (!fromSnapshot && knownIds.has(car.id))) return 'rejected';
+  if (stopped) return 'failed';
   if (!dryRun) {
-    await importCars([car]);
+    if (fromSnapshot) {
+      const saved = await withTransaction(async client => {
+        const current = await client.query("SELECT status FROM listings WHERE source='Che168' AND external_id=$1 FOR UPDATE", [externalId]);
+        if (current.rows[0]?.status === 'active') return false;
+        await upsertCar(car, client, { resetPriceBaseline: current.rowCount > 0 });
+        return true;
+      });
+      if (!saved) return 'present';
+    } else {
+      await importCars([car]);
+    }
     catalogChanged = true;
   }
   knownIds.add(car.id);
@@ -1123,12 +1224,159 @@ const landedTotal = (row, usd) => estimateLandedCost({
   curbWeight: row.curb_weight,
 }).totalUsd;
 
+async function loadSnapshotState(brands) {
+  const initial = { startedAt: cursor.startedAt, brands, snapshots: [], failures: [] };
+  if (startFresh) return initial;
+  try {
+    const saved = JSON.parse(await fs.readFile(SNAPSHOT_PATH, 'utf8'));
+    if (saved.startedAt === cursor.startedAt) return saved;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (cursor.brandsDone.length || cursor.snapshotImport) throw Error('Che168: сохранённый снимок отсутствует; начните новый круг');
+  return initial;
+}
+
+async function saveSnapshotState(state) {
+  if (dryRun) return;
+  await fs.mkdir(path.dirname(SNAPSHOT_PATH), { recursive: true });
+  await fs.writeFile(`${SNAPSHOT_PATH}.tmp`, JSON.stringify(state));
+  await fs.rename(`${SNAPSHOT_PATH}.tmp`, SNAPSHOT_PATH);
+}
+
+let latestSnapshotReport;
+async function runListSnapshot(brands, ourPricesByBrand) {
+  const state = await loadSnapshotState(brands);
+  const snapshots = new Map(state.snapshots);
+  const failures = new Map(state.failures);
+  const knownStatuses = new Map(knownRows.map(row => [String(row.external_id), row.status]));
+  const activeIds = new Set(knownRows.filter(row => row.status === 'active').map(row => row.id));
+  cursor.brandsDone = [...snapshots.keys()];
+  await collectChe168Snapshots({
+    brands: state.brands,
+    snapshots,
+    failures,
+    stopped: () => stopped,
+    retry: (brand, reason) => console.log(`[snapshot] ${brand}: ${reason}. Повторяю с первой страницы`),
+    readBrand: async entry => {
+      const quotes = new Map();
+      const walk = await walkBrand(entry, ourPricesByBrand.get(entry.brand) || [], (payload, fuelType) => {
+        collectChe168ListPage(quotes, payload.items, item =>
+          discoveryCandidate(item, { fuelType, knownIds: activeIds, requirePowertrain: false }));
+        return payload.items.length > 0;
+      }, true);
+      return { ...walk, covered: entry.ids.length > 0, quotes: walk.ok ? [...quotes.values()] : [] };
+    },
+    saveBrand: async (brand, snapshot) => {
+      state.snapshots.push([brand, snapshot]);
+      await saveSnapshotState(state);
+      cursor.brandsDone.push(brand);
+      await saveCursor(cursor);
+      console.log(`[snapshot] ${brand}: сохранено ID ${snapshot.quotes.length}`);
+    },
+    saveFailure: async (brand, failure) => {
+      state.failures = [...new Map(state.failures).set(brand, failure)];
+      await saveSnapshotState(state);
+    },
+  });
+  assertChe168Running(() => stopped);
+  if (!state.plan) {
+    if (!scopedSnapshot && rows.length && ![...snapshots.values()].some(snapshot => snapshot.quotes.length)) {
+      throw Object.assign(Error('Che168: все выдачи пусты при действующем каталоге; снимок отклонён'),
+        { code: 'CHE168_EMPTY_SNAPSHOT', stage: 'сверка выдачи' });
+    }
+    const selected = new Set(state.brands.map(entry => entry.brand));
+    const active = rows.map(row => ({ ...row, sourceBrand: sourceBrandOf(row.brand) }));
+    state.plan = planChe168Snapshot(snapshots, scopedSnapshot ? active.filter(row => selected.has(row.sourceBrand)) : active,
+      knownStatuses, { estimate: landedTotal, newPerBrand, reportingThreshold: PRICE_STEP_USD });
+    await saveSnapshotState(state);
+  }
+
+  const { updates, counts, candidates, pricedByLists } = state.plan;
+  const progress = cursor.snapshotImport ??= { applied: false, results: [] };
+  if (!progress.applied) {
+    assertChe168Running(() => stopped);
+    if (!dryRun) {
+      await withTransaction(async db => {
+        await writeChe168ListSnapshot(db, updates, cursor.startedAt);
+        assertChe168Running(() => stopped);
+      });
+      catalogChanged = counts.priceChanged + counts.hiddenMissing + counts.hiddenPrice > 0;
+    }
+    if (catalogChanged) {
+      await purgePageCache();
+      catalogChanged = false;
+    }
+    progress.applied = true;
+    await saveCursor(cursor);
+  }
+
+  const results = new Map(progress.results);
+  const queuedByBrand = new Map(state.brands.map(({ brand }) => [brand, []]));
+  for (const candidate of candidates) if (candidate.queued) queuedByBrand.get(candidate.brand).push(candidate);
+  for (const [brand, queue] of queuedByBrand) {
+    assertChe168Running(() => stopped);
+    for (const { externalId } of queue) {
+      assertChe168Running(() => stopped);
+      if (results.has(externalId) && results.get(externalId) !== 'failed') continue;
+      const verdict = knownStatuses.get(externalId) === 'active' ? 'present' : await addNewCar(externalId, true);
+      if (!dryRun && verdict === 'present') catalogChanged = true;
+      assertChe168Running(() => stopped);
+      results.set(externalId, verdict);
+      if (verdict !== 'present') await sleep(pace);
+    }
+    if (catalogChanged) {
+      await purgePageCache();
+      catalogChanged = false;
+    }
+    progress.results = [...results];
+    await saveCursor(cursor);
+    console.log(`[snapshot] ${brand}: очередь импорта обработана (${queue.length})`);
+  }
+  assertChe168Running(() => stopped);
+  const added = candidates.filter(({ externalId, returning }) => !returning && ['added', 'present'].includes(results.get(externalId))).length;
+  const reactivated = candidates.filter(({ externalId, returning }) => returning && ['added', 'present'].includes(results.get(externalId))).length;
+  const addFailed = [...results.values()].filter(verdict => verdict === 'failed').length;
+  const remainingListings = counts.hiddenPrice + counts.conflictingPrice + counts.unmapped;
+  const problems = remainingListings + addFailed;
+  const detailLayerUnavailable = publicDetailChecked > 0 && publicDetailConclusive === 0;
+  const circleClosed = !detailLayerUnavailable && canCompleteWithProblems({ problems });
+  const remainingActive = (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n;
+  latestSnapshotReport = {
+    startedAt: new Date(startedAt).toISOString(), cycleStartedAt: cursor.startedAt, finishedAt: new Date().toISOString(),
+    scope: scopedSnapshot ? 'brands' : 'catalog', dryRun, verifyAllDetails: false, mode: 'list-snapshot',
+    circleRound: cursor.round, circleClosed, brandsCoveredThisRun: snapshots.size, remainingBrands: 0,
+    checkedThisRun: updates.length, skippedProblemListings: problems, remainingListings, addFailed,
+    added, reactivated, sold: 0, remainingActive, ...counts, pricedByLists, publicDetailChecked, publicDetailConclusive,
+    detailLayerUnavailable, listPages, sourceRequests, detailProblems: [...detailProblems.values()],
+  };
+  if (!dryRun && !scopedSnapshot) {
+    for (const { externalId, candidate, returning } of candidates) {
+      if (!returning && (!results.has(externalId) || results.get(externalId) === 'failed')) discoveries.set(externalId, candidate);
+    }
+    await writeDiscoveries();
+  }
+  await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify(latestSnapshotReport, null, 2)}\n`);
+  if (!circleClosed) {
+    throw Error(detailLayerUnavailable ? 'Che168: не удалось прочитать ни одной карточки для импорта'
+      : `Che168: ${problems} проблемных карточек, допустимо до 100`);
+  }
+  await saveCursor({ ...cursor, round: cursor.round + 1, startedAt: null, brandsDone: [], snapshotImport: undefined });
+  if (!dryRun) await refreshAfterManualCatalog({ root: ROOT });
+  await reportCircleDone(cursor.round, {
+    brands: snapshots.size, checked: updates.length, rePriced: counts.priceChanged, added, reactivated,
+    sold: 0, hidden: counts.hiddenMissing + counts.hiddenPrice, remaining: remainingActive,
+    hours: Math.round((Date.now() - startedAt) / 360000) / 10, skippedProblems: problems,
+  });
+}
+
 let detailChecked = 0;
 let detailSkipped = 0;
 // Закрытая дверь — не поломка: прогон сворачивается тихо, без стека в журнале.
 let entryDenied = false;
 
-try {
+async function refresh() {
   console.log(`[feeds] фиды этой ночи: ${activeFeeds.join(", ")}${args.get("shift") ? ` (ограничено ключом --shift=${args.get("shift")})` : ""}`);
   // Если дверь закрыли в прошлый раз — даже не подходим к ней.
   if (await underLockout()) {
@@ -1253,14 +1501,9 @@ try {
   console.log(burstLimit
     ? `[burst] норма подхода ${burstLimit} обращений, пауза ${burstPauseMin} мин, подходов за сессию до ${burstsMax}`
     : `[burst] заранее не отдыхаем: работаем, пока источник отвечает, и встаём на ${burstPauseMin} мин только когда он остановил`);
-  if (modelTopPages > 0) console.log(`[order] ценовой срез моделей: первые ${modelTopPages} страниц по возрастанию цены (~${modelTopPages * 24} самых дешёвых машин модели)`);
+  if (!useListSnapshot && modelTopPages > 0) console.log(`[order] ценовой срез моделей: первые ${modelTopPages} страниц по возрастанию цены (~${modelTopPages * 24} самых дешёвых машин модели)`);
   console.log(`[order] круг №${cursor.round}, в нём уже обойдено марок: ${cursor.brandsDone.length}`);
-  // ---- Проход по маркам ---------------------------------------------------
-  // Марка обрабатывается целиком и по порядку: списки с фильтрами, потом сразу
-  // новые машины (чтобы появились на сайте в этот же проход), потом проверка
-  // пропавших, потом отбивка в телеграм. Только затем следующая марка.
-  // Поле осталось в отчёте ради совместимости с утренней проверкой: теперь мы
-  // отвечаем за марки поимённо, и «ждут своей смены» превратилось в «в очереди».
+  // The same brand aliases and source filters serve both refresh modes.
   let outOfShift = 0;
   const ourRowsByBrand = new Map();
   const ourPricesByBrand = new Map();
@@ -1288,12 +1531,13 @@ try {
     : null;
   let brandsToWalk = wantedBrands
     ? allBrands.filter((item) => wantedBrands.has(item.brand))
-    : fullQueue;
+    : useListSnapshot ? allBrands : fullQueue;
   if (wantedBrands && !brandsToWalk.length) throw new Error(`марок не нашлось: ${args.get("brands")}`);
   if (brandLimit) brandsToWalk = brandsToWalk.slice(0, brandLimit);
   console.log(`[order] в очереди ${brandsToWalk.length} марок из ${allBrands.length}; первые: ${brandsToWalk.slice(0, 5).map((b) => `${b.brand} (${b.ourCars})`).join(", ")}`);
 
-  // Пополнение по-прежнему ограничено; актуализация существующих карточек — нет.
+  if (useListSnapshot) return runListSnapshot(brandsToWalk, ourPricesByBrand);
+
   const totals = runTotals;
 
   for (const entry of brandsToWalk) {
@@ -1305,62 +1549,7 @@ try {
     const pricedBefore = seenPrices.size;
     const pagesBefore = listPages;
     const rePricedBefore = stats.rePriced;
-    let ok = true;
-    let why = null;
-    let windows = 0;
-
-    for (const brandId of entry.ids) {
-      if (stopped) break;
-      const brandParams = `brandid=${brandId}&${filterParams(entry.brand)}&sort=2`;
-      // Вставать на страницу каждой марки оказалось вредно: загрузка страницы стоит
-      // 113 обращений на холодном профиле, а потолок источника считается по всем
-      // обращениям. Замеры 31.08.2026: со «своей» страницей 113 прочитанных страниц,
-      // без неё 107 — разницы нет, а половина запаса уходила на саму загрузку.
-      // `--stand-on-brand=true` включает прежнее поведение для опытов.
-      if (args.get("stand-on-brand") === "true" && !(await standOn(brandParams))) {
-        ok = false;
-        why = "не удалось открыть страницу марки";
-        continue;
-      }
-      const probe = await listFlight(brandParams);
-      await noteAnswer(Boolean(probe));
-      await sleep(pace);
-      if (!probe?.pageCount || probe.totalCount === 0) {
-        // Молчание на разведке — не «марка пустая», а закрытая дверь: отмечать её
-        // пройденной нельзя, иначе её машины уйдут в проверку пропавших зря.
-        if (!probe) { ok = false; why = "источник не ответил на разведку марки"; }
-        continue;
-      }
-      absorbList(probe, null);
-      brandsWalked += 1;
-      const wins = priceWindowsFor(entry.brand, ourPrices, probe.pageCount);
-      if (wins.length > 1) windows += wins.length;
-      if (wins.length > 1) console.log(`[brand] ${entry.brand}: ${probe.totalCount} машин, ${probe.pageCount} страниц — режу на ${wins.length} ценовых окон`);
-      const pendingWindows = [...wins];
-      const fullWindow = wins.length === 1 ? wins[0] : null;
-      for (const win of pendingWindows) {
-        if (stopped) break;
-        const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
-        let head = probe;
-        if (win !== fullWindow) {
-          if (args.get("stand-on-brand") === "true" && !(await standOn(base))) { ok = false; why = "не удалось открыть окно по цене"; continue; }
-          head = await listFlight(base);
-          await noteAnswer(Boolean(head));
-          await sleep(pace);
-          if (!head) { ok = false; why = "источник не отдал окно по цене"; continue; }
-          if (head.totalCount === 0) continue;
-          absorbList(head, null);
-        }
-        if (head.pageCount > SLICE_MAX_PAGES && win.maxPrice - win.minPrice > 1) {
-          const middle = Math.floor((win.maxPrice + win.minPrice) / 2);
-          pendingWindows.push({ ...win, maxPrice: middle }, { ...win, minPrice: middle });
-          windows += 2;
-          continue;
-        }
-        const walked = await walkSlice(base, head, null, SLICE_MAX_PAGES);
-        if (!walked.complete) { ok = false; why = "источник оборвал выдачу на середине"; }
-      }
-    }
+    const { ok, why, windows } = await walkBrand(entry, ourPrices);
 
     // The discovery list never refreshes an existing listing's status or quote.
     const checked = await checkPendingListings(ourRows, {
@@ -1565,11 +1754,18 @@ try {
   } else {
     console.log("[tg] итог передаст планировщик либо включён тихий режим");
   }
+}
+
+try {
+  await refresh();
 } catch (error) {
+  if (lockFailure) error = Object.assign(Error('Che168: потеряно соединение с базой, удерживавшее блокировку круга'),
+    { code: 'CHE168_ROUND_LOCK_LOST', cause: lockFailure });
   process.exitCode = 1;
   // Persist failures as well, so the scheduler has current progress to report.
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   const failedReport = {
+    ...latestSnapshotReport,
     startedAt: new Date(startedAt).toISOString(),
     finishedAt: new Date().toISOString(),
     minutes: Math.round((Date.now() - startedAt) / 6000) / 10,
@@ -1580,8 +1776,11 @@ try {
     failureCode: error.code,
     diagnostic: error.diagnostic,
     detailProblems: [...detailProblems.values()],
-    checkedThisRun: verifiedThisRun.size,
-    added: runTotals.added, sold: soldTotal, errors: runTotals.errors,
+    circleClosed: false,
+    stoppedEarly: stopped && !budgetSpent,
+    checkedThisRun: latestSnapshotReport?.checkedThisRun ?? verifiedThisRun.size,
+    added: latestSnapshotReport?.added ?? runTotals.added, sold: latestSnapshotReport?.sold ?? soldTotal,
+    errors: runTotals.errors,
   };
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(failedReport, null, 2)}\n`);
   console.error(error.stack || error.message);
@@ -1590,5 +1789,6 @@ try {
 } finally {
   if (catalogChanged) await purgePageCache();
   if (browser) await browser.close().catch(() => {});
+  await runLock.end();
   await pool.end();
 }

@@ -140,11 +140,11 @@ test('Che168 closes with 100 individual problems, carries unchanged dates into t
   assert.equal(finishRefreshCycle(cursor, { ...counts, skippedChecks: 1 }).complete, false);
 });
 
-test("production wiring persists the cycle before selecting rows and checks leftovers after an incomplete list", () => {
+test("production selects the complete snapshot before the legacy detail pass and writes only after validating the plan", () => {
   const source = readFileSync(new URL("../scripts/refresh-che168.mjs", import.meta.url), "utf8");
   assert.ok(source.indexOf("await saveCursor(cursor)") < source.indexOf("const { rows } = await pool.query"));
-  assert.match(source, /await checkPendingListings\(ourRows,/);
-  assert.doesNotMatch(source, /if \(!skipDetail && ok/);
+  assert.match(source, /if \(useListSnapshot\) return runListSnapshot\(brandsToWalk, ourPricesByBrand\);[\s\S]*await checkPendingListings\(ourRows,/);
+  assert.ok(source.indexOf("state.plan = planChe168Snapshot") < source.indexOf("await writeChe168ListSnapshot(db"));
   assert.match(source, /remainingListings, remainingBrands, stopped/);
   assert.match(source, /await withTransaction/);
   assert.match(source, /if \(!ids.has\(brand\)\) ids.set/);
