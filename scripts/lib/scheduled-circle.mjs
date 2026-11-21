@@ -30,8 +30,11 @@ export function encarImportPlan(discoveries, report, startedAt) {
   const refreshedAt = Math.max(snapshotStartedAt, Date.parse(report?.resumedAt) || 0);
   if (report?.fatal || !Number.isFinite(snapshotStartedAt) || !Number.isFinite(Date.parse(report?.finishedAt)) || Date.parse(report.finishedAt) < startedAt || refreshedAt < startedAt) throw Error('Нет свежего завершённого отчёта Encar');
   const deferred = report.skippedProblemListings || 0;
-  if (report.complete === false || !withinCircleProblemLimit(deferred) || (report.remainingListings || 0) !== deferred
-    || (report.unknown || 0) !== deferred || report.writeFailed || report.walk?.broken || report.walk?.stopped) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
+  const completedBrandsReady = report.mode === 'list-snapshot' && report.readyForImport === true;
+  if ((!completedBrandsReady && (report.complete === false || report.walk?.broken)) || !withinCircleProblemLimit(deferred)
+    || (report.remainingListings || 0) !== deferred || (report.unknown || 0) !== deferred || report.writeFailed || report.walk?.stopped) {
+    throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
+  }
   if (!Array.isArray(discoveries?.items) || Date.parse(discoveries.generatedAt) < snapshotStartedAt || Date.parse(discoveries.generatedAt) > Date.parse(report.finishedAt) || !Number.isFinite(Date.parse(discoveries.generatedAt))) throw Error('Нет свежих находок Encar');
   if (!discoveries.items.length) return null;
   return { command: 'node', args: ['scripts/import-encar.mjs', '--discoveries', `--limit=${discoveries.items.length}`], log: 'runtime/encar-circle.log' };
@@ -119,6 +122,9 @@ export async function runScheduledCircle(source, { readState, running, run, afte
       if (state?.status !== 'complete') throw Error('Круг не завершён; прогресс сохранён. Продолжение: «Продолжить 2».');
     }
     await afterRefresh();
+    if (source === 'encar' && report?.mode === 'list-snapshot' && report.skippedBrands?.length) {
+      throw Object.assign(Error('Для завершённых марок каталог обновлён; остались марки с оборванной выдачей'), { code: 'ENCAR_SKIPPED_BRANDS' });
+    }
     await notify(circleSummary(source, { report, state, importReport, elapsedMs: now() - startedAt }));
     return 'complete';
   } catch (error) {

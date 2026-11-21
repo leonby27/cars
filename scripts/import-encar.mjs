@@ -76,7 +76,7 @@ const startedAt = new Date().toISOString();
 const log = (line) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
 
 // Объявления пропускаем до скачивания; повтор машины под другим номером —
-// после чтения карточки, по её sourceVehicleId. Снятая машина не блокирует
+// по sourceVehicleId из основной карточки, до истории и осмотра. Снятая машина не блокирует
 // новое объявление, а активная не должна появляться в каталоге дважды.
 let identity = createEncarImportIdentity();
 let pool = null;
@@ -248,9 +248,17 @@ async function worker() {
     }
     const candidate = candidates[cursor++];
     let stage = 'read';
+    let releaseDetail;
     try {
-      const { status, car, detail, error } = await client.car(candidate.externalId, { usdPerKrw, history: withHistory });
+      const { status, car, detail, error, duplicate } = await client.car(candidate.externalId, {
+        usdPerKrw, history: withHistory,
+        skipDuplicate: repair ? undefined : async vehicleId => {
+          releaseDetail = await identity.reserveDetail(candidate.externalId, vehicleId);
+          return releaseDetail === null;
+        },
+      });
       detailReads += 1;
+      if (duplicate) { reject('duplicate Encar vehicle', candidate.externalId); continue; }
       if (status === 404 && !error) { reject("listing gone (404)", candidate.externalId); continue; }
       if (status !== 200 || error) { reject(`detail request failed (${status})${error ? `: ${safeDiagnostic(error.code || error.cause?.code || error.message).slice(0, 100)}` : ''}`, candidate.externalId); continue; }
       if (!car) {
@@ -263,13 +271,15 @@ async function worker() {
       if (violation) { reject(`Import policy: ${violation}`, candidate.externalId); continue; }
       const landedUsd = estimateLandedCost(car).totalUsd;
       if (isAbovePriceCeiling(landedUsd)) { reject(`landed price ${Math.round(landedUsd)} $ is above the ${MAX_LANDED_USD} $ ceiling`, candidate.externalId); continue; }
-      const duplicate = identity.claim(car, { repair });
-      if (duplicate) { reject(duplicate, candidate.externalId); continue; }
+      const rejection = identity.claim(car, { repair });
+      if (rejection) { reject(rejection, candidate.externalId); continue; }
       accepted.push(car);
       if (accepted.length - checkpointed >= batchSize) { stage = 'write'; await checkpoint(false); }
     } catch (error) {
       if (stage === 'write' || error instanceof EncarGeoBlockedError || error.code === 'ENCAR_UNAVAILABLE') throw error;
       reject(`detail error: ${String(error.message).slice(0, 80)}`, candidate.externalId);
+    } finally {
+      releaseDetail?.();
     }
   }
 }

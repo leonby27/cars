@@ -1,6 +1,5 @@
-// Encar refresh: list snapshot -> existing cards -> discoveries for import.
-// A missing list entry alone never marks a sale; the detail page decides.
-// --resume retains completed cards, repairing incomplete list evidence if needed.
+// Encar refresh reconciles complete brand lists, then opens returning cards.
+// Use --legacy-refresh for the former detail-based workflow.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EncarClient } from './lib/encar-client.mjs';
@@ -10,7 +9,7 @@ import { ENCAR_MANUFACTURERS } from './lib/encar-parser.mjs';
 import { canonicalImportBrand, importPolicyViolation } from '../config/import-policy.mjs';
 import { sourceUsdRate } from '../src/pricing.js';
 import { pool, withTransaction } from '../server/db.mjs';
-import { upsertEncarCar } from './lib/encar-write.mjs';
+import { upsertEncarCar, writeEncarListSnapshot } from './lib/encar-write.mjs';
 import { refreshAfterManualCatalog } from './lib/sitemap-refresh.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,8 +46,9 @@ try {
   const client = new EncarClient({ pace, log, specs });
   await runEncarRefresh({
     client, db: pool,
-    // A failed card write rolls back facts, listing, media and history together.
-    upsert: car => withTransaction(db => upsertEncarCar(car, db)),
+    upsert: (car, options) => withTransaction(db => upsertEncarCar(car, db, undefined, options)),
+    applySnapshot: (updates, options) => withTransaction(db => writeEncarListSnapshot(db, updates, options)),
+    listSnapshot: args.get('legacy-refresh') !== 'true' && detailLimit === 0,
     policyViolation: importPolicyViolation, canonicalBrand: canonicalImportBrand,
     brands, yearFrom, usdPerKrw, concurrency, detailLimit,
     dryRun, resume: args.get('resume') === 'true',

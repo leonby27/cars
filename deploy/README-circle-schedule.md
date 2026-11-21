@@ -17,8 +17,8 @@ Telegram commands remain available.
 
 Che168 uses the existing full-circle command and its 100-new-cars-per-brand
 setting. Guazi starts a new circle after completion, otherwise resumes its
-durable checkpoint. Encar updates existing cars, then imports the refresh's
-fresh discoveries using existing import/physical-vehicle deduplication rules.
+durable checkpoint. Encar reconciles complete brand lists, then imports fresh
+discoveries. It checks the physical vehicle ID before fetching history and inspection.
 
 On HTTP 567, Guazi saves its checkpoint and the EdgeOne request ID when
 provided. The scheduled runner waits at least one hour, or longer if requested
@@ -26,8 +26,10 @@ by `Retry-After`, then resumes that checkpoint once. A second failure leaves
 the saved queue and sends one final report. `Продолжить 2` still starts a
 manual resume.
 
-Incomplete Encar refreshes prevent the import stage. Telegram receives only one
-result per launch: a numeric summary after success, or detailed failure context,
+An Encar brand that exhausts its list retries is left untouched. The importer
+processes discoveries from the completed brands and the final report names the
+skipped brands. An access outage or write failure still blocks import. Telegram
+receives only one result per launch: a numeric summary after success, or detailed failure context,
 saved progress and recent log lines after an error. There are no automatic
 startup or per-brand messages. Child collectors use
 `ABCARS_CIRCLE_REPORT_OWNER=scheduler` to prevent duplicate result notifications;
@@ -66,22 +68,26 @@ flock -w 600 /run/lock/abcars-deploy.lock npm run sitemap:update
 The refresh skips another site's profile, a closed preview build or a directory
 without a published sitemap. It does not rebuild the frontend or publish code.
 
-Encar refresh saves its unresolved detail queue atomically to
+Encar's default refresh reads fresh lists even on resume. It updates known prices
+from the list, hides invalid quotes and differences above ₩1,350,000, and marks
+an absent ID sold after a complete brand walk. Returning cars still get a detail
+check. Each interrupted brand gets two attempts, then two after five minutes and
+one after fifteen further minutes. Every page must be covered to apply that brand.
+
+The former detail-based refresh remains available with `--legacy-refresh`. It saves its unresolved detail queue atomically to
 `runtime/encar-refresh-checkpoint.json`, after the list snapshot, every 100
 processed cards or 30 seconds, and on a graceful stop. Resume it with
-`npm run refresh:encar -- --resume` using the same `--brands` / `--year-from`
+`npm run refresh:encar -- --legacy-refresh --resume` using the same `--brands` / `--year-from`
 settings. Completed cards are omitted; failed and unattempted cards are retried.
 A hard process kill can replay the last unsaved successful writes; upserts are
 idempotent. Resume retains the original list/discovery date and cumulative
 counts. A broken/stopped list walk is checked again on resume, preserving the
-unresolved detail queue and successful writes. The scheduler resumes an unfinished
-detail checkpoint; a completed round starts a new list snapshot. A failure before
+unresolved detail queue and successful writes. A failure before
 the detail queue was created needs a fresh list walk. The October 10 failed run
 predates this checkpoint format and cannot be resumed through this option.
 
 `--detail-limit` and `--max-minutes` never turn an incomplete refresh into a
-successful circle. Import stays blocked while any details or lists remain
-unresolved. Dry runs write separate `*-dry.json` files and cannot overwrite the
+successful circle. Dry runs write separate `*-dry.json` files and cannot overwrite the
 live queue/discoveries/report. Network/HTTP, parsing and database failures are
 counted separately; HTTP/network codes and representative errors appear in the
 report and per-card log. Each live card rewrite is a database transaction.

@@ -85,7 +85,7 @@ export function circleFailure(source, error, { report, state, importReport, curs
     source === 'encar' ? count('Скрыто до следующей проверки', report?.skipped) : null,
     source === 'encar' ? count('Историю/осмотр обновить не удалось', report?.historyDeferred) : null,
     count('Незавершённых марок', report?.remainingBrands),
-    source === 'che' && report?.skippedBrands?.length ? `Пропущены марки: ${report.skippedBrands.join(', ')}` : null,
+    ['che', 'encar'].includes(source) && report?.skippedBrands?.length ? `Пропущены марки: ${report.skippedBrands.join(', ')}` : null,
     count(attempt ? 'Ошибок чтения за этот запуск' : source === 'encar' && Number.isFinite(report?.readFailed) ? 'Ошибок чтения карточек' : 'Карточек без ответа', failures?.readFailed ?? report?.unknown ?? report?.noAnswer),
     count('Ошибок разбора карточек', failures?.parseFailed),
     count('Ошибок записи в базу', failures?.writeFailed),

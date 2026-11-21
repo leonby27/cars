@@ -10,6 +10,8 @@ export function createEncarImportIdentity(rows = []) {
   const knownIds = new Set(rows.map((row) => String(row.external_id)));
   const activeVehicles = new Map();
   const activeAds = new Map();
+  const inFlight = new Map();
+  const hasDuplicate = (externalId, key) => [...(activeVehicles.get(key) || [])].some(id => id !== externalId);
   const activate = (externalId, key) => {
     if (!activeVehicles.has(key)) activeVehicles.set(key, new Set());
     activeVehicles.get(key).add(externalId);
@@ -22,6 +24,16 @@ export function createEncarImportIdentity(rows = []) {
 
   return {
     knownIds,
+    // Let another ad for the same vehicle proceed if this one fails verification.
+    async reserveDetail(externalId, vehicleId) {
+      const key = vehicleKey(vehicleId);
+      if (!key) return () => {};
+      while (inFlight.has(key)) await inFlight.get(key);
+      if (hasDuplicate(String(externalId), key)) return null;
+      const { promise, resolve } = Promise.withResolvers();
+      inFlight.set(key, promise);
+      return () => { inFlight.delete(key); resolve(); };
+    },
     // Проверка и резервирование синхронны: два рабочих потока не примут одну
     // машину до того, как очередная пачка успеет записаться в базу.
     claim(car, { repair = false, reactivate = false } = {}) {
@@ -29,7 +41,7 @@ export function createEncarImportIdentity(rows = []) {
       if (knownIds.has(externalId) && !reactivate) return "already in catalog";
       const key = vehicleKey(car.sourceVehicleId);
       if (!key) return "missing Encar vehicle identity";
-      if (!repair && [...(activeVehicles.get(key) || [])].some(id => id !== externalId)) return "duplicate Encar vehicle";
+      if (!repair && hasDuplicate(externalId, key)) return "duplicate Encar vehicle";
       knownIds.add(externalId);
       activate(externalId, key);
       return null;

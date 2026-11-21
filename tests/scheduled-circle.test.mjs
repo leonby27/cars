@@ -26,6 +26,25 @@ test('Encar imports all fresh discoveries only after a verified refresh', () => 
   for (const bad of [null, { ...report, fatal: 'failed' }, { ...report, startedAt: '2026-10-04' }, { ...report, unknown: 1 }, { ...report, complete: false }, { ...report, remainingListings: 1 }, { ...report, walk: { stopped: true } }, { ...report, walk: { broken: 1 } }]) assert.throws(() => encarImportPlan(discoveries, bad, startedAt));
   assert.throws(() => encarImportPlan({ ...discoveries, generatedAt: 'bad' }, report, startedAt));
 });
+test('Encar imports completed brands, refreshes the sitemap, and reports the skipped brand', async () => {
+  const events = [];
+  const snapshot = { ...report, mode: 'list-snapshot', readyForImport: true, complete: false,
+    skippedBrands: ['Kia'], remainingBrands: 1, walk: { broken: 1 } };
+  const states = {
+    'runtime/encar-refresh-report.json': snapshot,
+    'runtime/encar-discoveries.json': { generatedAt: iso, items: [{ brand: 'BMW' }] },
+    'runtime/encar-import-report.json': { startedAt: iso, final: true, complete: true, imported: 1 },
+  };
+  await assert.rejects(runScheduledCircle('encar', {
+    readState: async name => states[name], running: async () => false,
+    run: async step => events.push(step.args[0]), afterRefresh: async () => events.push('sitemap'),
+    notify: async text => events.push(text), now: () => startedAt,
+  }), { code: 'ENCAR_SKIPPED_BRANDS' });
+  assert.deepEqual(events.slice(0, 3), ['scripts/refresh-encar.mjs', 'scripts/import-encar.mjs', 'sitemap']);
+  assert.match(events[3], /Пропущены марки: Kia/);
+  assert.match(events[3], /Добавлено: 1/);
+  assert.equal(events.length, 4);
+});
 test('busy source is skipped without reading or overwriting its checkpoint', async () => {
   const messages = [];
   assert.equal(await runScheduledCircle('che', { running: async () => true, readState: () => assert.fail(), run: () => assert.fail(), notify: async text => messages.push(text) }), 'busy');

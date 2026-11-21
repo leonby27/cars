@@ -398,7 +398,7 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
 // Фильтр списка на языке площадки. Год — по месяцу регистрации (YYYYMM), цена в
 // 만원 (10 000 вон). `FormYear` фильтром не работает (404), поэтому модельный год
 // проверяется по карточке.
-export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, priceMin, priceMax, fuel, sellType = "일반" } = {}) {
+export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, yearRange, priceMin, priceMax, fuel, sellType = "일반" } = {}) {
   // Encar uses _. for a literal dot inside a value (facet Expression for ID.4
   // is ModelGroup.ID_.4.). URL encoding alone does not escape its query grammar.
   const literal = (value) => String(value).replaceAll(".", "_.");
@@ -406,7 +406,8 @@ export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, pri
   if (manufacturer) parts.push(`Manufacturer.${literal(manufacturer)}`);
   if (modelGroup) parts.push(`ModelGroup.${literal(modelGroup)}`);
   // Границы диапазона — обе: с одной открытой стороной площадка отвечает пусто.
-  if (yearFrom || yearTo) parts.push(`Year.range(${yearFrom || 1990}00..${yearTo || new Date().getFullYear() + 1}12)`);
+  if (yearRange) parts.push(`Year.range(${yearRange[0]}..${yearRange[1]})`);
+  else if (yearFrom || yearTo) parts.push(`Year.range(${yearFrom || 1990}00..${yearTo || new Date().getFullYear() + 1}12)`);
   if (priceMin || priceMax) parts.push(`Price.range(${priceMin || 0}..${priceMax || 999_999})`);
   if (fuel) parts.push(`FuelType.${literal(fuel)}`);
   if (sellType) parts.push(`SellType.${literal(sellType)}`);
@@ -451,11 +452,14 @@ export function encarCandidate(item, { minYear = 2020 } = {}) {
   if (item.SellType && item.SellType !== "일반") return { externalId, skip: "sellType" };
   const year = numeric(item.FormYear) || Math.floor((numeric(item.Year) || 0) / 100) || null;
   if (year && year < minYear) return { externalId, skip: "year" };
+  const currency = item.Currency ?? item.CurrencyCode ?? item.PriceCurrency;
+  const priceMan = currency == null || ['KRW', '₩', '원'].includes(String(currency).trim().toUpperCase())
+    ? positiveSourceAmount(item.Price) : null;
   return {
     externalId,
     year,
     type: fuel.type,
-    priceMan: positiveSourceAmount(item.Price),
+    priceMan,
     manufacturer: String(item.Manufacturer || ""),
     modelGroup: String(item.Model || ""),
     modifiedAt: item.ModifiedDate || null,

@@ -5,6 +5,7 @@ import { encarOutcome, encarEvidence, encarSourceProblem } from './encar-result.
 import { createEncarImportIdentity } from './encar-import-identity.mjs';
 import { canCompleteWithProblems } from './circle-completion.mjs';
 import { quarantineListing } from './catalog-quarantine.mjs';
+import { collectEncarSnapshot, planEncarSnapshot } from './encar-snapshot.mjs';
 
 const accountedListings = (summary, pending) => summary.seenSamePrice + summary.stillAlive
   + summary.sold + (summary.skipped || 0) + pending;
@@ -29,9 +30,13 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
   canonicalBrand = value => value, concurrency = 2,
   brands, yearFrom = 2020, usdPerKrw, dryRun = false, resume = false,
   detailLimit = 0, stop = () => false, log = () => {}, now = Date.now,
-  checkpointPath, reportPath, discoveriesPath,
+  checkpointPath, reportPath, discoveriesPath, listSnapshot = false, applySnapshot, wait,
 }) {
   const options = { brands, yearFrom, dryRun };
+  // A resumed snapshot always reads current lists. Earlier committed writes are
+  // already in the database and should be compared against that fresh evidence.
+  const resumedSnapshot = resume && listSnapshot;
+  if (listSnapshot) resume = false;
   let state = resume ? await readEncarCheckpoint(checkpointPath) : null;
   if (resume && (!state || state.version !== 1 || JSON.stringify(state.options) !== JSON.stringify(options))) {
     throw new Error('Encar: нет совместимой сохранённой очереди; запустите новый полный проход');
@@ -49,7 +54,7 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
   }
   const iso = () => new Date(now()).toISOString();
   if (!state) state = {
-    version: 1, options, phase: 'lists', pending: [], failures: {}, discoveries: [],
+    version: listSnapshot ? 2 : 1, options, phase: 'lists', pending: [], failures: {}, discoveries: [],
     summary: { startedAt: iso(), brands, active: 0, seenSamePrice: 0, priceChanged: 0,
       rewritten: 0, unseen: 0, sold: 0, stillAlive: 0, unknown: 0, discoveries: 0,
       requests: 0, errors: [] },
@@ -61,7 +66,8 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
   delete summary.failureCode;
   delete summary.failureStatus;
   delete summary.failureStage;
-  if (resume) summary.resumedAt = iso();
+  if (resume || resumedSnapshot) summary.resumedAt = iso();
+  if (listSnapshot) summary.mode = 'list-snapshot';
   const attempt = summary.attempt = { startedAt: iso(), checked: 0, completed: 0, readFailed: 0, parseFailed: 0, writeFailed: 0, responseStatuses: {}, errors: [] };
   let pending = new Set(state.pending);
   let workQueue = [...pending];
@@ -115,7 +121,46 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     log(`[${stage}] ${externalId}: ${status === undefined ? '' : `HTTP ${status} · `}${entry.code ? `${entry.code} · ` : ''}${entry.error}`);
   };
   try {
-    if (!resume) {
+    if (listSnapshot) {
+      await save();
+      const { rows: catalog } = await db.query(`SELECT l.id,l.external_id,l.price_cny,l.status,v.brand
+        FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.source='Encar'`);
+      const existing = catalog.filter(row => row.status === 'active' || row.status === 'skipped');
+      const known = new Map(catalog.map(row => [String(row.external_id), row]));
+      const snapshot = await collectEncarSnapshot({ client, brands, yearFrom, stop, log, wait });
+      summary.walk = { pages: snapshot.pages, broken: snapshot.skippedBrands.length, errors: snapshot.errors };
+      summary.skippedBrands = snapshot.skippedBrands;
+      summary.remainingBrands = snapshot.skippedBrands.length;
+      if (!snapshot.covered.size || (snapshot.covered.size > 1 && !snapshot.quotes.size
+        && existing.some(row => row.status === 'active' && snapshot.covered.has(row.brand)))) {
+        throw Error('Encar: не удалось получить пригодную выдачу для сверки каталога');
+      }
+      if (stop()) throw Object.assign(Error('Остановлено по команде; начните со свежей выдачи'), { code: 'ABCARS_STOPPED' });
+      const { updates, counts, discoveries, returning } = planEncarSnapshot(snapshot, existing, known);
+      state.discoveriesGeneratedAt = iso();
+      if (!dryRun) {
+        try {
+          await applySnapshot(updates, { startedAt: summary.startedAt, observedAt: state.discoveriesGeneratedAt, usdPerKrw });
+        } catch (error) { error.stage = 'write'; throw error; }
+      }
+      Object.assign(summary, counts, {
+        active: updates.length + returning.length, stillAlive: counts.priceChanged, unseen: counts.sold,
+        rewritten: counts.priceChanged, discoveries: discoveries.length,
+      });
+      state.discoveries = discoveries;
+      state.returning = returning;
+      pending = new Set(returning);
+      workQueue = returning;
+      state.phase = 'details';
+      state.detailsReady = true;
+      await writeEncarJson(discoveriesPath, { generatedAt: state.discoveriesGeneratedAt, source: 'Encar', yearFrom, items: discoveries });
+      await save();
+      log(`[snapshot] марок ${snapshot.covered.size}, цен изменилось ${counts.priceChanged}, снято ${counts.sold}, скрыто ${counts.skipped}, вернулось ${returning.length}, находок ${discoveries.length}`);
+      if (workQueue.length) {
+        knownRows = await readKnown();
+        identity = createEncarImportIdentity(knownRows);
+      }
+    } else if (!resume) {
       const { rows } = await db.query(`SELECT l.id, l.external_id, l.price_cny, l.status, l.source_payload->>'historyUnavailable' AS history_unavailable
         FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
         WHERE l.source='Encar' AND l.status IN ('active','skipped') AND v.brand=ANY($1::text[])`, [brands]);
@@ -210,15 +255,23 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
         attempt.checked += 1;
         let stage = 'read';
         let activationClaimed = false;
+        let releaseDetail;
         try {
-          const { status, car, detail, error, historyUnavailable, apiStatus, publicStatus, availabilitySource, unverifiedUnavailable } = await client.car(externalId, { usdPerKrw, history: true });
+          const { status, car, detail, error, historyUnavailable, apiStatus, publicStatus, availabilitySource, unverifiedUnavailable, duplicate } = await client.car(externalId, {
+            usdPerKrw, history: true,
+            skipDuplicate: listSnapshot ? async vehicleId => {
+              releaseDetail = await identity.reserveDetail(externalId, vehicleId);
+              return releaseDetail === null;
+            } : undefined,
+          });
           if ((status !== 200 && status !== 404) || (status === 404 && error)) {
             await fail(externalId, 'read', error || `Encar: detail request failed (${status})`, status);
           } else if (status === 200 && (!detail || error)) {
             await fail(externalId, 'parse', error || 'Encar: empty detail response', status);
           } else {
             stage = 'parse';
-            let { state: outcome, reason } = encarOutcome({ status, car, detail, error, unverifiedUnavailable }, policyViolation);
+            let { state: outcome, reason } = duplicate ? { state: 'hidden', reason: 'duplicate' }
+              : encarOutcome({ status, car, detail, error, unverifiedUnavailable }, policyViolation);
             if (outcome === 'active' && state.returning?.includes(externalId)) {
               const alreadyActive = identity.isActive(externalId);
               if (identity.claim(car, { reactivate: true })) { outcome = 'hidden'; reason = 'duplicate'; }
@@ -245,7 +298,10 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
               identity.release(externalId);
             } else {
               let saved;
-              if (!dryRun) { saved = await upsert({ ...car, sourceAvailability: evidence }); summary.rewritten += 1; }
+              if (!dryRun) {
+                saved = await upsert({ ...car, sourceAvailability: evidence }, listSnapshot ? { resetPriceBaseline: true } : undefined);
+                summary.rewritten += 1;
+              }
               summary.stillAlive += 1;
               if (state.returning?.includes(externalId)) summary.reactivated = (summary.reactivated || 0) + 1;
               if (historyUnavailable || saved?.historyUnavailable) summary.historyDeferred = (summary.historyDeferred || 0) + 1;
@@ -265,6 +321,8 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
           if (['parse', 'write'].includes(error.stage)) stage = error.stage;
           await fail(externalId, stage, error, error.status);
           if (stage === 'write' && /^(?:08|53|57P0|ECONN|ETIMEDOUT|EPIPE)/.test(error.code || '')) { fatal = error; break; }
+        } finally {
+          releaseDetail?.();
         }
         processedSinceSave += 1;
         if (processedSinceSave >= 100 || now() - savedAt >= 30_000) {
@@ -280,14 +338,16 @@ export async function runEncarRefresh({ client, db, upsert, policyViolation,
     const accounted = accountedListings(summary, pending.size);
     if (accounted !== summary.active) throw Object.assign(new Error('Encar: итоги не совпадают с исходным набором объявлений'), { code: 'ENCAR_ACCOUNTING_MISMATCH', stage: 'write' });
     summary.finishedAt = iso();
-    summary.complete = canCompleteWithProblems({ problems: pending.size,
+    const resolvedCards = canCompleteWithProblems({ problems: pending.size,
       unattempted: [...pending].filter(id => !state.failures[id]).length,
-      stopped: stop(), incompleteLists: !!(summary.walk?.broken || summary.walk?.stopped), writeFailed: summary.writeFailed });
-    summary.skippedProblemListings = summary.complete ? pending.size : 0;
+      stopped: stop(), writeFailed: summary.writeFailed });
+    summary.complete = resolvedCards && !(summary.walk?.broken || summary.walk?.stopped);
+    if (listSnapshot) summary.readyForImport = resolvedCards;
+    summary.skippedProblemListings = (summary.complete || summary.readyForImport) ? pending.size : 0;
     // Keep the IDs and last valid catalog data as evidence. A completed phase
     // starts a fresh snapshot next time, so this tail cannot block discovery.
     const sourceProblems = [...Object.keys(attempt.responseStatuses).map(status => ({ status: Number(status) })), ...(summary.walk?.errors || [])];
-    if (!summary.complete && !attempt.parseFailed && !attempt.writeFailed) Object.assign(summary, encarSourceProblem(sourceProblems));
+    if (!summary.complete && !summary.readyForImport && !attempt.parseFailed && !attempt.writeFailed) Object.assign(summary, encarSourceProblem(sourceProblems));
     state.phase = summary.complete ? 'complete' : 'partial';
     await save();
     log(`[done] проданы ${summary.sold}, переписаны ${summary.rewritten}, ошибки чтения ${summary.readFailed}, разбора ${summary.parseFailed}, записи ${summary.writeFailed}, осталось ${pending.size}`);

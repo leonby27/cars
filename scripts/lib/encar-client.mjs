@@ -23,6 +23,14 @@ const encarBatteryUrl = (vehicleId) => `${ENCAR_API}/v1/readside/vehicle/ev-batt
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const validListCount = json => json?.Count !== null && json?.Count !== undefined && Number.isSafeInteger(Number(json.Count)) && Number(json.Count) >= 0;
 
+function splitRegistrationRange([from, to]) {
+  if (from === to) return [];
+  const firstYear = Math.floor(from / 100);
+  const lastYear = Math.floor(to / 100);
+  const mid = firstYear === lastYear ? Math.floor((from + to) / 2) : Math.floor((firstYear + lastYear) / 2) * 100 + 12;
+  return [[from, mid], [mid % 100 === 12 ? mid + 88 : mid + 1, to]];
+}
+
 // fetch deliberately turns HTTP 407 into a network error with an empty cause.
 // request preserves that status; no proxy, cookie or global dispatcher changes.
 const sourceFetch = async (url, options) => {
@@ -177,7 +185,7 @@ export class EncarClient {
   }
 
   /** Карточка с историей. При отказе API статус подтверждается публичной страницей. */
-  async vehicle(id, { history = true } = {}) {
+  async vehicle(id, { history = true, skipDuplicate } = {}) {
     let detail = await this.json(encarDetailUrl(id));
     const apiStatus = detail.status;
     let availabilitySource = 'api-detail', publicStatus;
@@ -226,6 +234,9 @@ export class EncarClient {
       throw Object.assign(new Error('Encar: invalid vehicle price'), { code: 'ENCAR_INVALID_DETAIL', stage: 'parse' });
     }
     const vehicleId = detail.json.vehicleId;
+    if (await skipDuplicate?.(vehicleId)) {
+      return { status: 200, detail: detail.json, duplicate: true, availabilitySource, apiStatus, publicStatus };
+    }
     let record = null;
     let inspection = null;
     let battery = null;
@@ -255,10 +266,10 @@ export class EncarClient {
   }
 
   /** Missing cards are terminal; an unreadable control still stops a source outage. */
-  async car(id, { usdPerKrw, importedAt, history = true } = {}) {
+  async car(id, { usdPerKrw, importedAt, history = true, skipDuplicate } = {}) {
     let stage = 'read';
     try {
-      const fetched = await this.vehicle(id, { history });
+      const fetched = await this.vehicle(id, { history, skipDuplicate });
       if (fetched.status !== 200) {
         if (fetched.unverifiedUnavailable) {
           if (++this.failedCards >= 15) {
@@ -272,7 +283,7 @@ export class EncarClient {
         return { ...fetched, car: null };
       }
       stage = 'parse';
-      const built = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
+      const built = fetched.duplicate ? null : buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
       const car = built && this.specs ? applyKoreaSpecs(built, this.specs) : built;
       if (car) car.sourceAvailability = encarEvidence(fetched, { state: 'active', reason: 'advertised' }, importedAt || new Date().toISOString());
       if (car && fetched.historyUnavailable) {
@@ -328,11 +339,12 @@ export class EncarClient {
   }
 
   /**
-   * Обход срезов: марка → модельная группа → (год, если срез глубже 10 000).
+   * Для сверки каталога читаем всю марку и делим крупные списки по регистрации.
+   * Обычный поиск новых карточек по-прежнему начинает с модельных групп.
    * На каждую строку списка зовёт `onItem(candidate, item)`; `onSlice` получает
    * итог среза. Возвращает статистику. Останавливается, когда `stop()` истинно.
    */
-  async walk({ brands = Object.keys(ENCAR_MANUFACTURERS), yearFrom = 2020, yearTo = null, priceMin = null, priceMax = null, minYear = yearFrom, onItem, onSlice = () => {}, stop = () => false } = {}) {
+  async walk({ brands = Object.keys(ENCAR_MANUFACTURERS), yearFrom = 2020, yearTo = null, priceMin = null, priceMax = null, minYear = yearFrom, onItem, onSlice = () => {}, stop = () => false, verifyCoverage = false } = {}) {
     const stats = { slices: 0, pages: 0, items: 0, candidates: 0, skipped: {}, errors: [] };
     const walkSlice = async (label, base, canSplit) => {
       if (stop()) return;
@@ -341,6 +353,12 @@ export class EncarClient {
       let total = null;
       let sliceItems = 0;
       let emptyRetries = 0;
+      const seen = verifyCoverage ? new Set() : null;
+      const incomplete = (offset, status, error) => {
+        stats.broken = (stats.broken || 0) + 1;
+        if (stats.errors.length < 20) stats.errors.push({ label, offset, status, code: 'ENCAR_LIST_INCOMPLETE', error });
+        this.log(`[list] ${label}: ${error}`);
+      };
       while (!stop()) {
         const { status, json, error } = await this.patientList(query, offset, ENCAR_PAGE_SIZE);
         stats.pages += 1;
@@ -353,17 +371,46 @@ export class EncarClient {
         const firstPage = total === null;
         // Listings can disappear while we paginate; use the current count.
         total = Number(json.Count);
-        if (firstPage) {
+        if (firstPage && total > ENCAR_MAX_OFFSET) {
+          if (verifyCoverage) {
+            const ranges = splitRegistrationRange(base.yearRange);
+            if (!ranges.length) {
+              incomplete(offset, status, `Encar: ${total} объявлений за один месяц, полный список недоступен`);
+              return seen;
+            }
+            this.log(`[list] ${label}: ${total} машин — делю по дате регистрации`);
+            for (const yearRange of ranges) {
+              const ids = await walkSlice(`${label} ${yearRange.join('–')}`, { ...base, yearRange }, false);
+              if (stop() || stats.broken) return seen;
+              for (const id of ids) seen.add(id);
+            }
+            if (seen.size < total) {
+              const current = await this.patientList(query, 0, 1);
+              stats.pages += 1;
+              if (current.status !== 200 || !validListCount(current.json) || !Array.isArray(current.json.SearchResults)
+                || seen.size < Number(current.json.Count) || current.json.SearchResults.some(item => !seen.has(String(item?.Id)))) {
+                incomplete(offset, current.status, `Incomplete list: ${seen.size} of ${total} across registration ranges`);
+              }
+            }
+            return seen;
+          }
           // Глубже 10 000 список повторяет одну страницу: делим срез по годам.
-          if (total > ENCAR_MAX_OFFSET && canSplit) {
+          if (canSplit) {
             this.log(`[list] ${label}: ${total} машин — делю по годам`);
             const from = Number(base.yearFrom) || 2020;
             const to = Number(base.yearTo) || new Date().getFullYear() + 1;
-            for (let year = from; year <= to; year += 1) await walkSlice(`${label} ${year}`, { ...base, yearFrom: year, yearTo: year }, false);
+            for (let year = from; year <= to; year += 1) {
+              await walkSlice(`${label} ${year}`, { ...base, yearFrom: year, yearTo: year }, false);
+            }
             return;
           }
         }
         const rows = Array.isArray(json.SearchResults) ? json.SearchResults : [];
+        if (seen && rows.some(item => !/^\d+$/.test(String(item?.Id ?? '')) || item.Manufacturer !== base.manufacturer || !Number.isInteger(Number(item.Year))
+          || Number(item.Year) < base.yearRange[0] || Number(item.Year) > base.yearRange[1])) {
+          incomplete(offset, status, 'Encar вернул некорректный ID, чужую марку или дату вне запрошенного списка');
+          break;
+        }
         if (!rows.length && offset < total && offset < ENCAR_MAX_OFFSET && emptyRetries < 2) {
           const delay = 5000 * ++emptyRetries;
           this.log(`[list] ${label}: пустая страница на ${offset} из ${total} — повтор через ${delay / 1000} с`);
@@ -372,6 +419,7 @@ export class EncarClient {
         }
         if (rows.length) emptyRetries = 0;
         for (const item of rows) {
+          if (seen) seen.add(String(item.Id));
           sliceItems += 1;
           stats.items += 1;
           const candidate = encarCandidate(item, { minYear });
@@ -382,21 +430,26 @@ export class EncarClient {
         }
         offset += rows.length;
         if (!rows.length || offset >= total || offset >= ENCAR_MAX_OFFSET) {
-          if (offset < total) {
-            stats.broken = (stats.broken || 0) + 1;
-            if (stats.errors.length < 20) stats.errors.push({ label, offset, status, code: 'ENCAR_LIST_INCOMPLETE', error: `Incomplete list: ${offset} of ${total}` });
-            this.log(`[list] ${label}: неполная выдача ${offset} из ${total}`);
+          const unique = seen?.size ?? offset;
+          if (unique < total || (seen && total === 0 && offset > 0)) {
+            incomplete(offset, status, `Incomplete list: ${unique} of ${total} (${offset} rows)`);
           }
           break;
         }
       }
       stats.slices += 1;
       await onSlice({ label, total, items: sliceItems });
+      return seen;
     };
     for (const brand of brands) {
       const manufacturer = ENCAR_MANUFACTURERS[brand];
       if (!manufacturer) { this.log(`[walk] ${brand}: у площадки такой марки нет — пропускаю`); continue; }
       if (stop()) break;
+      if (verifyCoverage) {
+        const yearRange = [yearFrom * 100, (yearTo || new Date().getFullYear() + 1) * 100 + 12];
+        await walkSlice(brand, { manufacturer, yearRange, priceMin, priceMax }, false);
+        continue;
+      }
       let groups;
       try { groups = await this.modelGroups(brand, { yearFrom, yearTo, priceMin, priceMax }); }
       catch (error) {
