@@ -72,7 +72,9 @@ Encar's default refresh reads fresh lists even on resume. It updates known price
 from the list, hides invalid quotes and differences above ₩1,350,000, and marks
 an absent ID sold after a complete brand walk. Returning cars still get a detail
 check. Each interrupted brand gets two attempts, then two after five minutes and
-one after fifteen further minutes. Every page must be covered to apply that brand.
+one after fifteen further minutes. The walk splits large lists by registration
+date and, if needed, by price, so each request fits one page. The whole brand
+must be covered before applying its snapshot.
 
 The former detail-based refresh remains available with `--legacy-refresh`. It saves its unresolved detail queue atomically to
 `runtime/encar-refresh-checkpoint.json`, after the list snapshot, every 100

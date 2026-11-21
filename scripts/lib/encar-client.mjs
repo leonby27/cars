@@ -31,6 +31,17 @@ function splitRegistrationRange([from, to]) {
   return [[from, mid], [mid % 100 === 12 ? mid + 88 : mid + 1, to]];
 }
 
+function splitSnapshotQuery(base, rows) {
+  const dates = splitRegistrationRange(base.yearRange);
+  if (dates.length) return dates.map(yearRange => ({ ...base, yearRange }));
+
+  const [from, to] = base.priceRange ?? [base.priceMin || 0, base.priceMax || 999_999];
+  if (from === to) return [];
+  const prices = rows.map(item => Number(item?.Price)).filter(price => Number.isSafeInteger(price) && price >= from && price < to).sort((a, b) => a - b);
+  const mid = prices[Math.floor(prices.length / 2)] ?? Math.floor((from + to) / 2);
+  return [[from, mid], [mid + 1, to]].map(priceRange => ({ ...base, priceRange }));
+}
+
 // fetch deliberately turns HTTP 407 into a network error with an empty cause.
 // request preserves that status; no proxy, cookie or global dispatcher changes.
 const sourceFetch = async (url, options) => {
@@ -339,7 +350,8 @@ export class EncarClient {
   }
 
   /**
-   * Для сверки каталога читаем всю марку и делим крупные списки по регистрации.
+   * Для сверки каталога делим выдачу до одной страницы, чтобы сортировка с
+   * одинаковым временем обновления не дублировала ID на соседних страницах.
    * Обычный поиск новых карточек по-прежнему начинает с модельных групп.
    * На каждую строку списка зовёт `onItem(candidate, item)`; `onSlice` получает
    * итог среза. Возвращает статистику. Останавливается, когда `stop()` истинно.
@@ -371,16 +383,17 @@ export class EncarClient {
         const firstPage = total === null;
         // Listings can disappear while we paginate; use the current count.
         total = Number(json.Count);
-        if (firstPage && total > ENCAR_MAX_OFFSET) {
+        if (firstPage && total > (verifyCoverage ? ENCAR_PAGE_SIZE : ENCAR_MAX_OFFSET)) {
           if (verifyCoverage) {
-            const ranges = splitRegistrationRange(base.yearRange);
-            if (!ranges.length) {
-              incomplete(offset, status, `Encar: ${total} объявлений за один месяц, полный список недоступен`);
+            const slices = splitSnapshotQuery(base, json.SearchResults);
+            if (!slices.length) {
+              incomplete(offset, status, `Encar: ${total} объявлений с одной датой и ценой, полный список недоступен`);
               return seen;
             }
-            this.log(`[list] ${label}: ${total} машин — делю по дате регистрации`);
-            for (const yearRange of ranges) {
-              const ids = await walkSlice(`${label} ${yearRange.join('–')}`, { ...base, yearRange }, false);
+            this.log(`[list] ${label}: ${total} машин — делю на запросы по одной странице`);
+            for (const slice of slices) {
+              const rangeLabel = `${slice.yearRange.join('–')}${slice.priceRange ? ` ₩ ${slice.priceRange.join('–')} × 10 000` : ''}`;
+              const ids = await walkSlice(`${label} / ${rangeLabel}`, slice, false);
               if (stop() || stats.broken) return seen;
               for (const id of ids) seen.add(id);
             }
@@ -389,7 +402,7 @@ export class EncarClient {
               stats.pages += 1;
               if (current.status !== 200 || !validListCount(current.json) || !Array.isArray(current.json.SearchResults)
                 || seen.size < Number(current.json.Count) || current.json.SearchResults.some(item => !seen.has(String(item?.Id)))) {
-                incomplete(offset, current.status, `Incomplete list: ${seen.size} of ${total} across registration ranges`);
+                incomplete(offset, current.status, `Incomplete list: ${seen.size} of ${total} across smaller ranges`);
               }
             }
             return seen;
@@ -407,8 +420,9 @@ export class EncarClient {
         }
         const rows = Array.isArray(json.SearchResults) ? json.SearchResults : [];
         if (seen && rows.some(item => !/^\d+$/.test(String(item?.Id ?? '')) || item.Manufacturer !== base.manufacturer || !Number.isInteger(Number(item.Year))
-          || Number(item.Year) < base.yearRange[0] || Number(item.Year) > base.yearRange[1])) {
-          incomplete(offset, status, 'Encar вернул некорректный ID, чужую марку или дату вне запрошенного списка');
+          || Number(item.Year) < base.yearRange[0] || Number(item.Year) > base.yearRange[1]
+          || (base.priceRange && Number.isFinite(Number(item.Price)) && (Number(item.Price) < base.priceRange[0] || Number(item.Price) > base.priceRange[1])))) {
+          incomplete(offset, status, 'Encar вернул некорректный ID или объявление вне запрошенного диапазона');
           break;
         }
         if (!rows.length && offset < total && offset < ENCAR_MAX_OFFSET && emptyRetries < 2) {

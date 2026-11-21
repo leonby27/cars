@@ -398,7 +398,7 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
 // Фильтр списка на языке площадки. Год — по месяцу регистрации (YYYYMM), цена в
 // 만원 (10 000 вон). `FormYear` фильтром не работает (404), поэтому модельный год
 // проверяется по карточке.
-export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, yearRange, priceMin, priceMax, fuel, sellType = "일반" } = {}) {
+export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, yearRange, priceMin, priceMax, priceRange, fuel, sellType = "일반" } = {}) {
   // Encar uses _. for a literal dot inside a value (facet Expression for ID.4
   // is ModelGroup.ID_.4.). URL encoding alone does not escape its query grammar.
   const literal = (value) => String(value).replaceAll(".", "_.");
@@ -408,7 +408,8 @@ export function encarListQuery({ manufacturer, modelGroup, yearFrom, yearTo, yea
   // Границы диапазона — обе: с одной открытой стороной площадка отвечает пусто.
   if (yearRange) parts.push(`Year.range(${yearRange[0]}..${yearRange[1]})`);
   else if (yearFrom || yearTo) parts.push(`Year.range(${yearFrom || 1990}00..${yearTo || new Date().getFullYear() + 1}12)`);
-  if (priceMin || priceMax) parts.push(`Price.range(${priceMin || 0}..${priceMax || 999_999})`);
+  if (priceRange) parts.push(`Price.range(${priceRange[0]}..${priceRange[1]})`);
+  else if (priceMin || priceMax) parts.push(`Price.range(${priceMin || 0}..${priceMax || 999_999})`);
   if (fuel) parts.push(`FuelType.${literal(fuel)}`);
   if (sellType) parts.push(`SellType.${literal(sellType)}`);
   return `(And.${parts.join("._.")}.)`;

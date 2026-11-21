@@ -96,6 +96,31 @@ test('large brand lists cover all models and prove the split by registration mon
   assert.equal(walk.broken, undefined);
 });
 
+test('a dense month is split by price and never read through an unstable second page', async () => {
+  const client = new EncarClient({ pace: 0 });
+  const calls = [];
+  const items = [{ Id: '1', Year: 202612, Manufacturer: '기아', FuelType: '가솔린', Price: 2300 },
+    { Id: '2', Year: 202612, Manufacturer: '기아', FuelType: '가솔린', Price: 3000 }];
+  client.patientList = async (query, offset, count) => {
+    assert.equal(offset, 0);
+    if (count === 1) return { status: 200, json: { Count: 2, SearchResults: [items[0]] } };
+    const [, from, to] = query.match(/Year\.range\((\d+)\.\.(\d+)\)/);
+    if (Number(to) < 202612) return { status: 200, json: { Count: 0, SearchResults: [] } };
+    const priceRange = query.match(/Price\.range\((\d+)\.\.(\d+)\)/);
+    if (!priceRange) return { status: 200, json: { Count: 600, SearchResults: items } };
+    assert.equal(from, to);
+    const [, min, max] = priceRange.map(Number);
+    calls.push([min, max]);
+    const rows = items.filter(item => item.Price >= min && item.Price <= max);
+    return { status: 200, json: { Count: rows.length, SearchResults: rows } };
+  };
+  const found = [];
+  const result = await client.walk({ brands: ['Kia'], yearFrom: 2026, yearTo: 2026, verifyCoverage: true, onItem: item => found.push(item.externalId) });
+  assert.deepEqual(calls, [[0, 3000], [3001, 999999]]);
+  assert.deepEqual(found, ['1', '2']);
+  assert.equal(result.broken, undefined);
+});
+
 test('a verified duplicate never requests history and two workers serialize a new vehicle', async () => {
   const { samples } = JSON.parse(await readFile(new URL('./fixtures/encar-samples.json', import.meta.url)));
   const { detail, listItem } = samples[1];
