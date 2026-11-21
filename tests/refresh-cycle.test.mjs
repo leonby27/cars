@@ -126,16 +126,16 @@ test("visiting every brand cannot close a cycle with unchecked listings", () => 
   }
 });
 
-test('Che168 closes with 100 individual problems, carries unchanged dates into the next round, and rejects 101', () => {
+test('Che168 closes with up to 1000 individual problems, carries unchanged dates, and rejects 1001', () => {
   const cursor = resumeRefreshCycle(null, at);
-  for (const remainingListings of [1, 100, 101]) {
+  for (const remainingListings of [1, 100, 101, 1000, 1001]) {
     const result = finishRefreshCycle(cursor, { remainingListings, remainingBrands: 1, unresolvedListings: remainingListings });
-    assert.equal(result.complete, remainingListings <= 100);
-    assert.equal(result.cursor.startedAt, remainingListings <= 100 ? null : at);
+    assert.equal(result.complete, remainingListings <= 1000);
+    assert.equal(result.cursor.startedAt, remainingListings <= 1000 ? null : at);
   }
-  const counts = { remainingListings: 60, remainingBrands: 1, unresolvedListings: 60, failedNewListings: 40 };
+  const counts = { remainingListings: 600, remainingBrands: 1, unresolvedListings: 600, failedNewListings: 400 };
   assert.equal(finishRefreshCycle(cursor, counts).complete, true);
-  assert.equal(finishRefreshCycle(cursor, { ...counts, failedNewListings: 41 }).complete, false);
+  assert.equal(finishRefreshCycle(cursor, { ...counts, failedNewListings: 401 }).complete, false);
   assert.equal(finishRefreshCycle(cursor, { ...counts, incompleteLists: true }).complete, false);
   assert.equal(finishRefreshCycle(cursor, { ...counts, skippedChecks: 1 }).complete, false);
 });

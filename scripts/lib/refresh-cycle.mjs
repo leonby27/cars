@@ -1,4 +1,4 @@
-import { canCompleteWithProblems } from './circle-completion.mjs';
+import { canCompleteWithProblems, CHE168_CIRCLE_PROBLEM_LIMIT } from './circle-completion.mjs';
 
 // A cycle owns the active listings present at its start. Database check dates
 // are its durable per-card checkpoint; a failed request never advances them.
@@ -86,7 +86,7 @@ export async function checkPendingListings(rows, {
 
 export function finishRefreshCycle(cursor, { remainingListings, remainingBrands, stopped = false,
   unresolvedListings = 0, failedNewListings = 0, incompleteLists = false, skippedChecks = 0 }) {
-  const complete = canCompleteWithProblems({ problems: remainingListings + failedNewListings,
+  const complete = canCompleteWithProblems({ problems: remainingListings + failedNewListings, problemLimit: CHE168_CIRCLE_PROBLEM_LIMIT,
     unattempted: Math.max(0, remainingListings - unresolvedListings) + skippedChecks, stopped, incompleteLists })
     && (remainingBrands === 0 || remainingListings > 0);
   return {

@@ -267,6 +267,26 @@ test('Che168 stale reports or partial cursors never report completion', async ()
     await assert.rejects(runScheduledCircle('che', { now: () => startedAt, running: async () => false, run: async () => {}, readState: async name => name.includes('cursor') ? cursor : { ...report, startedAt: '2026-10-04' } }), /не завершён/);
   }
 });
+test('Che168 scheduled completion uses a single 1000-card allowance across existing and new cards', async () => {
+  for (const addFailed of [400, 401]) {
+    const messages = [];
+    const current = {
+      ...report, circleClosed: true, remainingListings: 600, addFailed, skippedProblemListings: 600 + addFailed,
+    };
+    const run = runScheduledCircle('che', {
+      now: () => startedAt, running: async () => false, run: async () => {},
+      readState: async name => name.includes('cursor') ? { startedAt: null } : current,
+      notify: async text => messages.push(text),
+    });
+    if (addFailed === 400) {
+      assert.equal(await run, 'complete');
+      assert.match(messages[0], /Пропущено до следующего круга: 1\s?000/i);
+    } else {
+      await assert.rejects(run, /1001/);
+    }
+    assert.equal(messages.length, 1);
+  }
+});
 test('weekly timers encode Minsk time with no jitter or missed-run catchup', async () => {
   for (const [source, day] of [['che', 'Mon'], ['guazi', 'Wed'], ['encar', 'Sat']]) {
     const timer = await fs.readFile(new URL(`../deploy/abcars-circle-${source}.timer`, import.meta.url), 'utf8');

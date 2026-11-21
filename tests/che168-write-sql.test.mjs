@@ -99,6 +99,18 @@ test('Che168 SQL preserves hidden data, commits verified price and sale, and rej
       ...updates[0], previous: '19000',
     }], '2026-11-18T01:00:00.000Z'), { code: 'CHE168_SNAPSHOT_WRITE_CONFLICT' });
     await db.query('ROLLBACK TO SAVEPOINT stale_snapshot');
+
+    const failedReturn = id => quarantineListing(db, {
+      source: 'Che168', externalId: id, reason: 'required-fields-missing', checkedFrom: at, unavailableOnly: true,
+    });
+    assert.equal((await failedReturn('103')).rowCount, 0, 'a current active record is unchanged');
+    assert.equal((await failedReturn('102')).rowCount, 1);
+    const { rows: [returning] } = await db.query("SELECT status,sold_at,price_cny,last_checked_at FROM listings WHERE external_id='102'");
+    assert.equal(returning.status, 'skipped');
+    assert.equal(returning.sold_at, null);
+    assert.equal(returning.price_cny, removed.price_cny);
+    assert.deepEqual(returning.last_checked_at, removed.last_checked_at);
+    assert.equal((await db.query("SELECT * FROM listing_media WHERE listing_id='che168-102'")).rowCount, 1);
   } finally {
     await db.query('ROLLBACK').finally(() => db.end());
   }

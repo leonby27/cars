@@ -1,7 +1,7 @@
 // Weekly launches share the existing collectors and their durable progress.
 import { circleSummary, circleFailure } from './circle-report.mjs';
 import { encarCanRetry } from './encar-result.mjs';
-import { withinCircleProblemLimit, encarImportReadFailures } from './circle-completion.mjs';
+import { withinCircleProblemLimit, CHE168_CIRCLE_PROBLEM_LIMIT, encarImportReadFailures } from './circle-completion.mjs';
 export const CIRCLE_SOURCES = Object.freeze({ '1': 'che', '2': 'guazi', '3': 'encar' });
 const guaziCheckpoint = 'runtime/guazi-refresh/current.json';
 const guaziRetryDelayMs = 60 * 60 * 1000;
@@ -111,7 +111,8 @@ export async function runScheduledCircle(source, { readState, running, run, afte
       report = await readState('runtime/refresh-report.json');
       if (!cursor || cursor.startedAt || !report?.finishedAt || !Number.isFinite(Date.parse(report.startedAt)) || Date.parse(report.startedAt) < startedAt) throw Error('Круг не завершён; прогресс сохранён. Продолжение: «Продолжить».');
       const problems = (report.remainingListings || 0) + (report.addFailed || 0);
-      if (!withinCircleProblemLimit(problems) || (problems && (report.circleClosed !== true || report.skippedProblemListings !== problems))) throw Error(`Che168: не удалось проверить или добавить карточек: ${problems}`);
+      if (!withinCircleProblemLimit(problems, CHE168_CIRCLE_PROBLEM_LIMIT)
+        || (problems && (report.circleClosed !== true || report.skippedProblemListings !== problems))) throw Error(`Che168: не удалось проверить или добавить карточек: ${problems}`);
     }
     if (source === 'guazi') {
       state = await readState(guaziCheckpoint);

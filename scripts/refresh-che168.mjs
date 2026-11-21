@@ -61,7 +61,7 @@ import { CHE168_VERIFICATION_VERSION, che168PriceCny } from './lib/che168-result
 import { CHE168_CHECK_BATCH_SIZE, che168IdentityGuard, validateChe168CheckBatch } from './lib/che168-integrity.mjs';
 import { buildVerifiedChe168Car, checkChe168PublicPage } from './lib/che168-public-check.mjs';
 import { acceptsChe168ListTail, assertChe168Running, collectChe168ListPage, collectChe168Snapshots, inspectChe168ListResponse, planChe168Snapshot, retryChe168ListPage } from "./lib/che168-snapshot.mjs";
-import { canCompleteWithProblems } from "./lib/circle-completion.mjs";
+import { canCompleteWithProblems, CHE168_CIRCLE_PROBLEM_LIMIT } from "./lib/circle-completion.mjs";
 import { writeChe168ListSnapshot, writeChe168Observations } from './lib/che168-write.mjs';
 import { quarantineListing } from './lib/catalog-quarantine.mjs';
 
@@ -1213,11 +1213,11 @@ async function addNewCar(externalId, fromSnapshot = false) {
   try {
     car = buildVerifiedChe168Car(result);
   } catch (error) {
-    detailProblems.set(externalId, { externalId, reason: 'invalid-specifications', code: error.code });
+    detailProblems.set(externalId, { externalId, reason: 'invalid-specifications', code: error.code, attemptedAt: result.attemptedAt });
     return 'failed';
   }
   if (!car) {
-    detailProblems.set(externalId, { externalId, reason: 'required-fields-missing' });
+    detailProblems.set(externalId, { externalId, reason: 'required-fields-missing', attemptedAt: result.attemptedAt });
     return 'failed';
   }
   if (importPolicyViolation(car) || isAbovePriceCeiling(estimateLandedCost(car).totalUsd) || (!fromSnapshot && knownIds.has(car.id))) return 'rejected';
@@ -1386,6 +1386,13 @@ async function runListSnapshot(brands, ourPricesByBrand) {
       const verdict = knownStatuses.get(externalId) === 'active' ? 'present' : await addNewCar(externalId, true);
       if (!dryRun && verdict === 'present') catalogChanged = true;
       assertChe168Running(() => stopped);
+      if (!dryRun && verdict === 'failed' && knownStatuses.get(externalId) === 'unavailable') {
+        const problem = detailProblems.get(externalId);
+        const written = await quarantineListing(pool, {
+          source: 'Che168', externalId, reason: problem.reason, checkedFrom: problem.attemptedAt, unavailableOnly: true,
+        });
+        catalogChanged ||= written.rowCount > 0;
+      }
       results.set(externalId, verdict);
       if (verdict !== 'present') await sleep(pace);
     }
@@ -1401,10 +1408,14 @@ async function runListSnapshot(brands, ourPricesByBrand) {
   const added = candidates.filter(({ externalId, returning }) => !returning && ['added', 'present'].includes(results.get(externalId))).length;
   const reactivated = candidates.filter(({ externalId, returning }) => returning && ['added', 'present'].includes(results.get(externalId))).length;
   const addFailed = [...results.values()].filter(verdict => verdict === 'failed').length;
-  const remainingListings = counts.hiddenPrice + counts.conflictingPrice + counts.unmapped;
+  // Only records actually hidden can use the individual-card allowance.
+  // Conflicting quotes keep their old price; unmapped brands lack coverage.
+  const remainingListings = counts.hiddenPrice;
   const problems = remainingListings + addFailed;
   const detailLayerUnavailable = publicDetailChecked > 0 && publicDetailConclusive === 0;
-  const circleClosed = !detailLayerUnavailable && canCompleteWithProblems({ problems, incompleteLists: skipped.size > 0 });
+  const circleClosed = !detailLayerUnavailable && canCompleteWithProblems({
+    problems, problemLimit: CHE168_CIRCLE_PROBLEM_LIMIT, incompleteLists: skipped.size > 0 || counts.unmapped > 0,
+  });
   const remainingActive = (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n;
   latestSnapshotReport = {
     ...latestSnapshotReport,
@@ -1429,8 +1440,9 @@ async function runListSnapshot(brands, ourPricesByBrand) {
       await saveCursor(cursor);
       throw skippedBrandsError();
     }
-    throw Error(detailLayerUnavailable ? 'Che168: не удалось прочитать ни одной карточки для импорта'
-      : `Che168: ${problems} проблемных карточек, допустимо до 100`);
+    if (detailLayerUnavailable) throw Error('Che168: не удалось прочитать ни одной карточки для импорта');
+    if (counts.unmapped) throw Error(`Che168: для ${counts.unmapped} карточек не настроен обход выдачи`);
+    throw Error(`Che168: ${problems} проблемных карточек, допустимо до ${CHE168_CIRCLE_PROBLEM_LIMIT}`);
   }
   await saveCursor({ ...cursor, round: cursor.round + 1, startedAt: null, brandsDone: [], snapshotImport: undefined });
   if (!dryRun) await refreshAfterManualCatalog({ root: ROOT });
