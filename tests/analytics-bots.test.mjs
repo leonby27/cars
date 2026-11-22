@@ -28,7 +28,7 @@ test("приём событий исключает ботов в обоих ре
     if (sql.includes("INSERT INTO rate_limits")) return { rows:[{ hits:1, window_started_at:new Date() }] };
     if (sql.includes("FROM datacenter_ranges")) return { rows:[], rowCount:params[0] === "203.0.113.240" ? 1 : 0 };
     if (sql.includes("FROM country_ranges")) return { rows:[{ ready:false }] };
-    if (/INSERT INTO analytics_events|UPDATE analytics_events/.test(sql)) { writes.push({ sql, params }); return { rowCount:1 }; }
+    if (/INSERT INTO analytics_events|analytics_confirm_visit/.test(sql)) { writes.push({ sql, params }); return { rowCount:1, rows:[{ confirmed:1 }] }; }
     throw new Error(`Unexpected query: ${sql}`);
   };
   const previousSite = process.env.SITE_URL;

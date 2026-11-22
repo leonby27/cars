@@ -507,18 +507,14 @@ test("analytics login cookie is kept for 30 days", () => {
   assert.match(cookie, /Secure/);
 });
 
-test("одно и то же событие не записывается дважды подряд", async () => {
+test("запись события возвращает решение базы, включая отложенные события", async () => {
   const calls = [];
-  const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount: 1 }; } };
+  const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount:1 }; } };
   const event = { eventId:"e1", visitorId:"v1", sessionId:"s1", eventName:"vehicle_view", path:"/cars/1", listingId:"che168-1" };
-  const result = await recordAnalyticsEvent(event, { db });
-  assert.equal(result.ok, true);
-  // Запись идёт только если такого же события от этого посетителя не было пару секунд назад.
-  assert.match(calls[0].sql, /WHERE NOT EXISTS/);
-  assert.match(calls[0].sql, /created_at > now\(\) - interval '5 seconds'/);
-  assert.match(calls[0].sql, /visitor_id=\$2 AND event_name=\$4/);
-  // Отброшенный повтор виден в ответе: rowCount 0 — значит не записали.
-  const quiet = { query: async () => ({ rowCount: 0 }) };
+  assert.deepEqual(await recordAnalyticsEvent(event, { db }), { ok:true, recorded:true });
+  assert.match(calls[0].sql, /INSERT INTO analytics_events/);
+  assert.deepEqual(calls[0].values.slice(0, 6), ["e1","v1","s1","vehicle_view","/cars/1","che168-1"]);
+  const quiet = { query: async () => ({ rowCount:0 }) };
   assert.deepEqual(await recordAnalyticsEvent(event, { db: quiet }), { ok:true, recorded:false });
 });
 
@@ -750,14 +746,14 @@ test("живого человека отмечает поведение, а не
   const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount:1 }; } };
   await recordAnalyticsEvent({ ...later }, { db });
   assert.equal(calls[0].values.at(-2), true);
-  assert.match(calls[0].sql, /listing_title,properties,human,human_action/);
+  assert.equal(calls[0].values.at(-1), false);
 
   // Отметка ставится вдогонку на весь след этого посетителя в этом сеансе.
   const updates = [];
-  const updateDb = { query: async (sql, values) => { updates.push({ sql, values }); return { rowCount:3 }; } };
+  const updateDb = { query: async (sql, values) => { updates.push({ sql, values }); return { rows:[{ confirmed:3 }] }; } };
   const confirmed = await confirmHumanVisit({ visitorId:"v1", sessionId:"s1", action:true }, { db:updateDb });
   assert.deepEqual(confirmed, { ok:true, confirmed:3 });
-  assert.match(updates[0].sql, /UPDATE analytics_events SET human = true/);
+  assert.match(updates[0].sql, /SELECT analytics_confirm_visit/);
   assert.deepEqual(updates[0].values, ["v1", "s1", true]);
   // Без опознания посетителя отмечать нечего.
   assert.equal((await confirmHumanVisit({ visitorId:"v1" }, { db:updateDb })).error, "invalid_event_identity");
@@ -769,11 +765,10 @@ test("живого человека отмечает поведение, а не
 // только второе.
 test("время на странице человеком не делает — только действие", async () => {
   const updates = [];
-  const db = { query: async (sql, values) => { updates.push({ sql, values }); return { rowCount:1 }; } };
+  const db = { query: async (sql, values) => { updates.push({ sql, values }); return { rows:[{ confirmed:1 }] }; } };
   // Отметка по времени приходит без признака действия.
   await confirmHumanVisit({ visitorId:"v1", sessionId:"s1" }, { db });
   assert.deepEqual(updates[0].values, ["v1", "s1", false]);
-  assert.match(updates[0].sql, /human_action = human_action OR \$3/);
   // Действие после отстоянного времени всё равно доезжает: строка обновляется, пока
   // само действие не проставлено.
   await confirmHumanVisit({ visitorId:"v1", sessionId:"s1", action:true }, { db });
@@ -970,7 +965,7 @@ test("память о заходах поднимается из базы и п�
 test("сервер поднимает память о заходах при старте и сбрасывает её по таймеру и при остановке", async () => {
   const index = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
   assert.match(index, /await loadSiteRequests\(\);/);
-  assert.match(index, /setInterval\(\(\) => \{ flushSiteRequests\(\); \}, SITE_REQUESTS_FLUSH_MS\)/);
+  assert.match(index, /setInterval\(\(\) => \{\s*flushSiteRequests\(\);[\s\S]*?\}, SITE_REQUESTS_FLUSH_MS\)/);
   // При остановке — сначала сброс, потом закрытие базы.
   assert.match(index, /await flushSiteRequests\(\);\s*await pool\.end\(\);/);
   const migration = await readFile(new URL("../db/migrations/043_site_requests.sql", import.meta.url), "utf8");

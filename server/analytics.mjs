@@ -172,27 +172,6 @@ export function normalizeAnalyticsEvent(body = {}, { device = "", platform = "" 
   };
 }
 
-// Одно и то же действие иногда приходит дважды подряд: страница из старого кэша
-// браузера, повторный рендер, двойной клик. Такой повтор — не второй просмотр,
-// поэтому в пределах нескольких секунд одинаковые события не записываем. Проверка
-// стоит на сервере, а не только в браузере: у части посетителей загружен старый
-// код сайта, и починить их можно только здесь.
-export const ANALYTICS_REPEAT_SECONDS = 5;
-const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human,human_action)
-     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
-     WHERE NOT EXISTS (
-       SELECT 1 FROM analytics_events
-       WHERE visitor_id=$2 AND event_name=$4 AND coalesce(listing_id,'')=coalesce($6,'')
-         -- У события про машину примета — сама машина: «быстрый просмотр» в каталоге
-         -- и открытая следом карточка лежат на разных адресах, но взгляд один.
-         AND ($6 IS NOT NULL OR path=$5)
-         -- Два разных запроса в строке поиска — два разных события, даже если их
-         -- набрали подряд на одной странице.
-         AND coalesce(properties->>'query','') = coalesce(($8::jsonb)->>'query','')
-         AND created_at > now() - interval '${ANALYTICS_REPEAT_SECONDS} seconds'
-     )
-     ON CONFLICT (event_id) DO NOTHING`;
-
 // Настоящий адрес сайта — из настроек, а не из запроса. Сервер отвечает и по
 // числовому адресу, и по имени: раньше сверялись с тем адресом, по которому пришёл
 // запрос, поэтому робот, перебиравший адреса подряд, открыл главную по числовому
@@ -410,40 +389,36 @@ export async function recordAnalyticsEvent(body, { db = pool, headers = null, co
   if (event.properties && VISIT_COUNTRIES.has(country)) event.properties.country = country;
   if (event.ignored) return { ok:true, recorded:false };
   if (event.error) return event;
-  const result = await db.query(INSERT_EVENT_SQL,
+  const result = await db.query(`INSERT INTO analytics_events
+    (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human,human_action)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (event_id) DO NOTHING`,
     [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human,event.humanAction],
   );
   return { ok:true, recorded:result.rowCount > 0 };
 }
 
-// Посетитель себя проявил: отмечаем живым весь его сегодняшний след. Отметка нужна
-// именно так, вдогонку, потому что заход записывается сразу — иначе человек, который
-// открыл страницу и ушёл, не притронувшись ни к чему, потерялся бы совсем. Теперь он
-// в базе есть и учитывается в режиме «Все» без подтверждения действия.
+// Подтверждаем действие и в буфере: при втором просмотре оно попадёт в отчёт
+// вместе с исходными событиями.
 export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
   const visitorId = text(body.visitorId, 80);
   const sessionId = text(body.sessionId, 80);
   if (!visitorId || !sessionId) return { error:"invalid_event_identity" };
-  // Отметок две. Слабая — просто время на открытой странице; её научился получать
-  // обходчик, который ждёт свои пятнадцать секунд и уходит. Сильная — настоящее
-  // действие; режим «С действиями» берёт только по ней. Сильная приходит и
-  // после слабой, поэтому строку обновляем, пока не проставлено само действие.
-  const action = body.action === true;
-  const result = await db.query(
-    `UPDATE analytics_events SET human = true, human_action = human_action OR $3
-       WHERE visitor_id = $1 AND session_id = $2 AND NOT (human AND (human_action OR NOT $3))
-         AND path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'
-         AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%'
-         AND ${REVIEWED_AUTOMATION_SQL}
-         AND created_at > now() - interval '12 hours'`,
-    [visitorId, sessionId, action],
-  );
-  return { ok:true, confirmed:result.rowCount };
+  const result = await db.query("SELECT analytics_confirm_visit($1,$2,$3) AS confirmed",
+    [visitorId, sessionId, body.action === true]);
+  return { ok:true, confirmed:result.rows[0].confirmed };
+}
+
+export async function expirePendingAnalyticsVisits() {
+  try {
+    await pool.query("SELECT analytics_expire_pending_visits()");
+  } catch (error) {
+    console.error("Не удалось обработать отложенные заходы:", error?.message || error);
+  }
 }
 
 export async function resetAnalyticsData() {
-  const result = await pool.query("DELETE FROM analytics_events");
-  return { ok:true, deleted:result.rowCount };
+  const result = await pool.query("SELECT analytics_reset_events() AS deleted");
+  return { ok:true, deleted:result.rows[0].deleted };
 }
 
 const analyticsPassword = () => String(process.env.ANALYTICS_PASSWORD || "");
@@ -519,7 +494,7 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
   return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
-const PUBLIC_EVENT = `path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%' AND path !~* '(^|[?&])nocount=1(&|$)' AND ${REVIEWED_AUTOMATION_SQL}`;
+const PUBLIC_EVENT = `path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%' AND path !~* '(^|[?&])nocount=1(&|$)' AND ${REVIEWED_AUTOMATION_SQL} AND NOT excluded_single_car_visit`;
 // Режим «Только с действиями» сохраняет прежнее правило: достаточно одного
 // подтверждённого действия посетителя за всю историю. Период, источник,
 // страница входа и устройство не ограничивают поиск подтверждения. Отсутствие
@@ -907,7 +882,8 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
         EXISTS (SELECT 1 FROM analytics_events first_seen
           WHERE first_seen.visitor_id = numbered.visitor_id AND first_seen.created_at < min(numbered.created_at)
             AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path <> '/partner' AND first_seen.path NOT LIKE '/partner/%' AND first_seen.path NOT LIKE '/partner?%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)'
-            AND ${REVIEWED_AUTOMATION_SQL.replace(/\bevent_id\b/g, "first_seen.event_id")}) AS came_back
+            AND ${REVIEWED_AUTOMATION_SQL.replace(/\bevent_id\b/g, "first_seen.event_id")}
+            AND NOT first_seen.excluded_single_car_visit) AS came_back
       FROM numbered
       GROUP BY visitor_id, visit_number
       ORDER BY min(created_at) DESC`, [from, to]),
@@ -1112,6 +1088,7 @@ const leadDeviceGuess = (listingColumn, momentColumn) => `LEFT JOIN LATERAL (
       SELECT nullif(e.properties->>'device','') AS device, nullif(e.properties->>'platform','') AS platform
       FROM analytics_events e
       WHERE e.listing_id=${listingColumn} AND e.event_name='availability_request_click'
+        AND NOT e.excluded_single_car_visit
         AND e.created_at BETWEEN ${momentColumn} - interval '30 minutes' AND ${momentColumn} + interval '1 minute'
         AND nullif(e.properties->>'device','') IS NOT NULL
       ORDER BY abs(extract(epoch FROM e.created_at - ${momentColumn})) LIMIT 1

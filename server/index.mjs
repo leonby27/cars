@@ -3,7 +3,7 @@ import http from "node:http";
 import { SITE } from "../src/site-profile.js";
 import { pool } from "./db.mjs";
 import { handleApiRequest } from "./handler.mjs";
-import { flushSiteRequests, loadSiteRequests } from "./analytics.mjs";
+import { expirePendingAnalyticsVisits, flushSiteRequests, loadSiteRequests } from "./analytics.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
 const server = http.createServer(handleApiRequest);
@@ -51,7 +51,10 @@ server.on("error", (error) => {
 // поднимаем её до первых запросов и сбрасываем каждые 15 секунд.
 const SITE_REQUESTS_FLUSH_MS = 15 * 1000;
 await loadSiteRequests();
-const siteRequestsTimer = setInterval(() => { flushSiteRequests(); }, SITE_REQUESTS_FLUSH_MS);
+const siteRequestsTimer = setInterval(() => {
+  flushSiteRequests();
+  expirePendingAnalyticsVisits();
+}, SITE_REQUESTS_FLUSH_MS);
 siteRequestsTimer.unref();
 
 server.listen(port, "0.0.0.0", () => console.log(`${SITE.company.brand} API: http://127.0.0.1:${port}`));

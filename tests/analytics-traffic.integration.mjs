@@ -1,9 +1,9 @@
-// Request-level verification against local PostgreSQL, using only a temporary
-// event table inside a rolled-back transaction. No persistent records change.
+// Local PostgreSQL verification using an isolated schema in a rolled-back transaction.
 import "../config/load-env.mjs";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { pool } from "../server/db.mjs";
-import { getAnalyticsDashboard, getAnalyticsTrend, getVisitsBenchmark } from "../server/analytics.mjs";
+import { confirmHumanVisit, getAnalyticsDashboard, getAnalyticsTrend, getVisitsBenchmark, recordAnalyticsEvent } from "../server/analytics.mjs";
 
 const client = await pool.connect();
 let queued = Promise.resolve();
@@ -24,7 +24,35 @@ const add = async (visitor, at, path, event = "page_view", device = "desktop", h
 };
 try {
   await client.query("BEGIN");
-  await client.query("CREATE TEMP TABLE analytics_events (LIKE public.analytics_events INCLUDING DEFAULTS) ON COMMIT DROP");
+  await client.query(`CREATE SCHEMA analytics_traffic_test;
+    SET LOCAL search_path = analytics_traffic_test, public;
+    CREATE SEQUENCE event_id_sequence START 1000;
+    CREATE TABLE analytics_events (LIKE public.analytics_events INCLUDING DEFAULTS INCLUDING INDEXES);
+    ALTER TABLE analytics_events DROP COLUMN IF EXISTS excluded_single_car_visit,
+      ALTER COLUMN id SET DEFAULT nextval('event_id_sequence');`);
+  const directForeign = { entrySource:"direct", country:"US" };
+  await add("historic-excluded", "2026-09-15T06:00:00Z", "/cars/old", "vehicle_view", "desktop", true, directForeign);
+  await add("historic-excluded", "2026-09-15T06:00:01Z", "/cars/old", "page_view", "desktop", true, directForeign);
+  await add("historic-excluded", "2026-09-16T06:01:00Z", "/catalog", "page_view", "desktop", false, directForeign);
+  await add("historic-included", "2026-09-15T05:50:00Z", "/cars/keep", "page_view", "desktop", true, directForeign);
+  await add("historic-included", "2026-09-15T06:01:00Z", "/contacts", "page_view", "desktop", true, directForeign);
+  await add("historic-search", "2026-09-15T06:02:00Z", "/cars/keep?ysclid=search", "page_view", "desktop", true, directForeign);
+  await client.query(`INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,properties)
+    VALUES ('historic-open','historic-open','historic-open','page_view','/cars/open',
+      '{"entrySource":"direct","device":"desktop","country":"US"}')`);
+  await client.query(await readFile(new URL("../db/migrations/053_analytics_single_car_visits.sql", import.meta.url), "utf8"));
+  const historic = await getAnalyticsDashboard("today", { db, now:Date.parse("2026-09-15T12:00:00Z") });
+  assert.deepEqual(historic.visits.map((row) => [row.landingPath, row.pageViews]), [
+    ["/cars/keep?ysclid=search", 1], ["/cars/keep", 2],
+  ]);
+  assert.equal(historic.summary.page_views, 3);
+  assert.equal(historic.summary.vehicle_views, 0);
+  const historicTrend = await getAnalyticsTrend("today", { db, now:Date.parse("2026-09-15T12:00:00Z") });
+  assert.equal(historicTrend.daily[0].visits, 2);
+  const nextDay = { db, now:Date.parse("2026-09-16T12:00:00Z") };
+  assert.equal((await getAnalyticsDashboard("today", nextDay)).visits[0].returning, false);
+  assert.equal((await getAnalyticsDashboard("today", { ...nextDay, activity:"actions" })).summary.visits, 0);
+  assert.equal((await client.query("SELECT count(*)::int AS n FROM analytics_events WHERE excluded_single_car_visit")).rows[0].n, 3);
   await add("a", "2026-10-02T06:00:00Z", "/blog/ev-quota-2027?ysclid=1", "page_view", "mobile");
   await add("a", "2026-10-02T06:05:00Z", "/catalog");
   await add("a", "2026-10-02T06:10:00Z", "/cars/1", "vehicle_view");
@@ -192,6 +220,70 @@ try {
   assert.deepEqual([sourceTime.yandex, sourceTime.yandex_to_now, sourceTime.google, sourceTime.google_to_now], [5, 3, 4, 2]);
   const filteredSourceTime = (await getAnalyticsTrend("7", { ...options, device:"desktop", acquisition:"organic" })).daily.find((row) => row.day === "2026-09-30");
   assert.deepEqual([filteredSourceTime.yandex, filteredSourceTime.yandex_to_now, filteredSourceTime.google, filteredSourceTime.google_to_now], [4, 2, 3, 1]);
+  const desktopHeaders = { "sec-ch-ua-mobile":"?0" };
+  const record = (visitorId, eventId, path, { country = "US", eventName = "page_view", entrySource = "direct", mobile = false } = {}) =>
+    recordAnalyticsEvent({ visitorId, sessionId:visitorId, eventId, path, eventName, properties:{ entrySource } },
+      { db, country, headers:mobile ? { "sec-ch-ua-mobile":"?1" } : desktopHeaders });
+  const eventsFor = async (visitorId) => (await client.query(
+    "SELECT event_id, excluded_single_car_visit, human_action FROM analytics_events WHERE visitor_id=$1 ORDER BY created_at,id",
+    [visitorId],
+  )).rows;
+
+  assert.equal((await record("historic-open", "historic-second", "/contacts")).recorded, true);
+  assert.deepEqual((await eventsFor("historic-open")).map((row) => [row.event_id, row.excluded_single_car_visit]), [
+    ["historic-open", false], ["historic-second", false],
+  ]);
+
+  assert.equal((await record("single", "single-page", "/cars/one")).recorded, false);
+  assert.equal((await record("single", "single-double", "/cars/one")).recorded, false);
+  assert.equal((await record("single", "single-car", "/cars/one", { eventName:"vehicle_view" })).recorded, false);
+  assert.equal((await confirmHumanVisit({ visitorId:"single", sessionId:"single", action:true }, { db })).confirmed, 2);
+  assert.deepEqual(await eventsFor("single"), []);
+
+  assert.equal((await record("continues", "continues-car", "/cars/two", { eventName:"vehicle_view" })).recorded, false);
+  assert.equal((await record("continues", "continues-first", "/cars/two")).recorded, false);
+  await confirmHumanVisit({ visitorId:"continues", sessionId:"continues", action:true }, { db });
+  assert.equal((await record("continues", "continues-second", "/catalog", { entrySource:"internal" })).recorded, true);
+  assert.deepEqual((await eventsFor("continues")).map((row) => [row.event_id, row.human_action]), [
+    ["continues-car", true], ["continues-first", true], ["continues-second", false],
+  ]);
+  assert.equal((await record("continues", "continues-first", "/cars/two")).recorded, false);
+
+  for (const [visitor, path, settings] of [
+    ["cis", "/cars/a", { country:"BY" }],
+    ["unknown", "/cars/b", { country:"" }],
+    ["other", "/cars/c", { country:"other" }],
+    ["mobile", "/cars/d", { mobile:true }],
+    ["search", "/cars/e", { entrySource:"google.com" }],
+    ["paid", "/cars/f?yclid=ad", {}],
+    ["catalog", "/catalog/toyota", {}],
+  ]) {
+    assert.equal((await record(visitor, visitor, path, settings)).recorded, true, visitor);
+  }
+  assert.equal((await record("catalog", "in-visit-car", "/cars/catalog-landing")).recorded, true);
+
+  assert.equal((await record("orphan", "orphan-car", "/cars/late", { eventName:"vehicle_view" })).recorded, false);
+  assert.equal((await record("break", "break-first", "/cars/break")).recorded, false);
+  await client.query("UPDATE analytics_pending_events SET created_at = clock_timestamp() - interval '31 minutes'");
+  assert.equal((await record("break", "break-new", "/catalog")).recorded, true);
+  assert.deepEqual((await eventsFor("break")).map((row) => row.event_id), ["break-new"]);
+  await client.query("SELECT analytics_expire_pending_visits()");
+  assert.deepEqual(await eventsFor("single"), []);
+  assert.deepEqual((await eventsFor("orphan")).map((row) => row.event_id), ["orphan-car"]);
+  assert.equal((await client.query("SELECT count(*)::int AS n FROM analytics_pending_events")).rows[0].n, 0);
+  assert.equal((await client.query(`SELECT analytics_visit_cutoff('2026-10-02 00:05:00+03') =
+    '2026-10-02 00:00:00+03'::timestamptz AS midnight`)).rows[0].midnight, true);
+  // A process still running the previous release uses INSERT ... SELECT.
+  await client.query(`INSERT INTO analytics_events (event_id, visitor_id, session_id, event_name, path, properties)
+    SELECT 'previous-release', 'previous-release', 'previous-release', 'page_view', '/cars/legacy',
+      '{"entrySource":"direct","device":"desktop","country":"US"}'::jsonb
+    ON CONFLICT (event_id) DO NOTHING`);
+  assert.deepEqual(await eventsFor("previous-release"), []);
+  assert.equal((await client.query("SELECT count(*)::int AS n FROM analytics_pending_events")).rows[0].n, 1);
+  await client.query("SELECT analytics_reset_events()");
+  assert.equal((await client.query("SELECT count(*)::int AS n FROM analytics_pending_events")).rows[0].n, 0);
+  assert.equal((await client.query("SELECT count(*)::int AS n FROM analytics_events")).rows[0].n, 0);
+  console.log("Single-card filter verified: historical visits, pending storage, second view, deduplication, confirmation, expiry, and unaffected traffic.");
   console.log("Source same-time comparison verified: visit starts, Yandex click IDs/referrers, Google referrers, exact Minsk time boundary and traffic/device/activity/acquisition filters.");
   console.log("Activity filter verified: all recorded visits, strict action mode, dwell-only readers, public action scope, complete visits, source/quota/device combinations, graph, benchmark and independent saved leads.");
   console.log("Landing filter verified: all quota articles, complete visits, return visits, midnight, rolling-period boundary, devices, graph, benchmark, search and contacts.");

@@ -28,13 +28,14 @@ const operationsOnly = new Set([
   'scripts/lib/pricing-inputs.mjs', 'scripts/lib/build-metrics.mjs',
   // Reports and HTTP dispatch are not imported by catalog preparation.
   'server/partners.mjs', 'scripts/provision-partner.mjs', 'db/migrations/049_partner_portal.sql', 'db/migrations/050_partner_registration_requests.sql', 'db/migrations/051_partner_registration_seen.sql', 'db/migrations/048_lead_attribution.sql',
-  'server/handler.mjs', 'server/analytics.mjs', 'server/analytics-traffic.mjs',
+  'server/handler.mjs', 'server/index.mjs', 'server/analytics.mjs', 'server/analytics-traffic.mjs',
   'server/analytics-reviewed-automation.mjs',
   'server/analytics-lead-people.mjs', 'server/analytics-plan.mjs', 'server/abdrive/analytics.mjs',
   'server/static-page.mjs', 'server/boot-screen.mjs',
   'server/app-render.mjs', 'server/api-replay.mjs', 'server/root-inject.mjs',
   'db/migrations/045_vehicles_updated_at_index.sql',
   'db/migrations/046_catalog_read_indexes.sql',
+  'db/migrations/053_analytics_single_car_visits.sql',
 ]);
 export const developmentOnly = file => /^(tests|research|docs)\//.test(file)
   || /(^|\/)(AGENTS|README)[^/]*\.md$/.test(file);
